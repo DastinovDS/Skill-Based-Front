@@ -10,6 +10,7 @@ import { loadGuest } from './api/guestStore.ts';
 import { Api } from './api/http.ts';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import { installErrorLog } from './errorLog.ts';
+import { diagnostics, installDiagnostics } from './diagnostics.ts';
 // The display settings of the viewer (#871): the scale and the motion choice go on the root
 // before the first screen mounts.
 import './app/settingsState.svelte.ts';
@@ -35,6 +36,10 @@ const replayId = params.get('replay');
 const devScreen = import.meta.env.DEV && (params.has('scene') || params.has('dev'));
 // `?menu=<id>`: a screen before a match with fixed data (dev build, `mise run shots`, #471).
 const devMenus = import.meta.env.DEV && params.has('menu');
+
+// The console errors and warnings, stalls and snapshot gaps go to the server log too (#810); not
+// from the dev screens, whose fixtures warn on purpose.
+if (!devScreen && !devMenus) installDiagnostics(diagnostics, window);
 
 // `/impressum` and `/privacy` are the static legal pages (LEG-01); Caddy serves index.html for them.
 const legalPage =

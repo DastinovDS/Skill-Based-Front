@@ -304,6 +304,28 @@ export class Api {
     return this.#request('POST', '/api/bot-matches', token, { level, ...mapChoice(pick) }, signal);
   }
 
+  /**
+   * A report of the client diagnostics into the server log (#810, `diagnostics.ts`): `true` when
+   * the server took it, never throws. `keepalive` lets a report sent while the page closes finish.
+   */
+  async clientLog(
+    token: string,
+    report: Schemas['ClientReport'],
+    keepalive = false,
+  ): Promise<boolean> {
+    try {
+      const response = await this.#fetch('/api/client-log', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(report),
+        keepalive,
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async #request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     url: string,

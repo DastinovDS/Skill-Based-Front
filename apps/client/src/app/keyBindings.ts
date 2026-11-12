@@ -24,6 +24,7 @@ export const KEY_ACTIONS = [
   'alert',
   'fit',
   'mute',
+  'mark',
 ] as const;
 export type KeyAction = (typeof KEY_ACTIONS)[number];
 
@@ -44,6 +45,8 @@ export const DEFAULT_KEYS: KeyMap = {
   alert: 'Space',
   fit: 'KeyH',
   mute: 'KeyM',
+  // "Mark a problem" (#810): the last minute of diagnostics to the server log, for playtests.
+  mark: 'F8',
 };
 
 export const KEYS_STORAGE_KEY = 'sbf.keys';

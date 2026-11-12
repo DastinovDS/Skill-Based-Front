@@ -27,6 +27,7 @@
  * queued behind seconds of snapshots, and must not drop a live link for that (#852). `online` and a tab that becomes visible again reconnect at once, or
  * check the link at once.
  */
+import { diagnostics } from '../diagnostics.ts';
 import {
   CLOSE_NO_MATCH,
   CLOSE_POLICY,
@@ -294,7 +295,7 @@ export class MatchConnection {
       if (this.#socket === socket) this.#onFrame(event.data);
     };
     socket.onclose = (event: CloseEvent) => {
-      if (this.#socket === socket) this.#onClose(event.code);
+      if (this.#socket === socket) this.#onClose(event.code, event.reason);
     };
   }
 
@@ -365,7 +366,7 @@ export class MatchConnection {
     // Two pings without a pong, and not a frame since the later one: frames still coming in are
     // life, the pongs are only queued behind them on a page that runs late (#852).
     const unanswered = this.#pingSentAt.size >= 2 && this.#lastFrameAt <= this.#lastPingAt;
-    if (silent || unanswered) this.#onClose(CLOSE_ABNORMAL);
+    if (silent || unanswered) this.#onClose(CLOSE_ABNORMAL, silent ? 'silent link' : 'no pong');
   }
 
   /**
@@ -443,7 +444,8 @@ export class MatchConnection {
     this.#pingSentAt.clear();
   }
 
-  #onClose(code: number): void {
+  #onClose(code: number, reason = ''): void {
+    diagnostics.wsClose(code, reason);
     this.#teardown();
     this.#opts.handlers.onReset?.();
     if (code === CLOSE_PROTOCOL_VERSION) {

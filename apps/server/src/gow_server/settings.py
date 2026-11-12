@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     with the ruleset named in its header (AGENTS.md, section 4.5). The server archives its ruleset
     here at start-up, so it must be writable (in a container ``GOW_RULESETS_DIR=/data/rulesets``).
     """
+    client_log_dir: Path | None = None
+    """Where the client diagnostics (#810, ``gow_server.clientlog``) are written as well, one JSON
+    line per report into ``client.jsonl``, rotated by size. Unset: stderr only, like every other
+    log. In a container ``GOW_CLIENT_LOG_DIR=/client-logs``, the volume ``gow-client-logs`` that
+    ``stack:reset`` keeps."""
+    client_log_max_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    client_log_files: int = Field(default=5, ge=1)
+    """Rotation of ``client.jsonl``: a file past ``client_log_max_bytes`` becomes
+    ``client.jsonl.1`` and ``client_log_files`` old files are kept (60 MB at most by default)."""
+    client_log_rate_limit: int = Field(default=20, ge=1)
+    client_log_rate_window_s: int = Field(default=60, gt=0)
+    """At most ``client_log_rate_limit`` client reports per player within the window (#810): the
+    client sends a batch at most every 10 s, plus one per "mark problem" key press."""
     rulesets_bundled_dir: Path = Path("rulesets/archive")
     """The archive shipped with the image (read-only): its files are copied into ``rulesets_dir``
     at start-up when that is another directory."""

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HudChrome, DOUBLE_ESC_MS } from './chrome.svelte.ts';
 import { hudKey, routeKey, type HudKeyInput } from './hudKeys.ts';
+import { DEFAULT_KEYS } from '../app/keyBindings.ts';
 
 const down = (code: string, key = code): HudKeyInput => ({ type: 'keydown', code, key });
 
@@ -39,6 +40,30 @@ describe('hudKey', () => {
     chrome.openExit();
     expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 2)).toBe('blocked');
     expect(mute).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks a problem on F8 once per press, also while the help is open (#810)', () => {
+    const chrome = new HudChrome();
+    const mark = vi.fn();
+    expect(hudKey(chrome, down('F8'), { fit: vi.fn(), mark }, 0)).toBe('handled');
+    expect(hudKey(chrome, { ...down('F8'), repeat: true }, { fit: vi.fn(), mark }, 1)).toBe(
+      'handled',
+    );
+    chrome.helpOpen = true;
+    expect(hudKey(chrome, down('F8'), { fit: vi.fn(), mark }, 2)).toBe('handled');
+    expect(mark).toHaveBeenCalledTimes(2);
+    // Without the action (the replay) the key is not the HUD's.
+    chrome.helpOpen = false;
+    expect(hudKey(chrome, down('F8'), { fit: vi.fn() }, 3)).toBe('pass');
+  });
+
+  it('marks a problem on the key it was moved to', () => {
+    const chrome = new HudChrome();
+    const mark = vi.fn();
+    const keys = { ...DEFAULT_KEYS, mark: 'F9' };
+    expect(hudKey(chrome, down('F8'), { fit: vi.fn(), mark }, 0, keys)).toBe('pass');
+    expect(hudKey(chrome, down('F9'), { fit: vi.fn(), mark }, 1, keys)).toBe('handled');
+    expect(mark).toHaveBeenCalledOnce();
   });
 
   it('has no key for the removed journal: J goes on to the orders', () => {

@@ -6,6 +6,7 @@
   import { statusView } from '../app/matchStatus.ts';
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
+  import { markProblem } from '../hud/markProblem.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
   import { STATUS_INPUTS, isStatusScene } from './statusScenes.ts';
   import { createDevMatch } from './devMatch.ts';
@@ -302,7 +303,12 @@
   );
 
   function handleKey(event: KeyboardEvent): void {
-    if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), idle: () => orders.isIdle() })) {
+    // The mark key shows its toast as if the server took it (the dev screen sends nothing, #810).
+    const mark = (): void => {
+      const tick = hud.current?.tick ?? null;
+      void markProblem(hud.toasts, { mark: () => Promise.resolve({ sent: true, tick }) });
+    };
+    if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), mark, idle: () => orders.isIdle() })) {
       return;
     }
     if (forwardKey(orders, event)) {

@@ -41,7 +41,7 @@ const saved = (value: unknown): (() => Storage) => {
 };
 
 describe('the default keys (#966)', () => {
-  it('are the keys of the help: E F X R P B S G Q T Space H M', () => {
+  it('are the keys of the help: E F X R P B S G Q T Space H M F8', () => {
     expect(DEFAULT_KEYS).toEqual({
       planned: 'KeyE',
       release: 'KeyF',
@@ -56,6 +56,7 @@ describe('the default keys (#966)', () => {
       alert: 'Space',
       fit: 'KeyH',
       mute: 'KeyM',
+      mark: 'F8',
     });
   });
 

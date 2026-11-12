@@ -4,6 +4,8 @@
   import { HudChrome } from '../hud/chrome.svelte.ts';
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
+  import { markProblem } from '../hud/markProblem.ts';
+  import { diagnostics, watchFrames } from '../diagnostics.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
@@ -176,6 +178,16 @@
     canvas?.setInsets(insets);
   });
 
+  // The diagnostics name this match, and count its frames for stalls (#810).
+  $effect(() => {
+    diagnostics.setMatch(matchId);
+    const stop = watchFrames(diagnostics);
+    return () => {
+      stop();
+      diagnostics.setMatch(null);
+    };
+  });
+
   // Counts the pause down between server messages (the server sends whole seconds once).
   $effect(() => {
     if (paused === null) {
@@ -242,6 +254,9 @@
         fit: () => canvas?.fitMap(),
         mute: () => {
           sound.toggleMute();
+        },
+        mark: () => {
+          void markProblem(hud?.toasts ?? null);
         },
         idle: () => orders?.isIdle() ?? true,
       })

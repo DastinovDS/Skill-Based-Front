@@ -345,6 +345,14 @@ description = "Stop the agents' stack and delete its volumes (only project sbf-a
 env = { HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
 run = "docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet down --volumes --remove-orphans"
 
+[tasks.logs]
+description = "Client diagnostics of one match (#810) from the volume gow-client-logs of a running stack, oldest first, one JSON line each (arg: match id; --project: the compose project, default the owner's skill-based-front, agents pass sbf-agent). A dev server: uv run python -m gow_server.clientlog <match> --dir <dir>"
+usage = '''
+arg "<match>"
+flag "--project <project>" default="skill-based-front"
+'''
+run = "docker compose -p {{usage.project}} exec -T app python -m gow_server.clientlog {{usage.match}}"
+
 [tasks.share]
 description = "Put the local stack online through a Cloudflare quick tunnel and print the https link (arg: port, default 8080 = `stack`; 18080 for `stack:agent`). Ctrl+C closes it. Needs bash; does not start a stack"
 usage = 'arg "[port]" default="8080"'

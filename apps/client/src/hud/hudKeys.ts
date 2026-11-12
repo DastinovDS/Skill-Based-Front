@@ -1,8 +1,8 @@
 /**
- * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, `M` sound on or off, the
- * double `Esc` that opens the exit dialog, and `Esc` that closes an overlay. The keys of the
- * orders (`match/keyEvents.ts`) come after these. `H` and `M` are the defaults of their bindings
- * (#966); `?`, `F1`, `Home` and `Esc` are fixed.
+ * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, `M` sound
+ * on or off, `F8` mark a problem (#810), the double `Esc` that opens the exit dialog, and `Esc`
+ * that closes an overlay. The keys of the orders (`match/keyEvents.ts`) come after these. `H`, `M`
+ * and `F8` are the defaults of their bindings (#966); `?`, `F1`, `Home` and `Esc` are fixed.
  */
 import type { KeyMap } from '../app/keyBindings.ts';
 import { keyBindings } from '../app/keyBindingsState.svelte.ts';
@@ -27,6 +27,8 @@ export interface HudKeyActions {
   fit: () => void;
   /** Sound on or off (`M`, #71). Absent: the key is not the HUD's. */
   mute?: () => void;
+  /** "Mark a problem" (`F8`, #810): the last minute of diagnostics to the server log. */
+  mark?: () => void;
   /**
    * Nothing is selected and no order menu is open: an `Esc` now has nothing to drop, so two of
    * them in a row ask to leave the match. Absent: always idle (the unit tests of the keys).
@@ -68,6 +70,11 @@ export function hudKey(
   }
   if (input.code === keys.mute && actions.mute !== undefined) {
     if (input.repeat !== true) actions.mute();
+    return 'handled';
+  }
+  // A mark works with an overlay open too: the problem may be in it.
+  if (input.code === keys.mark && actions.mark !== undefined) {
+    if (input.repeat !== true) actions.mark();
     return 'handled';
   }
   if (chrome.modal) return 'blocked';

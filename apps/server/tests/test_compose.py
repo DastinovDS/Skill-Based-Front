@@ -22,6 +22,7 @@ CONTAINER_PATHS: Final = {
     "replays_dir",
     "rulesets_dir",
     "rulesets_bundled_dir",
+    "client_log_dir",
 }
 """Fixed by the image (``deploy/app.Dockerfile``): not for the operator to change."""
 
