@@ -47,6 +47,8 @@
     anchors?: MapAnchors;
     /** The pause of a private match; without it (none left, or a rated match) the button is not shown. */
     onpause?: () => void;
+    /** The match is paused (DEC-05): the clock shows it. */
+    paused?: boolean;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
   }
@@ -61,6 +63,7 @@
     colour = null,
     anchors = NO_ANCHORS,
     onpause,
+    paused = false,
     oninsets,
   }: Props = $props();
 
@@ -164,7 +167,7 @@
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
 <div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
-    <TopBar {data} {orders} {chrome} {onpause} {anchors} names={hud.nodeName} />
+    <TopBar {data} {orders} {chrome} {onpause} {paused} {anchors} names={hud.nodeName} />
   </div>
   {#if dev !== undefined}
     <DevPanel {dev} />

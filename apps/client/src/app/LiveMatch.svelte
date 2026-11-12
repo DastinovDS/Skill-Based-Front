@@ -298,6 +298,7 @@
       {orders}
       {chrome}
       colour={colours?.[me] ?? null}
+      paused={paused !== null}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
             session?.pause();

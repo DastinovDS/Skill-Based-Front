@@ -74,6 +74,11 @@
   const bannerPinned = params.has('banner');
   const cpParam = Number(params.get('cp'));
   const cpPinned = params.has('cp') && Number.isInteger(cpParam) ? Math.max(0, cpParam) : null;
+  // `?clock=<seconds>` sets the time left of a frozen scene (the match clock of #1005): the match
+  // ends that many seconds after the scene's tick.
+  const clockParam = Number(params.get('clock'));
+  const clockPinned =
+    params.has('clock') && Number.isInteger(clockParam) ? Math.max(0, clockParam) : null;
   // `?capture=<node>` turns on the price of a capture (`capture.charge_cost = 1`, DEC-38) and adds a
   // `capture_failed` event at that node to a fixture scene: its toast and the capture tip on a target
   // the player does not own (#580) can be looked at.
@@ -132,7 +137,11 @@
   // A scene may give the players their colours (DEC-49): the map, the HUD and the arena follow.
   const colours = $derived(fixture?.colours ?? null);
   // A scene may play other rules (#649): the HUD and the menus follow them.
-  const sceneRules = $derived(fixture?.rules ?? rules);
+  const sceneRules = $derived.by(() => {
+    const base = fixture?.rules ?? rules;
+    if (clockPinned === null || fixture === undefined) return base;
+    return { ...base, match_ticks: fixture.snapshot.tick + clockPinned * base.tick_hz };
+  });
 
   // The HUD numbers for the map on screen.
   const hud = $derived(
@@ -399,6 +408,7 @@
     {orders}
     {chrome}
     colour={colours?.[DEV_PLAYER] ?? null}
+    paused={statusId === 'paused-you' || statusId === 'paused-enemy'}
     onreload={() => undefined}
     oninsets={(next: Insets) => {
       insets = next;
