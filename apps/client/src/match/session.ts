@@ -1,4 +1,5 @@
 import type { MatchAudio } from '../audio/matchAudio.ts';
+import { diagnostics } from '../diagnostics.ts';
 import type { HudState } from '../hud/hudState.svelte.ts';
 import {
   MatchConnection,
@@ -231,14 +232,15 @@ export class MatchSession implements RenderSource {
 
   /**
    * Diagnostics for "the match froze" reports (#546): a long silence between two snapshots goes
-   * to the console with its length, so a bug report can say whether the server or the page stalled.
+   * to the console with its length, so a bug report can say whether the server or the page stalled,
+   * and to the server log with the flag of a hidden tab (#810, `diagnostics.ts`).
    */
   #noteSnapshotGap(): void {
     const now = (this.#now ?? (() => performance.now()))();
     const last = this.#lastSnapshotAt;
     this.#lastSnapshotAt = now;
     if (last !== null && now - last > SNAPSHOT_GAP_WARN_MS) {
-      console.warn(`[client] snapshot gap ${String(Math.round(now - last))} ms`);
+      diagnostics.gap(now - last);
     }
   }
 
@@ -254,6 +256,7 @@ export class MatchSession implements RenderSource {
         break;
       case 'snapshot':
         this.#noteSnapshotGap();
+        diagnostics.snapshot(msg.tick);
         // A duplicate or a stale snapshot is dropped by the buffer, and so by the HUD.
         if (this.buffer.push(msg) === 'added') this.#hud?.onSnapshot(msg);
         break;

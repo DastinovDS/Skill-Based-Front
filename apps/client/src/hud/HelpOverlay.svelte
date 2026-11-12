@@ -76,6 +76,7 @@
     [key('alert'), 'help.key.alert'],
     [key('fit'), 'help.key.fit'],
     [key('mute'), 'help.key.mute'],
+    [key('mark'), 'help.key.mark'],
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ]);

@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from gow_server import (
     alerts,
     botmatch,
+    clientlog,
     identity,
     internal,
     invites,
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         app.state.maps = maps.MapCatalog.load(settings.maps_dir)
+        client_file = clientlog.open_file_log(settings)
         engine = create_db_engine(settings.database_url)
         await asyncio.to_thread(upgrade_to_head, engine)
         app.state.sessions = sessionmaker(engine, expire_on_commit=False)
@@ -162,6 +164,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             await app.state.replays.aclose()
             engine.dispose()
             log.info("server stopped")
+            clientlog.close_file_log(client_file)
 
     app = FastAPI(title="Fines Imperii", lifespan=lifespan)
     app.state.settings = settings
@@ -235,5 +238,6 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(invites.lobby_router)
     app.include_router(botmatch.router)
     app.include_router(matchqueue.router)
+    app.include_router(clientlog.router)
     app.include_router(ws.router)
     return app

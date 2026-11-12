@@ -1072,6 +1072,46 @@
           }
         ]
       }
+    },
+    "/api/client-log": {
+      "post": {
+        "tags": [
+          "diagnostics"
+        ],
+        "summary": "Client Report",
+        "description": "A report of the player's client into the server log (#810); 429 past the per-player limit\n(``GOW_CLIENT_LOG_RATE_LIMIT`` within ``GOW_CLIENT_LOG_RATE_WINDOW_S``).",
+        "operationId": "client_report_api_client_log_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1154,6 +1194,189 @@
         ],
         "title": "Calibration",
         "description": "Calibration progress of an account: the first matches of a rated account do not show its\nrating (DEC-34, #414)."
+      },
+      "ClientEntry": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn",
+              "stall",
+              "gap",
+              "ws_close"
+            ],
+            "title": "Kind"
+          },
+          "msg": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Msg"
+          },
+          "count": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "default": 1
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 86400000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ms"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden",
+            "default": false
+          },
+          "t_ms": {
+            "type": "integer",
+            "maximum": 9007199254740992.0,
+            "minimum": 0.0,
+            "title": "T Ms"
+          },
+          "tick": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483648.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tick"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "msg",
+          "t_ms"
+        ],
+        "title": "ClientEntry",
+        "description": "One thing the client noticed; repeats of the same kind and message are one entry."
+      },
+      "ClientReport": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "batch",
+              "mark"
+            ],
+            "title": "Reason"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "tick": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483648.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tick"
+          },
+          "client_version": {
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^[A-Za-z0-9._+-]*$",
+            "title": "Client Version"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ClientEntry"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Entries"
+          },
+          "dropped": {
+            "type": "integer",
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Dropped",
+            "default": 0
+          },
+          "seconds": {
+            "items": {
+              "$ref": "#/components/schemas/ClientSecond"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Seconds"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason",
+          "client_version"
+        ],
+        "title": "ClientReport",
+        "description": "``POST /api/client-log``: a batch of entries or a \"mark problem\" dump (#810)."
+      },
+      "ClientSecond": {
+        "properties": {
+          "frames": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Frames"
+          },
+          "frame_max_ms": {
+            "type": "integer",
+            "maximum": 86400000.0,
+            "minimum": 0.0,
+            "title": "Frame Max Ms"
+          },
+          "snapshots": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Snapshots"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "frames",
+          "frame_max_ms",
+          "snapshots",
+          "hidden"
+        ],
+        "title": "ClientSecond",
+        "description": "One second of the timeline of a \"mark problem\" dump."
       },
       "ColourChange": {
         "properties": {

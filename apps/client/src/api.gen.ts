@@ -522,6 +522,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/client-log': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Client Report
+     * @description A report of the player's client into the server log (#810); 429 past the per-player limit
+     *     (``GOW_CLIENT_LOG_RATE_LIMIT`` within ``GOW_CLIENT_LOG_RATE_WINDOW_S``).
+     */
+    post: operations['client_report_api_client_log_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -566,6 +587,75 @@ export interface components {
        * @description Calibration matches needed (a server setting, 5 by default).
        */
       total: number;
+    };
+    /**
+     * ClientEntry
+     * @description One thing the client noticed; repeats of the same kind and message are one entry.
+     */
+    ClientEntry: {
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: 'error' | 'warn' | 'stall' | 'gap' | 'ws_close';
+      /** Msg */
+      msg: string;
+      /**
+       * Count
+       * @default 1
+       */
+      count: number;
+      /** Ms */
+      ms?: number | null;
+      /**
+       * Hidden
+       * @default false
+       */
+      hidden: boolean;
+      /** T Ms */
+      t_ms: number;
+      /** Tick */
+      tick?: number | null;
+    };
+    /**
+     * ClientReport
+     * @description ``POST /api/client-log``: a batch of entries or a "mark problem" dump (#810).
+     */
+    ClientReport: {
+      /**
+       * Reason
+       * @enum {string}
+       */
+      reason: 'batch' | 'mark';
+      /** Match Id */
+      match_id?: string | null;
+      /** Tick */
+      tick?: number | null;
+      /** Client Version */
+      client_version: string;
+      /** Entries */
+      entries?: components['schemas']['ClientEntry'][];
+      /**
+       * Dropped
+       * @default 0
+       */
+      dropped: number;
+      /** Seconds */
+      seconds?: components['schemas']['ClientSecond'][];
+    };
+    /**
+     * ClientSecond
+     * @description One second of the timeline of a "mark problem" dump.
+     */
+    ClientSecond: {
+      /** Frames */
+      frames: number;
+      /** Frame Max Ms */
+      frame_max_ms: number;
+      /** Snapshots */
+      snapshots: number;
+      /** Hidden */
+      hidden: boolean;
     };
     /** ColourChange */
     ColourChange: {
@@ -1759,6 +1849,37 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['QueueStatus'];
+        };
+      };
+    };
+  };
+  client_report_api_client_log_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientReport'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };

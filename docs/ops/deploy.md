@@ -223,6 +223,15 @@ To view: `docker compose logs -f app`; a whole match: `docker compose logs app |
 Docker log rotation is enabled by section 1. An exception in a match is written with a traceback and `match_id`
 (`"msg": "match crashed"`), the other matches go on; exceptions of HTTP handlers are written by uvicorn (`uvicorn.error`) in the same JSON.
 
+Client diagnostics (#810): the page sends its console errors and warnings, stalls (frames later than 200 ms), snapshot gaps over 1 s
+and abnormal WebSocket closes to `POST /api/client-log` (at most one batch every 10 s), and a dump of the last 60 s when the
+player presses the "mark a problem" key (`F8` by default, rebindable in Settings). The server writes each report as one line of the
+logger `gow_server.client` (`"msg": "client report"` or `"client mark"`, with `player_id`, `match_id`, `tick`) to stderr and to
+`/client-logs/client.jsonl` on the volume `gow-client-logs`, which `stack:reset` keeps (rotated by `GOW_CLIENT_LOG_MAX_BYTES` and
+`GOW_CLIENT_LOG_FILES`). One match: `mise run logs <match>` (`--project sbf-agent` for the agents' stack), or on the server
+`docker compose exec -T app python -m gow_server.clientlog <match>`. Reports are limited per player
+(`GOW_CLIENT_LOG_RATE_LIMIT` per `GOW_CLIENT_LOG_RATE_WINDOW_S`, 429 past it); tokens are cut out on the client and again on the server.
+
 ### Metrics
 
 `GET /internal/metrics` (the Prometheus format). The endpoint answers only on loopback, like `/internal/drain`; Caddy proxies

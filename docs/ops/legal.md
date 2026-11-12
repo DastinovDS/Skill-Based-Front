@@ -32,9 +32,10 @@ must fill in the real operator data.
 | IP when a guest is created | process memory, `SlidingWindowLimiter` (window `GOW_GUEST_RATE_WINDOW_S`, 1 h) | until the window ends or a restart |
 | IP and `nick_key` of password login attempts (`abuse.Limits.login_ip`, `login_nick`, `login_nick_total`) | process memory (windows `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 min) | until the window ends or a restart |
 | server log (`app.py`, `logs.py`) | the container stderr: method, path without query, status, time, request id; without IPs and tokens | rotation |
+| client diagnostics (#810, `apps/client/src/diagnostics.ts`, `gow_server/clientlog.py`): console errors and warnings of the page, stalls (frames later than 200 ms), snapshot gaps over 1 s with a "tab hidden" flag, WebSocket close codes; with the "mark a problem" key (`F8` by default) the same of the last 60 s and a per-second timeline (frames, the longest frame, snapshots); each report with the player id, match id, tick, client version (protocol version) and the browser's user agent; no IP, no token (cut out on the client and again on the server), no nick; sent only by a player with a saved token, at most `GOW_CLIENT_LOG_RATE_LIMIT` reports per player per `GOW_CLIENT_LOG_RATE_WINDOW_S`; nothing new is stored in the browser | the container stderr and the file `client.jsonl` on the separate volume `gow-client-logs` mounted at `/client-logs` (`GOW_CLIENT_LOG_DIR`); not part of backups; `stack:reset` does not remove it | rotation by size inside the server: `GOW_CLIENT_LOG_MAX_BYTES` (10 MB) times `GOW_CLIENT_LOG_FILES` (5) old files, about 60 MB at most, the oldest overwritten; `docker volume rm <project>_gow-client-logs` removes all |
 | Caddy log | the access log is not configured (`deploy/Caddyfile` has no `log`); the service log may contain IPs in errors | rotation |
 
-There are no cookies, analytics, third-party services or error collection; the CSP `default-src 'self'` forbids external requests.
+There are no cookies, analytics or third-party services; error collection is only the own client diagnostics above (no external service); the CSP `default-src 'self'` forbids external requests.
 
 ## Deleting a guest on request
 
