@@ -45,18 +45,33 @@ describe('ExitDialog', () => {
     expect(document.activeElement?.textContent).toContain(translate('en', 'exit.stay'));
   });
 
-  it('keeps Tab inside the dialog: Stay, Forfeit, back to Stay', async () => {
+  it('keeps Tab inside the dialog: from Forfeit back to Stay, Shift+Tab from Stay to Forfeit', async () => {
     render();
     await tick();
-    const dialog = document.querySelector('[role=alertdialog]');
-    const press = (shiftKey = false): void => {
-      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true }));
-    };
-    press();
-    expect(document.activeElement).toBe(document.querySelector('button.danger'));
-    press();
-    expect(document.activeElement?.textContent).toContain(translate('en', 'exit.stay'));
-    press(true);
-    expect(document.activeElement).toBe(document.querySelector('button.danger'));
+    const stay = document.activeElement;
+    const danger = document.querySelector<HTMLButtonElement>('button.danger');
+    expect(stay?.textContent).toContain(translate('en', 'exit.stay'));
+    danger?.focus();
+    danger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(document.activeElement).toBe(stay);
+    stay?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }),
+    );
+    expect(document.activeElement).toBe(danger);
+  });
+
+  it('Escape keeps playing', async () => {
+    const onstay = vi.fn();
+    setLocale('en');
+    component = mount(ExitDialog, {
+      target: document.body,
+      props: { open: true, onforfeit: vi.fn(), onstay },
+    });
+    flushSync();
+    await tick();
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(onstay).toHaveBeenCalledOnce();
   });
 });

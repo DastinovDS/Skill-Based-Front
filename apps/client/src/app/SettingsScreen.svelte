@@ -68,8 +68,7 @@
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    // The log-out and the keys dialogs keep their own keys while they are open.
-    if (confirmingLogout || editingKeys) return;
+    // Under a dialog (theme/modal.ts) the screen's keys do not arrive at all.
     if (event.key === 'Escape') {
       event.preventDefault();
       onback();

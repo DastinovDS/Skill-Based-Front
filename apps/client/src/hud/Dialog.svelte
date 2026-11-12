@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { modal } from '../theme/modal.ts';
   import './dialog.css';
 
   interface Props {
@@ -11,7 +12,8 @@
     role?: 'dialog' | 'alertdialog';
     /** The id of the element that describes the dialog, if any. */
     describedby?: string;
-    onkeydown?: (event: KeyboardEvent) => void;
+    /** Escape: the safe way out (the match HUD routes the other keys itself). */
+    onclose?: () => void;
     /** The body between the title and the buttons. */
     children: Snippet;
     /** The buttons, in a row at the bottom. */
@@ -24,7 +26,7 @@
     id,
     role = 'dialog',
     describedby,
-    onkeydown,
+    onclose,
     children,
     actions,
   }: Props = $props();
@@ -40,7 +42,7 @@
     aria-labelledby="{id}-title"
     aria-describedby={describedby}
     tabindex="-1"
-    {onkeydown}
+    use:modal={{ onclose, passKeys: true }}
   >
     <p class="dlg-eyebrow">{eyebrow}</p>
     <h2 class="dlg-title" id="{id}-title">{title}</h2>
