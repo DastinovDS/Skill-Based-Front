@@ -559,7 +559,8 @@ can gather a bonus. The CP keeps of the v1 personalities (`reserve`, `recruit_ke
 has no Defense to keep CP for and doubles the CP income. Under v1 the play is unchanged (the same `state_hash` on
 `mvp-2`).
 
-**Economy waste (#683, `mvp-7`).** Factories (`gow_bots.bots.factories`): a captured factory passes to the capturer
+**Economy waste (#683, `mvp-7`).** Factories of the campaign and smart bots (`gow_bots.bots.factories`; the plain
+BOT-03 yardsticks keep the front site, `tactics.front_factory_site`): a captured factory passes to the capturer
 (DEC-41, item 2) and the flow carries every charge to the front wherever it is made (DEC-43), so the bots build in the
 rear: an own city at least 3 roads from every enemy node, reached from the capital over nodes no enemy node touches,
 the deepest first (up to 4 roads), then the nearest to the capital; not while the enemy holds more nodes; only while

@@ -17,7 +17,8 @@ two were not exact:
   group gets which target follows the opaque id, which differs between the sides; the simulation
   then serves the gathering plans in the order of the internal group id and the first one departs
   first, so the targets leave in the other order on one side (``gather_plans``, SIM). A bot cannot
-  see the internal order and the rule is the simulation's, so this stays open (xfail, strict).
+  see the internal order and the rule is the simulation's, so this stays open (xfail; not strict
+  since #683, after which this seed plays an exact mirror: no repro of the cause is known now).
 """
 
 from collections.abc import Iterator, Mapping
@@ -71,9 +72,11 @@ def test_mirror_strangler_on_ridge_seed_3() -> None:
 
 @pytest.mark.slow  # one full match
 @pytest.mark.xfail(
-    strict=True,
+    strict=False,
     reason="#899: interchangeable groups get their plan targets by opaque id, the simulation "
-    "serves plans by internal id (gather_plans); a bot cannot see that order",
+    "serves plans by internal id (gather_plans); a bot cannot see that order. Not strict since "
+    "#683: this seed no longer reaches the case (32 mirror matches of the exploiter, the 4 pool "
+    "maps x seeds 0..7, were all exact), the cause stays open",
 )
 @pytest.mark.usefixtures("side_zero_params")
 def test_mirror_exploiter_on_narrows_seed_3() -> None:
