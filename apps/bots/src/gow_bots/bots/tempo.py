@@ -43,6 +43,18 @@ The human figure it models: the owner played ``mvp-3`` match 6 at 8.5 commands a
 any demand); ``normal`` and ``easy`` cut it below the demand. The think and reaction delays keep
 their old values (they model the human pace, not the strength).
 
+**Only priced commands count** (#1015, ``mvp-7``). The bucket of 6 and 7 commands a minute counted
+the free ones too, about a third of what the slow levels sent (a stance change, a split, a
+cancel), and the road fortification of the CP sink came first in every decision near the cap, so
+``easy`` put 27 to 46% of its CP into lines that took back about 0.3 charges each and ``normal``
+8 to 24% (the field run of 2026-11-12). Now the sink comes last and shares the fortification
+budget (``SmartBot`` item 26) and the bucket pays only priced commands, at 4 and 5 a minute: the
+paid commands a match stay where they were (about 60 for ``easy``, 72 for ``normal``, 82 for
+``hard``), now orders instead of lines, and the ladder with them (``hard`` over ``easy`` 0.78,
+over ``normal`` 0.62, ``normal`` over ``easy`` 0.70; 80 local matches each, the five
+personalities, the pool maps). 3 and 4 a minute separate the levels more but burn 10 to 14% of
+their CP at the cap.
+
 Integers only, no randomness: a tempo is a pure function of the ticks, so a match stays a
 function of ``(map, ruleset, bots, seed)`` and the two sides stay mirror-symmetric.
 """
@@ -72,8 +84,8 @@ class Tempo:
 
 
 DIFFICULTIES: Final[dict[str, Tempo]] = {
-    "easy": Tempo(think_ticks=20, react_ticks=30, apm=6, burst=3, insight=True),
-    "normal": Tempo(think_ticks=10, react_ticks=15, apm=7, burst=4, insight=True),
+    "easy": Tempo(think_ticks=20, react_ticks=30, apm=4, burst=3, insight=True),
+    "normal": Tempo(think_ticks=10, react_ticks=15, apm=5, burst=4, insight=True),
     "hard": Tempo(think_ticks=5, react_ticks=0, apm=40, burst=8, insight=True),
 }
 """Difficulty name to its tempo, easiest first."""

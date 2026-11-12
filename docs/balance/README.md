@@ -477,14 +477,14 @@ seeds and overfits them: confirm a result with a tournament on fresh seeds (`--s
 ## Difficulty levels and tempo
 
 The smart bots play at a human tempo (`gow_bots.bots.tempo`, #166): a decision at most every `think_ticks`, an enemy
-strike or figure noticed `react_ticks` after it is shown, at most `apm` commands a minute (a token bucket of `burst`),
-and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed cities, the scouts). `apm_avg` and
+strike or figure noticed `react_ticks` after it is shown, at most `apm` commands with a CP price a minute (a token
+bucket of `burst`; a free command needs a ready bucket and takes nothing from it, #1015), and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed cities, the scouts). `apm_avg` and
 `apm_by_minute` of `gow-bots stats` measure the result on replays.
 
 | Level | think | react | APM (burst) | insight |
 |---|---|---|---|---|
-| `easy` | 20 ticks | 30 ticks | 6 (3) | yes |
-| `normal` | 10 ticks | 15 ticks | 7 (4) | yes |
+| `easy` | 20 ticks | 30 ticks | 4 (3) | yes |
+| `normal` | 10 ticks | 15 ticks | 5 (4) | yes |
 | `hard` (the name alone) | 5 ticks | 0 | 40 (8) | yes |
 
 **Why the APM is the lever (#749).** Under `mvp-4` the CP income (about 93 CP a match) binds every smart bot: they
@@ -495,6 +495,17 @@ APM above that demand change almost nothing (the levels of #573, 12 / 25 / 40 AP
 plays even with `hard`. An APM bucket below the demand binds: a bot at 8 a minute still plays even with `hard`, at 7
 it wins about 0.4, at 6 almost never. So `hard` keeps the unlimited play and `normal` and `easy` sit below the
 demand; the owner played match 6 (`mvp-3`) at 8.5 commands a minute. The numbers and the validation run: #749.
+
+**Priced commands only, the fortification sink last (#1015).** Under `mvp-7` the bucket of 6 and 7 commands a minute
+counted the free commands too (stance changes, splits, cancels: about a third of what `easy` sent), and the road
+fortification of the CP sink (`economy.fort_site`) came first in every decision near the CP cap, where a bot with a
+short bucket always is: `easy` put 27 to 46% of its CP income into lines that took back about 0.3 charges each, `normal`
+8 to 24%. Now the sink comes last in the decision, spends only the CP the decision leaves near the cap and shares the
+`FORT_SHARE` budget of the threat fortifications (`SmartBot` item 26), and the bucket pays only priced commands, at
+4 and 5 a minute. The paid commands of a match stay where they were (about 60 `easy`, 72 `normal`, 82 `hard`) and go
+into orders instead of lines; the ladder stays (local, 80 matches a pair of levels over the five personalities and the
+pool maps: `hard` over `easy` 0.78 before and after, over `normal` 0.69 and 0.62, `normal` over `easy` 0.78 and 0.70).
+3 and 4 a minute separate the levels more (0.86, 0.75, 0.84 on 44 matches each) but burn 10 to 14% of the CP at the cap.
 
 Two behaviors of the smart bots that do not depend on the level (#618; module docstring of `gow_bots.bots.smart`,
 items 10 and 11): **a chosen plan gets its CP** (`wait_plan`: when the best attack is a scheduled order that the CP cannot

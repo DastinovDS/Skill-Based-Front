@@ -56,14 +56,20 @@ def test_levels_slow_down_from_hard_to_easy() -> None:
 
 
 def test_the_lower_levels_cannot_pay_the_demand_of_a_match() -> None:
-    # #749: under mvp-4 the smart bots send 118 to 136 commands in a 15-minute match (the field
-    # run of #706): that demand binds the ``easy`` and ``normal`` buckets, not ``hard``'s.
+    # #749, #1015: the bucket pays the priced commands, and the CP of a match bound them. Under
+    # mvp-7 a 15-minute match in Balance brings 3 CP at the start and 0.5 CP every 50 ticks (93
+    # CP), and the cheapest priced command, an order or a recruit, costs 1 CP: 93 commands. That
+    # demand binds the ``easy`` and ``normal`` buckets, not ``hard``'s.
     rules = load_ruleset(ROOT / "rulesets" / "mvp-7.toml")
     minutes = rules.match_ticks // (60 * rules.tick_hz)
     assert minutes == 15
+    cp = rules.cp
+    income = cp.start + cp.per_period * (rules.match_ticks // rules.stances.cp_period_ticks.balance)
+    demand = income // min(rules.orders.cost.move, rules.orders.cost.recruit)
+    assert demand == 93
     for level in ("easy", "normal"):
-        assert DIFFICULTIES[level].apm * minutes + DIFFICULTIES[level].burst < 118, level
-    assert DIFFICULTIES["hard"].apm * minutes > 136
+        assert DIFFICULTIES[level].apm * minutes + DIFFICULTIES[level].burst < demand, level
+    assert DIFFICULTIES["hard"].apm * minutes > demand
     with pytest.raises(ValueError):
         Tempo(think_ticks=0, react_ticks=0, apm=1, burst=1, insight=True)
 
