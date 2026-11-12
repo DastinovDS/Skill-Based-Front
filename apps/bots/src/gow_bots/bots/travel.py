@@ -25,8 +25,7 @@ Integers only, no ``set`` iteration (AGENTS.md, section 4.1 holds for the bots t
 """
 
 import heapq
-from dataclasses import dataclass
-from typing import Final
+from typing import Final, NamedTuple
 
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
@@ -94,9 +93,9 @@ class Times:
         return into_b if to_node == self.map.edges[edge].b else into_a
 
 
-@dataclass(frozen=True, slots=True)
-class Way:
-    """The path a ``Move`` of a group to one node takes, once it departs."""
+class Way(NamedTuple):
+    """The path a ``Move`` of a group to one node takes, once it departs (a ``NamedTuple``: a
+    search makes one for every node it settles, and a frozen dataclass costs twice as much)."""
 
     ticks: int
     """The ticks of the path (``movement.path_ticks``): the sum of its ``edge_ticks``."""
@@ -131,32 +130,37 @@ def ways(
     """
     me, nodes, out = view.player, view.nodes, times.out
     fights = {f.node: True for f in view.fights if f.node is not None}
-    best: dict[int, int] = {start: 0}
-    parent: dict[int, int] = {}
-    via: dict[int, int] = {}
+    push, pop = heapq.heappush, heapq.heappop
+    best: dict[int, tuple[int, int, int]] = {}
+    """By node not settled yet: ``(ticks, the node before it, the road from there)``."""
     found: dict[int, Way] = {}
-    heap: list[tuple[int, int]] = [(0, start)]
-    while heap:
-        ticks, node = heapq.heappop(heap)
-        if node in found or ticks != best[node]:
-            continue
-        path = (*found[parent[node]].path, node) if node != start else (start,)
-        found[node] = Way(ticks, path, via.get(node, -1))
-        if node != start and (nodes[node].owner != me or node in fights):
-            continue  # the first foreign or neutral node, or one with a fight, ends a path
-        for eid, nxt, step in out[node]:
-            if nxt in found:
-                continue
-            if size > 0 and nodes[nxt].capacity < size:
-                continue  # the stack limit (DEC-20, D): the group does not fit there
-            cand = ticks + step
-            old = best.get(nxt)
-            if old is None or cand < old:
-                best[nxt], parent[nxt], via[nxt] = cand, node, eid
-                heapq.heappush(heap, (cand, nxt))
-            elif cand == old and _before(keys, path, found[parent[nxt]].path, nxt):
-                parent[nxt], via[nxt] = node, eid
-    return found
+    heap: list[tuple[int, int]] = []
+    ticks, node, path = 0, start, (start,)
+    found[start] = Way(0, path, -1)
+    while True:
+        if node == start or (nodes[node].owner == me and node not in fights):
+            # only ``start`` and own nodes without a fight go on (a path ends at the others)
+            for eid, nxt, step in out[node]:
+                if nxt in found:
+                    continue
+                if size > 0 and nodes[nxt].capacity < size:
+                    continue  # the stack limit (DEC-20, D): the group does not fit there
+                cand = ticks + step
+                old = best.get(nxt)
+                if old is None or cand < old[0]:
+                    best[nxt] = (cand, node, eid)
+                    push(heap, (cand, nxt))
+                elif cand == old[0] and _before(keys, path, found[old[1]].path, nxt):
+                    best[nxt] = (cand, node, eid)
+        while heap:
+            ticks, node = pop(heap)
+            if node not in found and ticks == best[node][0]:
+                break
+        else:
+            return found
+        _, before, eid = best.pop(node)
+        path = (*found[before].path, node)
+        found[node] = Way(ticks, path, eid)
 
 
 def _before(

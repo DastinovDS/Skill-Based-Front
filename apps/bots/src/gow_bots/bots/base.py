@@ -28,6 +28,7 @@ two sides of the same bot with the same parameters take mirrored decisions.
 """
 
 import random
+from bisect import bisect_left
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -164,10 +165,15 @@ class Bot:
         """The travel ticks of every road in both directions (``travel.edge_ticks``)."""
         self._ways_tick = -1
         self._ways: dict[tuple[int, int], dict[int, Way]] = {}
-        """By ``(start, size)``: the ``travel.ways`` of this decision (``_ways_tick``)."""
+        """By ``(start, size class)``: the ``travel.ways`` of this decision (``_ways_tick``)."""
+        self._capacities: list[int] = []
+        """The distinct capacities of the nodes of that view, ascending: two sizes with the same
+        number of capacities below them pass the same nodes, so they share one search."""
+        self._by_key: dict[tuple[int, int], list[tuple[int, int]]] = {}
+        """By ``(start, size class)``: ``(node, roads of its way)`` of every destination of that
+        search in ``node_key`` order, for the decision of ``_ways_tick``."""
         self._reach: dict[tuple[int, int, int], list[int]] = {}
-        """By ``(start, radius, size)``: the destinations of ``reachable`` in ``node_key`` order,
-        for the decision of ``_ways_tick``."""
+        """By ``(start, size class, radius)``: the destinations of ``reachable``, likewise."""
         self._left: dict[int, int] = {}
         """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
         self.retreat = rules.combat.retreat is Retreat.ROUND
@@ -201,14 +207,19 @@ class Bot:
     def ways(self, view: PlayerView, start: int, size: int = 0) -> dict[int, Way]:
         """``travel.ways`` of a group of ``size`` units standing in ``start``: by node, the ticks,
         the path and the last road of the path a ``Move`` there takes, ``start`` included.
-        Once per decision for each ``(start, size)``."""
+        Once per decision for each ``start`` and size class (``_capacities``)."""
+        key = self._search(view, start, size)  # first: a new decision replaces ``_ways``
+        return self._ways[key]
+
+    def _search(self, view: PlayerView, start: int, size: int) -> tuple[int, int]:
+        """The key of ``_ways`` for ``start`` and ``size``, searched when it is missing."""
         if self._ways_tick != view.tick:
-            self._ways_tick, self._ways, self._reach = view.tick, {}, {}
-        found = self._ways.get((start, size))
-        if found is None:
-            found = ways(view, self.times, self.keys, start, size)
-            self._ways[(start, size)] = found
-        return found
+            self._ways_tick, self._ways, self._by_key, self._reach = view.tick, {}, {}, {}
+            self._capacities = sorted({n.capacity for n in view.nodes})
+        key = (start, bisect_left(self._capacities, size))  # the nodes with a capacity < size
+        if key not in self._ways:
+            self._ways[key] = ways(view, self.times, self.keys, start, size)
+        return key
 
     def reachable(self, view: PlayerView, start: int, radius: int, size: int = 0) -> list[int]:
         """Nodes a group standing in ``start`` can be sent to whose path (``ways``) has at most
@@ -221,12 +232,16 @@ class Bot:
         are neither passed nor reached (the stack limit, DEC-20, D); ``0``: no limit. In
         ``node_key`` order.
         """
-        found = self.ways(view, start, size)
-        cached = self._reach.get((start, radius, size))
-        if cached is not None:
-            return cached
-        near = sorted((n for n, w in found.items() if 0 < w.hops <= radius), key=self.key)
-        self._reach[(start, radius, size)] = near
+        key = self._search(view, start, size)
+        near = self._reach.get((*key, radius))
+        if near is None:
+            by_key = self._by_key.get(key)
+            if by_key is None:
+                found = self._ways[key]
+                by_key = [(n, len(found[n].path) - 1) for n in sorted(found, key=self.key)]
+                self._by_key[key] = by_key
+            near = [n for n, hops in by_key if 0 < hops <= radius]
+            self._reach[(*key, radius)] = near
         return near
 
     def fit(self, view: PlayerView, start: int, dest: int, units: int) -> int:
