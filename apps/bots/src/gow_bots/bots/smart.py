@@ -198,7 +198,8 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     of ``economy.fort_site`` (a road fortification while the CP near their cap) comes last in
     the decision, after the attacks, the recruits and ``bank``, and spends only the CP the
     decision leaves near the cap (``fort_sink``), within the ``FORT_SHARE`` budget of item 22,
-    which it shares. Before, it came first and had no budget: a level whose APM bucket binds sits
+    which it shares; the budget counts the CP had at the stance in force (``cp_had``), not at
+    the Balance period. Before, it came first and had no budget: a level whose APM bucket binds sits
     near the cap, so its every decision bought a fortification before any attack (27 to 41% of
     the CP of ``easy``). The APM bucket pays only the commands with a CP price (``spend``): a
     split, a cancel or a stance change needs a ready bucket and takes nothing.
@@ -208,6 +209,7 @@ same rule for all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
 """
 
+import math
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -238,7 +240,7 @@ from gow_sim.commands import (
     Split,
 )
 from gow_sim.maps import MapDef, NodeKind
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.view import (
     AtNode,
     Detail,
@@ -524,6 +526,16 @@ class SmartBot(CampaignBot):
         self.tempo = DIFFICULTIES[difficulty]
         rules = self.rules  # the rules of the match (``Bot``)
         self.bucket = Bucket(self.tempo, rules.tick_hz)
+        periods = rules.stances.cp_period_ticks
+        self.income_unit = math.lcm(periods.economy, periods.balance, periods.war)
+        """The common multiple of the CP periods of the stances: ``income`` counts in hundredths
+        of CP times it, so every period divides it (integers only)."""
+        self.income = 0
+        """The own CP income in hundredths times ``income_unit`` from tick 0 to ``income_tick``,
+        at the stance in force (item 26, ``cp_had``)."""
+        self.income_tick = 0
+        self.income_stance: Stance = rules.economy.start_stance
+        """The own stance in force since ``income_tick``."""
         self.perception = Perception(self.tempo.react_ticks)
         self.thought: int | None = None
         """The tick of the last decision (item 9)."""
@@ -869,6 +881,7 @@ class SmartBot(CampaignBot):
         return any(n.owner == 1 - self.player and 0 <= hops[n.id] <= watch for n in view.nodes)
 
     def _decide(self, view: PlayerView, tick: int, a: Assessment) -> list[Command]:
+        self.note_income(tick, view.me.stance)
         ctx = Ctx(view, tick, view.me.cp - self.params["reserve"], standing=self.standing(view))
         for g in view.groups:
             if g.order is not None:
@@ -1455,6 +1468,7 @@ class SmartBot(CampaignBot):
         cmd = self.stance_policy.command(view.me.stance, want, ctx.tick, dwell)
         if cmd is not None and self.spend(ctx, cmd):
             self.stance_policy.sent(ctx.tick)
+            self.note_income(ctx.tick + 1, cmd.stance)  # applied at the start of the next tick
 
     # The capital ----------------------------------------------------------------------------
 
@@ -1754,14 +1768,33 @@ class SmartBot(CampaignBot):
             self.fort_sent[site] = ctx.tick
             self.saving_since = None
 
+    def note_income(self, tick: int, stance: Stance) -> None:
+        """Count the own CP income up to ``tick`` at the stance in force, then ``stance`` from
+        there on (item 26)."""
+        self.income = self.income_at(tick)
+        self.income_tick = max(self.income_tick, tick)
+        self.income_stance = stance
+
+    def income_at(self, tick: int) -> int:
+        """``income`` carried on to ``tick`` at ``income_stance``."""
+        period = self.rules.stances.cp_period_ticks.of(self.income_stance)
+        rate = self.rules.cp.per_period * (self.income_unit // period)
+        return self.income + max(0, tick - self.income_tick) * rate
+
+    def cp_had(self, tick: int) -> int:
+        """The CP in hundredths the bot has had by ``tick``: ``cp.start`` and the flat income of
+        the stances it was in (DEC-44, the periods of the match: ``Bot.rules`` carries the map
+        tempo of DEC-46), rounded down. Until #1015 the fortification budget counted the Balance
+        period whatever the stance, so a War bot had more CP than it counted and an Economy bot
+        less. A stance change counts from the tick it is applied; the carried counter (DEC-44,
+        item 4) is not modelled, at most one quantum per change."""
+        return self.rules.cp.start + self.income_at(tick) // self.income_unit
+
     def fort_share_left(self, tick: int) -> bool:
         """Whether one more fortification of a node other than the capital stays within
-        ``FORT_SHARE`` percent of the CP the bot has had by ``tick`` (``cp.start`` and the flat
-        income, public), with the ones sent so far (``fort_cp``)."""
-        cp = self.rules.cp
-        # The flat income of the Balance stance (DEC-44), as the bot was tuned on it.
-        had = cp.start + cp.per_period * (tick // self.rules.stances.cp_period_ticks.balance)
-        return 100 * (self.fort_cp + self.rules.fort.cost) <= self.FORT_SHARE * had
+        ``FORT_SHARE`` percent of the CP the bot has had by ``tick`` (``cp_had``), with the ones
+        sent so far (``fort_cp``)."""
+        return 100 * (self.fort_cp + self.rules.fort.cost) <= self.FORT_SHARE * self.cp_had(tick)
 
     def fort_road_site(self, ctx: Ctx) -> tuple[int, int] | None:
         """The ``(node, road)`` ``fortify_roads`` fortifies now with the CP aside (its docstring);

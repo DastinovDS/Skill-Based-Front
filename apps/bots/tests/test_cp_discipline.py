@@ -13,6 +13,7 @@ quantum 0.5 CP, so the sink of ``economy.fort_site`` waits for 4.5 CP.
 """
 
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -133,3 +134,28 @@ def test_a_decision_at_the_cap_pays_orders_not_the_fort_sink(
         assert len(moves) == bot.tempo.burst
     else:
         assert len(moves) >= 2
+
+
+@pytest.mark.parametrize("map_name", ["crossroads", "narrows"])
+def test_the_fortification_budget_counts_the_income_of_the_stance_in_force(map_name: str) -> None:
+    """The CP had (``SmartBot.cp_had``) follow the stance: 0.5 CP per period of the stance in force
+    (DEC-44), the periods of the match after the map tempo (DEC-46, ``Bot.rules``). Before #1015
+    the budget counted the Balance period whatever the stance."""
+    mapdef = load_map(ROOT / "maps" / f"{map_name}.json")
+    bot = SmartRusher(mapdef, RULES, seed=1, player=0)
+    periods = bot.rules.stances.cp_period_ticks
+    quantum = Fraction(RULES.cp.per_period)
+    bot.note_income(0, Stance.BALANCE)
+    bot.note_income(1000, Stance.WAR)
+    bot.note_income(3000, Stance.ECONOMY)
+    exact = (
+        1000 * quantum / periods.balance
+        + 2000 * quantum / periods.war
+        + 1500 * quantum / periods.economy
+    )
+    assert bot.cp_had(4500) == RULES.cp.start + int(exact)  # rounded down
+    balance_only = SmartRusher(mapdef, RULES, seed=1, player=0)
+    assert balance_only.cp_had(4500) == RULES.cp.start + int(4500 * quantum / periods.balance)
+    war = SmartRusher(mapdef, RULES, seed=1, player=0)
+    war.note_income(0, Stance.WAR)
+    assert war.cp_had(4500) > balance_only.cp_had(4500) > bot.cp_had(4500)
