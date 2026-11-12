@@ -256,6 +256,15 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
       to the enemy capital and its strike reaches one hop farther (``strike_hops``).
 
     The benchmarks ``smart_hoarder`` and ``smart_exploiter`` keep item 28 off.
+29. **Defense** (#1022, step 4b of the bot plan; ``gow_bots.bots.defense``, ``DEFENSE``, off for
+    the benchmarks). Once the neutrals run out the front nodes worth holding keep a picket, the
+    valuable ones a garrison, within ``HOLD_SHARE`` percent of the army (``front_hold``); a
+    salient is given up; a lost node is retaken before any attack by the nearest free groups
+    that take it together (a breakthrough sealed), else the road into the rear is blocked. A
+    visible strike at any own node is answered (``respond``): a reinforcement when the sum
+    holds, else its origin is a target, or a garrison it would kill whole leaves. A lost node,
+    the source of an enemy siege and the empty enemy rear while its army is committed score more
+    (``score``).
 
 An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
 same rule for all bots (AGENTS.md, section 8), and with item 28 whenever it attacks a defended
@@ -273,6 +282,8 @@ from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option, Wave
 from gow_bots.bots.capital import TakeCommand
+from gow_bots.bots.defense import Defense, answer, seal
+from gow_bots.bots.defense import read as read_defense
 from gow_bots.bots.economy import fort_site
 from gow_bots.bots.estimate import EnemyForce, Phase, Sector, phase, sectors, strengths, threats
 from gow_bots.bots.forts import RoadThreat, cut_off, fortified, road_threats
@@ -563,6 +574,15 @@ class SmartBot(CampaignBot):
     W_EXPLOIT: ClassVar[int] = 150
     """Item 28: score of an enemy node next to a node the bot took within ``EXPLOIT_TICKS``: the
     second echelon follows a breakthrough."""
+    DEFENSE: ClassVar[bool] = True
+    """Item 29 (#1022): the line, the reserve, the answers to strikes at any node, retakes and
+    raids of ``gow_bots.bots.defense``; the benchmarks keep it off."""
+    HOLD_SHARE: ClassVar[int] = 50
+    """Item 29: percent of the units outside the capital guard the line holds at most."""
+    SEAL: ClassVar[bool] = True
+    """Item 29: a lost node is retaken before any attack (``defense.seal``)."""
+    PULL_OUT: ClassVar[bool] = True
+    """Item 29: a garrison a visible strike would kill whole leaves (``defense.pull_out``)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -721,6 +741,8 @@ class SmartBot(CampaignBot):
         """Item 28: the owner of every node at the last decision (public ownership)."""
         self.breach: dict[int, int] = {}
         """Item 28: an enemy node the bot took to the tick it saw it taken (``EXPLOIT_TICKS``)."""
+        self.defense = Defense()
+        """Item 29: the memory of the defense (``gow_bots.bots.defense``)."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -779,6 +801,7 @@ class SmartBot(CampaignBot):
         self._estimate(view)
         self._read_breaches(view)
         self.pockets = self.read_pockets(view, tick, supplied)
+        read_defense(self, view, self.defense)  # item 29
         self.params = self.adjusted(a)
         try:
             return self._decide(view, tick, a)
@@ -981,8 +1004,13 @@ class SmartBot(CampaignBot):
         return self.weak.get(dest, 0)
 
     def front_hold(self, node: int) -> int:
-        """Units an own node next to the enemy keeps (``hold_front``; a hook of the turtle)."""
-        return self.params["hold_front"]
+        """Units an own node next to the enemy keeps (``hold_front``, the line of item 29; a hook
+        of the turtle)."""
+        return max(self.params["hold_front"], self.defense.hold(node))
+
+    def defending(self) -> bool:
+        """Item 29 is on: the personality's ``DEFENSE`` with ``insight`` (item 9)."""
+        return self.DEFENSE and self.tempo.insight
 
     def adjusted(self, a: Assessment) -> dict[str, int]:
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
@@ -1061,6 +1089,8 @@ class SmartBot(CampaignBot):
         self.answer_worry(ctx)
         self.respond(ctx)
         self.withdraw(ctx)
+        if self.defending() and self.SEAL:
+            seal(self, ctx)  # item 29: a breakthrough is sealed before any attack
         ctx.held = bank  # a banked strike waits only for the capital and the strikes
         saving = save > 0
         if saving:
@@ -2048,6 +2078,8 @@ class SmartBot(CampaignBot):
                 continue
             if self.reinforce(ctx, target):
                 self.answered[intent.id] = True
+        if self.defending():  # item 29: a strike at any own node
+            answer(self, ctx, [i for i in self.strikes(ctx) if i.id not in self.answered])
         ctx.budget -= self.params["reserve"]
 
     def worth_defending(self, node: int) -> bool:
@@ -2247,7 +2279,10 @@ class SmartBot(CampaignBot):
         return site
 
     @override
-    def may_leave(self, ctx: Ctx, g: GroupView) -> bool:
+    def may_leave(self, ctx: Ctx, g: GroupView, *, hold: bool = True) -> bool:
+        """``CampaignBot.may_leave`` with the pin, the pockets, the scouts, the capital guard and,
+        with ``hold``, the garrison of a front node (``front_hold``); a retake of item 29 passes
+        ``hold=False``: the garrisons next to a breach are the ones that seal it."""
         here = node_of(g)
         if self.pinned[here]:
             return False  # DEC-37: caught on the way out, it fights outside the node
@@ -2260,7 +2295,7 @@ class SmartBot(CampaignBot):
             if self.alarm:
                 return False
             return ctx.standing[here] - g.units >= self.params["guard"]
-        if self.hot[here]:
+        if hold and self.hot[here]:
             return ctx.standing[here] - g.units >= self.front_hold(here)
         return True
 
@@ -2280,7 +2315,9 @@ class SmartBot(CampaignBot):
             else:
                 continue
             spare = ctx.standing[here] - keep
-            if spare < 2 or g.units <= spare:
+            # Item 29: a picket of the line lets the rest of its group go, one unit too.
+            least = 1 if self.defending() and self.defense.hold(here) else 2
+            if spare < least or g.units <= spare:
                 continue
             squad = self.squad()
             whole = not self.squads() or spare >= squad
@@ -2328,6 +2365,7 @@ class SmartBot(CampaignBot):
         value += self.terrain_value(ctx, dest)  # item 28: plains first, mountains last
         if self.pockets is not None:
             value += W_RESCUE * self.pockets.rescue.get(dest, 0)  # item 20: retake the cut
+        value += self.defense.bonus.get(dest, 0)  # item 29: retakes, origins, raids
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops
 
     def in_reach(self, ctx: Ctx, g: GroupView, dest: int) -> bool:
@@ -2616,6 +2654,11 @@ class SmartRusher(SmartBot):
     FORTS: ClassVar[int] = 1
     FORT_KEEP: ClassVar[int] = 200
     FORT_SHARE: ClassVar[int] = 5
+    HOLD_SHARE: ClassVar[int] = 35
+    """Item 29: the rusher holds the least, its army attacks."""
+    SEAL: ClassVar[bool] = False
+    """Item 29: no retake before the attacks (with it the rusher won 0.44 of 16 matches against
+    ``smart_exploiter``, without it 0.69; #1022)."""
     STRIKE: ClassVar[bool] = True
     MID_GROUP: ClassVar[int] = 3
     MID_GOAL: ClassVar[bool] = True
@@ -2678,6 +2721,8 @@ class SmartReactive(SmartBot):
     BANK: ClassVar[int] = 250
     """Item 23: a fortification and its keep (the answers spend the saving first)."""
     FORTS: ClassVar[int] = 3
+    HOLD_SHARE: ClassVar[int] = 60
+    """Item 29: the answering personality holds the most of its line."""
     STRIKE: ClassVar[bool] = True
     COUNTER: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
@@ -2704,6 +2749,9 @@ class SmartExpander(SmartBot):
     DISCIPLINE: ClassVar[bool] = True
     BANK: ClassVar[int] = 150
     """Item 23: territory first, so the least: a fortification without its keep."""
+    HOLD_SHARE: ClassVar[int] = 0
+    """Item 29: no line of item 29 on top of its own ``hold_front`` (with it the expander won 0.25
+    of 32 matches against ``smart_exploiter``, without it 0.44, as without item 29; #1022)."""
     STRIKE: ClassVar[bool] = True
     MID_GOAL: ClassVar[bool] = True
     W_WEAK: ClassVar[int] = 40

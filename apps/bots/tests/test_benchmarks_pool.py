@@ -194,10 +194,10 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("supply", "highway"): 0.032,
     ("supply", "narrows"): 0.021,
     ("supply", "ridge"): 0.06,
-    ("supply_replan", "crossroads"): 0.135,
-    ("supply_replan", "highway"): 0.115,
-    ("supply_replan", "narrows"): 0.048,
-    ("supply_replan", "ridge"): 0.13,
+    ("supply_replan", "crossroads"): 0.18,
+    ("supply_replan", "highway"): 0.15,
+    ("supply_replan", "narrows"): 0.065,
+    ("supply_replan", "ridge"): 0.17,
     ("snapshot", "crossroads"): 0.4,
     ("snapshot", "highway"): 0.3,
     ("snapshot", "narrows"): 0.2,
@@ -212,7 +212,11 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("decision", "ridge"): 0.82,
 }
 """Reference-machine means (3 runs, 2026-11-12; the supply rows after #482's flow work), rounded
-up about 10%, by (kind, map): see the module docstring. A new pool map needs its row."""
+up about 10%, by (kind, map): see the module docstring. A new pool map needs its row. The
+``supply_replan`` rows are raised about 30% (#1022): the CI runners measured the replanned dispatch
+1.5 to 1.8 times the reference after ``speed_factor`` on ``develop`` itself (runs 43248526758,
+43301391850: crossroads, highway, narrows over the ceiling), so the job failed on noise; the cost
+of the warm state did not change (``docs/perf.md``)."""
 
 
 def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) -> None:
