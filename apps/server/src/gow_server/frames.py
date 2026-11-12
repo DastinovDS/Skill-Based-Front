@@ -60,15 +60,12 @@ __all__ = [
     "vision_of",
 ]
 
-FORMAT: Final = 2
+FORMAT: Final = 3
 """Version of the frames file format; the viewer checks it. 2 (#905): the buildings (``c`` and
-``d`` of a frame and of ``v``) and the header ``rules``. A viewer reads 1 and 2; files of 1 are
-never rewritten (``docs/design/replay-frames.md``, "Format change")."""
-
-ROAD_LEVEL: Final = 1
-"""The road level written where the format has one (``w`` of a frame, the first element of an
-edge in ``v``): roads have no levels since the road upgrades were removed (#894), every road is
-level 1. The format keeps the slot."""
+``d`` of a frame and of ``v``) and the header ``rules``. 3 (#980): the road-level slots are gone
+(``w`` of a frame, the first element of an edge in ``v``) and the header ``rules`` also carries
+the numbers of the map's timings and stocks. A viewer reads 1, 2 and 3; older files are never
+rewritten (``docs/design/replay-frames.md``, "Format change")."""
 
 FRAMES_PER_SECOND: Final = 2
 """Full-state frames per second of the match (the issue: "2 times per second")."""
@@ -208,7 +205,6 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
             ]
             for n in (state.nodes[i] for i in sorted(state.nodes))
         ],
-        "w": [ROAD_LEVEL] * len(state.map.edges),
         "g": [_group(state.groups[i]) for i in sorted(state.groups)],
         "k": [
             [p.id, p.owner, p.edge, p.from_node, p.charges, p.depart_tick, p.arrive_tick]
@@ -299,7 +295,7 @@ def vision_of(view: PlayerView) -> dict[str, object]:
             for n in view.nodes
         ],
         "e": [
-            [ROAD_LEVEL, e.detail.value, _half(e.halves[0], t), _half(e.halves[1], t)]
+            [e.detail.value, _half(e.halves[0], t), _half(e.halves[1], t)]
             + ([[_figure(f) for f in e.enemy_groups]] if e.enemy_groups else [])
             for e in view.edges
         ],
@@ -371,9 +367,11 @@ class FramesResult:
 
 
 def viewer_rules(rules: Ruleset) -> dict[str, int]:
-    """The rule numbers the viewer draws buildings with (#905): the time bars of the builds and of
-    the recruit queue, their prices. ``rules`` are the rules the match played (map tempo
-    applied), so the bars fill at the real pace."""
+    """The rule numbers the viewer draws the map with (#905, #980): the time bars of the builds and
+    of the recruit queue, their prices, the fight round length, the rally walk price, the province
+    warehouse and the overcrowding timings. ``rules`` are the rules the match played (map tempo
+    applied), so the bars fill at the real pace. ``rally_cost`` is 0 without a rally point, as
+    the client reads ``ruleset_public``."""
     return {
         "unit_ticks": rules.recruit.unit_ticks,
         "queue_max": rules.recruit.queue_max,
@@ -382,6 +380,11 @@ def viewer_rules(rules: Ruleset) -> dict[str, int]:
         "factory_ticks": rules.factory.build_ticks,
         "factory_charges": rules.factory.cost,
         "fort_ticks": rules.fort.build_ticks,
+        "round_ticks": rules.combat.round_ticks,
+        "rally_cost": rules.recruit.rally_cost if rules.recruit.rally_point else 0,
+        "province_warehouse": rules.warehouse.province,
+        "attrition_ticks": rules.capacity.attrition_ticks,
+        "grace_ticks": rules.capacity.grace_ticks,
     }
 
 

@@ -237,12 +237,12 @@ describe('buildTimeline as one side (#600)', () => {
   });
 
   it('keeps an enemy figure the file lists, at its place and level', () => {
-    const frame = SAMPLE_FOG.frames.find((f) => f.v?.[0].e.some((e) => (e[4]?.length ?? 0) > 0));
+    const frame = SAMPLE_FOG.frames.find((f) => f.v?.[0].e.some((e) => (e[3]?.length ?? 0) > 0));
     if (frame === undefined) throw new Error('the sample has no figure');
-    const edge = frame.v?.[0].e.findIndex((e) => (e[4]?.length ?? 0) > 0) ?? -1;
-    const record = frame.v?.[0].e[edge]?.[4]?.[0];
+    const edge = frame.v?.[0].e.findIndex((e) => (e[3]?.length ?? 0) > 0) ?? -1;
+    const record = frame.v?.[0].e[edge]?.[3]?.[0];
     const shown = fog.snapshots[at(frame.t)]?.view.edges[edge]?.enemy_groups;
-    expect(shown?.map((g) => g.id)).toEqual(frame.v?.[0].e[edge]?.[4]?.map((r) => r[0]));
+    expect(shown?.map((g) => g.id)).toEqual(frame.v?.[0].e[edge]?.[3]?.map((r) => r[0]));
     expect(shown?.[0]).toMatchObject({
       id: record?.[0],
       pos: record?.[1],
@@ -256,15 +256,15 @@ describe('buildTimeline as one side (#600)', () => {
     );
   });
 
-  it('gives every node and road the level, the warehouse and the road level of the file', () => {
+  it('gives every node and road the level and the warehouse of the file', () => {
     for (const [i, frame] of SAMPLE_FOG.frames.entries()) {
       const view = fog.snapshots[i]?.view;
       const vision = frame.v?.[0];
       expect(view?.nodes.map((n) => n.detail)).toEqual(vision?.n.map((n) => n[0]));
       expect(view?.nodes.map((n) => n.warehouse)).toEqual(vision?.n.map((n) => n[2] ?? null));
-      expect(view?.edges.map((e) => e.detail)).toEqual(vision?.e.map((e) => e[1]));
+      expect(view?.edges.map((e) => e.detail)).toEqual(vision?.e.map((e) => e[0]));
       expect(view?.edges.map((e) => e.halves.map((h) => h.detail))).toEqual(
-        vision?.e.map((e) => [e[2][0], e[3][0]]),
+        vision?.e.map((e) => [e[1][0], e[2][0]]),
       );
     }
     // The sample has fog, ranges and both kinds of levels for player 1.

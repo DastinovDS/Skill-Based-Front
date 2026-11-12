@@ -384,4 +384,9 @@ def test_header_has_the_rule_numbers_the_viewer_draws_builds_with(tmp_path: Path
         "factory_ticks": toml["factory"]["build_ticks"],
         "factory_charges": toml["factory"]["cost"],
         "fort_ticks": toml["fort"]["build_ticks"],
+        "round_ticks": toml["combat"]["round_ticks"],
+        "rally_cost": toml["recruit"]["rally_cost"] if toml["recruit"].get("rally_point") else 0,
+        "province_warehouse": toml["warehouse"]["province"],
+        "attrition_ticks": toml["capacity"]["attrition_ticks"],
+        "grace_ticks": toml["capacity"]["grace_ticks"],
     }

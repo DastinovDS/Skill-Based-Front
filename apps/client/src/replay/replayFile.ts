@@ -21,7 +21,7 @@ import { PLAYER_COLOURS } from '../theme/tokens.ts';
  * the two parts of #905 (then it has the keys `c` and `d`, and they are drawn); a file with any
  * other `format` is refused.
  */
-const READABLE_FORMATS: readonly number[] = [1, 2];
+const READABLE_FORMATS: readonly number[] = [1, 2, 3];
 
 /** Why a file cannot be shown. `format`: a version this viewer does not know; `invalid`: not a replay. */
 export class ReplayError extends Error {
@@ -98,7 +98,6 @@ export interface ReplayFrame {
   t: number;
   p: [FramePlayer, FramePlayer];
   n: FrameNode[];
-  w: number[];
   g: FrameGroup[];
   k: FramePacket[];
   i: FrameIntent[];
@@ -162,8 +161,11 @@ export type FrameFigure = [
   (FrameRange | null)?,
 ];
 
-/** `[width, detail, half_a, half_b, figures]` of an edge as the player saw it (`EdgeView`). */
-type FrameVisionEdge = [number, Detail, FrameHalf, FrameHalf, FrameFigure[]?];
+/**
+ * `[detail, half_a, half_b, figures]` of an edge as the player saw it (`EdgeView`). Format 1 and 2
+ * files have a road level first; `parseReplay` removes it, so the rest reads one shape.
+ */
+type FrameVisionEdge = [Detail, FrameHalf, FrameHalf, FrameFigure[]?];
 
 /** The fog part of one player's `PlayerView` at the frame's tick (#598). */
 export interface FrameVision {
@@ -228,6 +230,17 @@ interface ReplayRules {
   factory_ticks: number;
   factory_charges: number;
   fort_ticks: number;
+  /**
+   * The numbers of the map (format 3, #980): `combat.round_ticks`, `recruit.rally_cost` (0 without
+   * a rally point), `warehouse.province` and `capacity.attrition_ticks` and `grace_ticks`.
+   * Absent in format 2, whose viewer falls back to the default round length and draws no rally
+   * marks, province stock or overcrowding pill.
+   */
+  round_ticks?: number;
+  rally_cost?: number;
+  province_warehouse?: number;
+  attrition_ticks?: number;
+  grace_ticks?: number;
 }
 
 export interface ReplayFile {
@@ -360,11 +373,10 @@ function isVision(v: unknown, nodes: number, edges: number): v is [FrameVision, 
         side.e.every(
           (e) =>
             Array.isArray(e) &&
-            isInt(e[0]) &&
-            isDetail(e[1]) &&
+            isDetail(e[0]) &&
+            isHalf(e[1]) &&
             isHalf(e[2]) &&
-            isHalf(e[3]) &&
-            (e[4] === undefined || (Array.isArray(e[4]) && e[4].every(isFigure))),
+            (e[3] === undefined || (Array.isArray(e[3]) && e[3].every(isFigure))),
         ) &&
         (side.b === undefined || (Array.isArray(side.b) && side.b.every(isInt))) &&
         (side.c === undefined ||
@@ -391,6 +403,7 @@ export function hasBuildings(file: ReplayFile): boolean {
   return file.frames.some((frame) => frame.c !== undefined);
 }
 
+/** The numbers of the buildings (format 2 and after). */
 const RULE_KEYS: readonly (keyof ReplayRules)[] = [
   'unit_ticks',
   'queue_max',
@@ -400,8 +413,41 @@ const RULE_KEYS: readonly (keyof ReplayRules)[] = [
   'factory_charges',
   'fort_ticks',
 ];
-const isRules = (v: unknown): v is ReplayRules =>
-  isObj(v) && RULE_KEYS.every((key) => isInt(v[key]) && v[key] >= 0);
+/** The numbers of the map (format 3 and after, #980); a round is at least one tick. */
+const MAP_RULE_KEYS: readonly (keyof ReplayRules)[] = [
+  'round_ticks',
+  'rally_cost',
+  'province_warehouse',
+  'attrition_ticks',
+  'grace_ticks',
+];
+const isCount = (v: unknown): v is number => isInt(v) && v >= 0;
+/**
+ * The header `rules` is kept when the numbers of its format are all sound: the buildings' from
+ * format 2, the map's too from format 3. A damaged key is dropped, never an error.
+ */
+const isRules = (v: unknown, format: number): v is ReplayRules =>
+  isObj(v) &&
+  RULE_KEYS.every((key) => isCount(v[key])) &&
+  (format < 3 || (MAP_RULE_KEYS.every((key) => isCount(v[key])) && (v.round_ticks as number) >= 1));
+
+/**
+ * Format 1 and 2 put the road level first in every edge record of `v` (roads have had no levels
+ * since #894, it was always 1); format 3 dropped it (#980). Take it off an older file, in place;
+ * a record that starts with the road visibility (a string) is left alone, so parsing twice is safe.
+ */
+function dropRoadLevels(frames: ReplayFrame[]): void {
+  for (const frame of frames) {
+    if (!Array.isArray(frame.v)) continue;
+    for (const side of frame.v as unknown[]) {
+      if (isObj(side) && Array.isArray(side.e)) {
+        side.e = (side.e as unknown[]).map((e) =>
+          Array.isArray(e) && typeof e[0] === 'number' ? e.slice(1) : e,
+        );
+      }
+    }
+  }
+}
 
 const isNick = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
@@ -455,8 +501,6 @@ export function parseReplay(raw: unknown): ReplayFile {
         f.p.length === 2 &&
         Array.isArray(f.n) &&
         f.n.length === (map.nodes as unknown[]).length &&
-        Array.isArray(f.w) &&
-        f.w.length === (map.edges as unknown[]).length &&
         Array.isArray(f.g) &&
         Array.isArray(f.k) &&
         Array.isArray(f.i) &&
@@ -468,6 +512,7 @@ export function parseReplay(raw: unknown): ReplayFile {
     );
   if (!sound) throw new ReplayError('invalid');
   const file = raw as unknown as ReplayFile;
+  if (raw.format < 3) dropRoadLevels(file.frames);
   // The optional header key: an array by player id or an object keyed "0" and "1". Anything
   // else (a shape this version does not know) is ignored, never an error.
   const nicks = readNicks(raw.nicks);
@@ -499,6 +544,6 @@ export function parseReplay(raw: unknown): ReplayFile {
       delete frame.d;
     }
   }
-  if (!isRules(raw.rules)) delete file.rules;
+  if (!isRules(raw.rules, raw.format)) delete file.rules;
   return file;
 }

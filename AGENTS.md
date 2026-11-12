@@ -552,7 +552,7 @@ Benchmarks use `pytest-benchmark`; a regression of more than 50% breaks CI.
 | ruleset | `Ruleset` | all numbers and flags of the rules, `rulesets/*.toml` |
 | city / node | `Node` | a vertex of the graph; a node is a city with a warehouse or a province (DEC-23) |
 | province | `kind = province` | a node without a city: a warehouse of 1 (`warehouse.province`, DEC-41 item 13), capacity 3, no VP, no barracks, no factory (DEC-23) |
-| road / edge | `MapDef.edges` | a link between nodes; roads have no levels and no upgrades (#894; the map field `max_level` is read by no rule) |
+| road / edge | `MapDef.edges` | a link between nodes; roads have no levels and no upgrades (#894; the map field `max_level` is read by no rule, kept as a drawing hint of the previews, `docs/design/map-format.md`, #980) |
 | border point | `border_permille` | a point on an edge in thousandths from the end `a`; splits the edge into halves for vision (DEC-21, DEC-23) |
 | internal edge | `is_internal` | both ends belong to one owner; only along it does supply go |
 | buffer edge | (no code name: not `is_internal`) | the ends belong to different owners, or one is neutral |
