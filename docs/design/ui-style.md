@@ -1393,11 +1393,13 @@ the look of most frames or costs more than a day) **does not start with code.** 
 
 1. **A mockup.** A self-contained interactive HTML in `docs/design/mockups/` (one file, opens from a file by double click, no network, no third-party
    assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene
-   plus the current look, in **two rounds** (the owner, 2026-11-07; replaces "at least 10 variants" of 2026-10-30): **round 1 is broad**, many clearly
-   different directions (12 or more, not tweaks of one idea) at the game's finish level, no placeholders, foreign styles dropped; **round 2 is deep**,
-   several fully polished variations of the direction the owner picked. **A whole-style round** (one complete UI style across many
-   screens, as #826) is capped at **5 complete directions** per round (the owner, 2026-11-08), an exception to the 12 or more of a
-   normal round 1. Every variant is checked against a style-fit list of the existing look
+   plus the current look, in **two rounds** (the owner, 2026-11-07; replaces "at least 10 variants" of 2026-10-30): **round 1 is broad**, clearly
+   different directions (not tweaks of one idea), as many as can be finished to production quality, no placeholders, foreign styles dropped; **round 2 is deep**,
+   a few fully polished variations of the direction the owner picked. **Quality over count** (the owner, 2026-11-07, repeated 2026-11-11 and 2026-11-12):
+   every variant, in both rounds and in every design implementation, is finished, production quality, at the level of the existing art; when time or effort
+   is short, cut the number of variants, never the quality. No variant count is a target or a floor; a variant that cannot be brought to that level is dropped,
+   not shown. **A whole-style round** (one complete UI style across many screens, as #826) is capped at **5 complete directions** per round
+   (the owner, 2026-11-08), a ceiling, not a target. Every variant is checked against a style-fit list of the existing look
    (palette, strokes, rims, glow, easing and timings of the current effects) before it goes on the page, and is drawn with the game's own material
    (real baked frames, gradients, rims, soft glow, eased motion): nothing flat, crude or unfinished. Weak variants are pruned with
    `design:design-critique` before the owner sees them. **As little text and as few tables as possible
@@ -1405,7 +1407,7 @@ the look of most frames or costs more than a day) **does not start with code.** 
    controls (play, pause, scrub) where something moves; the explanations go into the issue. **In-match designs show only the mechanics of the played ruleset, and keep in-match text to a minimum (no legend panels)** (the owner, 2026-11-08): every element is checked against the played ruleset and the client before it is drawn, and meaning comes from shape, hatch, motion and position; text stays only where a number is the information. Switches for what affects readability
    (grayscale, "reduced motion"), the state in the address (`#el=...&v=...`) for reproducible frames. The mockup engine, where there are rules,
    is checked against the tables of `mechanics.md` right on the page (like `simulate` in `fight-arena.html`).
-   **Mockup controls** (the owner, 2026-11-11): variant buttons first (one button per variant, one large view of the chosen one), then only the few switches that matter for the decision; everything else hidden behind one "More" toggle at most; no compare mode or side-by-side cells unless the owner asks for one.
+   **Mockup controls** (the owner, 2026-11-11): **the page is not overloaded**: separately clickable variant buttons (one button per variant) and ONE large view of the chosen one; no compare mode and no side-by-side cells unless the owner asks for one; only the few switches that matter for the decision, the rest behind one "More" toggle; as little text as possible.
    **Design tools are mandatory** (the owner, 2026-10-30): `design:design-critique` (pruning, the recommendation), `design:accessibility-review`
    (contrast on the map background, state not by colour alone, AGENTS.md 7.4), `design:ux-copy` for every string left; SpriteCook for icon and
    art candidates (section 22). A tool that is not installed is named to the owner first, before the work, not replaced silently.
