@@ -60,7 +60,8 @@ The budget on the current machine: the reference budget × `speed_factor`. `spee
 reference (`REFERENCE_WORKLOAD_S`, the best of 30 runs). A benchmark fails if the result exceeds
 the scaled budget by more than 50% (`REGRESSION = 1.5`): a slow CI runner and noise
 do not break the build, a real regression does. If the reference machine changes, re-measure
-`REFERENCE_WORKLOAD_S` and the table of measurements below.
+`REFERENCE_WORKLOAD_S` and the table of measurements below. The pool benchmarks (`apps/bots/tests/test_benchmarks_pool.py`) scale by a
+workload of their own shape with its own `REFERENCE_WORKLOAD_S` (#1029, "The recorded state and the CI scaling" below).
 
 For comparing two versions of the code on one machine there is the standard `pytest-benchmark` comparison:
 
@@ -228,25 +229,32 @@ run). Two causes, both of the measurement:
   benchmarks replay the commands, each test on a copy of the match at tick 3000: the bots of aa432c6 and of the head
   measure the same numbers, and so does `-k supply`. `test_bench_pool_logs.py` (ordinary run) fails when a rule, `mvp-7`
   or a pool map change makes the log give another match; record it again then, and measure the ceilings again.
-- **The `speed_factor` workload did not scale these benchmarks on the CI runners.** Five runners of one dispatch (run
-  43386390401) and one of run 43385162619, the head state, raw time against the reference:
+- **The `speed_factor` workload did not scale these benchmarks on the CI runners.** `ubuntu-latest` hands out several
+  CPUs; raw time of the pool benchmarks against the reference (the recorded state; runs 43385162619, 43386390401 and
+  43387621201, twelve runners):
 
   | Runner CPU | `_workload` of the simulation benchmarks | pool step / project | pool supply / replanned | the deep-copy graph workload |
   |---|---|---|---|---|
   | AMD EPYC 9V45 (4 runners) | x1.06 to x1.09 | 1.34 to 1.54 | 1.42 to 1.74 | x1.27 to x1.44 |
-  | Intel Xeon Platinum 8370C | x2.04 | 2.28 to 2.43 | 2.42 to 2.73 | x2.38 |
-  | Intel Xeon 6973P-C | x1.37 | 1.78 to 1.91 | 1.86 to 2.14 | (not measured) |
+  | AMD EPYC 9V74 (2) | not measured | 1.75 to 2.01 | 1.87 to 2.28 | x2.02 to x2.06 |
+  | AMD EPYC 7763 (3) | not measured | 2.57 to 2.78 | 2.60 to 2.95 | x2.59 to x2.71 |
+  | Intel Xeon Platinum 8370C (2) | x2.04 | 2.28 to 2.43 | 2.40 to 2.74 | x2.38 to x2.43 |
+  | Intel Xeon 6973P-C (1) | x1.37 | 1.78 to 1.91 | 1.86 to 2.14 | not measured |
 
-  The small workload (5000 slotted objects, in every cache) reads the EPYC runners as almost the reference, while the
-  supply flow on a freshly copied state runs 1.6 to 1.7 times it there: scaled, the `supply_replan` rows sat at 1.5 to 1.6
-  times the reference on a healthy head, against the 1.65 a ceiling of +10% and `REGRESSION` 1.5 allow, so any drift of the
-  state or of the runner failed the job. The pool benchmarks now scale by a workload of their shape (a deep copy of a
-  20000-node graph of slotted objects and a breadth-first search over it, `REFERENCE_WORKLOAD_S` 75.7 ms on the
-  reference): it leaves every pool row at 0.75 to 1.35 of the reference on all those runners (supply at most 1.25,
-  replanned 1.35). The simulation benchmarks keep their workload: their budgets have room on CI.
+  The small workload (5000 slotted objects, in every cache) reads the EPYC 9V45 runners as almost the reference, while
+  the supply flow on a freshly copied state runs 1.6 to 1.7 times it there: scaled, the `supply_replan` rows sat at 1.5
+  to 1.6 times the reference on a healthy head, against the 1.65 a ceiling of +10% and `REGRESSION` 1.5 allow, so any
+  drift of the state or of the runner failed the job (the failures of 846f122 to 9f72adf ran on 9V45 and 6973P-C
+  runners). The pool benchmarks now scale by a workload of their shape (a deep copy of a 20000-node graph of slotted
+  objects and a breadth-first search over it, `REFERENCE_WORKLOAD_S` 75.7 ms on the reference): scaled by it, the pool
+  rows are at 0.75 to 1.35 of the reference on all those runners (supply at most 1.25, replanned 1.35, on 9V45), and in
+  run 43387621201 (six runners: EPYC 7763, 9V74, Xeon 8370C) every row was at 0.75 to 1.03 of its ceiling, where
+  the test fails at 1.5. Median instead of mean, and the GC off (`--benchmark-disable-gc`), changed nothing: the
+  supply rows of one runner differ by less than 5% between them and between two runs in a job. The simulation
+  benchmarks keep their workload: their budgets have room on CI.
 
 The ceilings (`CEILING_MS`) are the means of three runs of the recorded state on the reference machine (2026-11-13,
-load average 2.6 to 2.9), rounded up about 10%; the raises of #1022 and #1027 are gone with the state they were set on:
+load average 2.3 to 2.9; the decisions of two runs), rounded up about 10%; the raises of #1022 and #1027 are gone with the state they were set on:
 
 | Quantity (ms) | `narrows` | `crossroads` | `highway` | `ridge` |
 |---|---|---|---|---|
@@ -257,7 +265,7 @@ load average 2.6 to 2.9), rounded up about 10%; the raises of #1022 and #1027 ar
 | `compute_vision`, empty memo | 0.019 | 0.026 | 0.027 | 0.028 |
 | `snapshot_frame`, one player | 0.175 | 0.347 | 0.265 | 0.276 |
 | server tick per match | 0.75 | 1.39 | 1.29 | 1.35 |
-| bot `view` + `decide`, ticks 300 to 3000 (mean) | DEC_NA | DEC_CR | DEC_HW | DEC_RI |
+| bot `view` + `decide`, ticks 300 to 3000 (mean) | 0.46 | 0.77 | 0.73 | 0.75 |
 
 The findings above hold on the recorded state: the replanned dispatch is over the 0.1 ms budget on `crossroads` and
 `ridge`, the step and the projection hold.

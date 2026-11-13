@@ -238,10 +238,10 @@ CEILING_MS: Final[dict[tuple[str, str], float]] = {
     ("server_tick", "highway"): 1.45,
     ("server_tick", "narrows"): 0.83,
     ("server_tick", "ridge"): 1.5,
-    ("decision", "crossroads"): 9.9,
-    ("decision", "highway"): 9.9,
-    ("decision", "narrows"): 9.9,
-    ("decision", "ridge"): 9.9,
+    ("decision", "crossroads"): 0.85,
+    ("decision", "highway"): 0.8,
+    ("decision", "narrows"): 0.51,
+    ("decision", "ridge"): 0.82,
 }
 """Reference-machine means of the recorded state (3 runs, 2026-11-13, #1029), rounded up about
 10%, by (kind, map): see the module docstring. A new pool map needs its row and its log. The rows
