@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial round, round 1 (#806)</title>
+<!--
+  How to play as a playable tutorial (#806), round 1. Six pieces, each with its variants: the hint card of a chapter,
+  the goal highlight on the map, the chapter intro, the chapter result, the chapter select and the hint of the first
+  match. The design, the chapter scripts and the recommendation are in docs/design/tutorial.md and issue #806, not on
+  this page.
+  Self-contained, no network. The fonts are the client's own (SIL OFL, assets/out-of-game-style/fonts/); the pictures
+  are frames of the real client (assets/tutorial/): c1..c3 are the chapter maps of tutorial.md, section 4, played on
+  the simulation (mvp-7) and drawn by the client; m-* are dev scenes of the artery map; menu is the main screen.
+  The artboard is the real window size, 1280 x 800, scaled to fit.
+  State in the address: #el=<card|mark|intro|result|select|hint>&v=<a|b|c>&m=<moment>&rm=<0|1>&g=<0|1>
+-->
+<style>
+@font-face{font-family:Cinzel;src:url(assets/out-of-game-style/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond-italic.woff2) format('woff2');font-weight:400 800;font-style:italic;font-display:block}
+
+:root{
+  --stone-bg:#16130f;--stone-panel:#1d1a15;--stone-raised:#221e18;--stone-tex:url(assets/tutorial/stone.webp);
+  --ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--rule-faint:rgb(125 115 99/60%);
+  --line:#3d372d;--cut:#050403;--lit:rgb(214 200 172/30%);--lit-faint:rgb(214 200 172/15%);--frame-lozenge:#8f8573;
+  --plate:#0e0c09;--casing:#060504;--own:#86a6ea;--enemy:#e5785e;--neutral:#b3a88f;--vp:#cfab62;--warn:#e6ab42;
+  --font-display:'Cinzel','Times New Roman',serif;--font-text:'EB Garamond',Georgia,'Times New Roman',serif;
+  --ease-engrave:cubic-bezier(.37,0,.63,1);--ease-settle:cubic-bezier(.33,1,.68,1);--ease-travel:cubic-bezier(.65,0,.35,1);
+  color-scheme:dark
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0c0b09;color:var(--ink);font-family:var(--font-text);-webkit-font-smoothing:antialiased;font-variant-numeric:lining-nums tabular-nums}
+body{display:flex;flex-direction:column;overflow:hidden}
+body:not(.ready) .stage{visibility:hidden}
+button{font:inherit;color:inherit}
+html.gray .art{filter:grayscale(1)}
+
+/* ===== The page chrome: switches only ===================================================== */
+.bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:9px 16px 8px;background:#0a0908;border-bottom:1px solid #2a251e;box-shadow:0 1px 0 #050403}
+.bar .grp{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.bar .lab{font:500 10px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;color:#8d836f;margin-right:4px}
+.bar .ch{height:28px;padding:0 10px;border:0;background:transparent;color:var(--ink-dim);font:500 11px/1 var(--font-display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap;
+  box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 3px #0a0908,inset 0 0 0 4px var(--rule-faint)}
+.bar .ch:hover{color:var(--ink)}
+.bar .ch[aria-pressed=true]{color:var(--ink);background:rgb(236 228 209/7%);box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px #13110d,inset 0 0 0 4px rgb(236 228 209/35%)}
+.bar .ch:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.bar .ch .n{margin-right:6px;color:var(--ink-dim)}
+.bar .ch .rec{display:inline-block;width:6px;height:6px;margin-left:7px;transform:rotate(45deg) translateY(-1px);background:var(--ink-soft)}
+.bar .sep{width:1px;height:22px;background:#2a251e}
+.bar .more{display:none;gap:4px}
+.bar.open .more{display:flex}
+.view{flex:1;min-height:0;position:relative;display:grid;place-items:center;padding:12px}
+.stage{position:relative;width:1280px;height:800px;transform-origin:center center;box-shadow:0 0 0 1px #2a251e,0 18px 50px rgb(0 0 0/55%)}
+.art{position:absolute;inset:0;overflow:hidden;background:#0d0c0a}
+.art>img.bg{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* ===== Shared primitives of the client (theme/primitives.css) ============================= */
+.rule-frame{position:relative}
+.rule-frame::before{content:'';position:absolute;inset:-4px;pointer-events:none;background:
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/svg%3E") left top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(-1 0 0 1 26 0)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(-1 0 0 -1 26 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right bottom/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(1 0 0 -1 0 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") left bottom/26px 26px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 26px 4px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--cut),var(--cut)) 26px calc(100% - 4px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 4px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--cut),var(--cut)) calc(100% - 4px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 26px 5px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--lit),var(--lit)) 26px calc(100% - 5px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 5px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--lit),var(--lit)) calc(100% - 5px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 26px 9px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 26px calc(100% - 9px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 9px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) calc(100% - 9px) 26px/1px calc(100% - 52px) no-repeat}
+.stone{background:var(--stone-tex) var(--stone-panel);color:var(--ink)}
+.lab{margin:0;font:500 11.5px/1.3 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.sec{display:flex;align-items:center;gap:18px}
+.sec::after{content:'';flex:1;height:5px;background:linear-gradient(var(--cut),var(--cut)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 1px/100% 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 0 4px/100% 1px no-repeat}
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:12px;height:46px;padding:0 22px;border:0;background:none;color:var(--ink);font:500 13px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.btn.primary{height:50px;padding:0 28px;background:var(--ink);color:var(--stone-bg);font-size:14px;letter-spacing:.22em;box-shadow:inset 0 0 0 4px var(--ink),inset 0 0 0 5px var(--stone-bg)}
+.btn.primary:hover{background:#fff8e9;box-shadow:inset 0 0 0 4px #fff8e9,inset 0 0 0 5px var(--stone-bg)}
+.btn.secondary{box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 3px transparent,inset 0 0 0 4px var(--rule-faint)}
+.btn.secondary:hover{box-shadow:inset 0 0 0 1px var(--ink-soft),inset 0 0 0 4px var(--rule-faint)}
+.quiet{border:0;background:none;padding:2px 0;color:var(--ink-soft);font:italic 500 18px/1.2 var(--font-text);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;text-decoration-color:var(--rule);cursor:pointer}
+.quiet:hover{color:var(--ink);text-decoration-color:var(--ink-soft)}
+.quiet:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.kbd{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;margin:0 2px;vertical-align:2px;font:500 10.5px/1 var(--font-display);letter-spacing:.1em;color:var(--ink);background:#14110d;box-shadow:inset 0 0 0 1px rgb(236 228 209/55%),inset 0 -2px 0 rgb(0 0 0/45%)}
+.mouse{display:inline-block;width:13px;height:18px;margin:0 3px;vertical-align:-3px;border:1.4px solid var(--ink);border-radius:7px;position:relative}
+.mouse::after{content:'';position:absolute;left:50%;top:0;width:1.4px;height:6px;margin-left:-.7px;background:var(--ink)}
+.mouse.l::before{content:'';position:absolute;left:1px;top:1px;width:4px;height:6px;border-radius:5px 0 0 0;background:var(--ink)}
+b,strong{font-weight:600;color:#fff6e2}
+.lz{display:inline-block;width:7px;height:7px;transform:rotate(45deg);vertical-align:1px;box-shadow:0 0 0 1px var(--ink-soft)}
+.lz.on{background:var(--ink)}
+.lz.now{background:var(--ink);box-shadow:0 0 0 1px var(--ink),0 0 0 3px rgb(236 228 209/18%)}
+.bonus{display:inline-block;width:11px;height:11px;margin:0 2px;vertical-align:-1px;transform:rotate(45deg) scale(.82);border:1.6px solid #8fd3a0;box-shadow:0 0 6px rgb(143 211 160/40%)}
+
+/* ===== Steps of a chapter ================================================================== */
+.steps{display:flex;align-items:center;gap:9px}
+.steps .lz{width:6px;height:6px}
+
+/* ===== A1 Tablet ============================================================================= */
+.tablet{position:absolute;bottom:26px;width:438px;padding:22px 26px 20px;box-shadow:0 22px 46px rgb(0 0 0/55%),0 0 0 1px rgb(0 0 0/40%);animation:tablet-in .65s var(--ease-settle) both}
+.tablet.left{left:28px}.tablet.right{right:28px}
+.tablet .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+.tablet p.say{margin:0;font:500 20px/1.32 var(--font-text);color:var(--ink);text-wrap:pretty}
+.tablet .act{display:flex;align-items:center;gap:8px;margin-top:13px;padding-top:11px;font:italic 500 16px/1.2 var(--font-text);color:var(--ink-soft);background:linear-gradient(var(--line),var(--line)) 0 0/100% 1px no-repeat}
+@keyframes tablet-in{from{opacity:0;transform:translateY(18px)}}
+
+/* ===== A2 Leader ============================================================================= */
+.leadwrap{position:absolute;left:0;top:0;width:1280px;height:800px;pointer-events:none}
+.leadwrap>svg{position:absolute;inset:0;overflow:visible}
+.leadline{stroke:var(--ink);stroke-width:1.2;fill:none;stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:rule-in .16s linear .05s forwards}
+.leadcase{stroke:var(--casing);stroke-width:3.4;fill:none;opacity:.85;stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:rule-in .16s linear .05s forwards}
+.leadfoot{fill:var(--ink);stroke:var(--casing);stroke-width:1;opacity:0;animation:ink .1s linear .05s forwards}
+@keyframes rule-in{to{stroke-dashoffset:0}}
+@keyframes ink{to{opacity:1}}
+.plate{position:absolute;pointer-events:auto;width:330px;padding:12px 15px 12px;border:1px solid rgb(236 228 209/60%);background:rgb(14 12 9/95%);
+  box-shadow:inset 0 0 0 3px rgb(14 12 9/95%),inset 0 0 0 4px rgb(236 228 209/25%),0 14px 34px rgb(0 0 0/55%);color:var(--ink);
+  mask-image:linear-gradient(90deg,#000 0 63.3%,transparent 70%);mask-size:300% 100%;mask-position:100% 0;mask-repeat:no-repeat;animation:burin .55s var(--ease-engrave) .2s forwards}
+.plate .head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.plate .head .lab{font-size:11px;letter-spacing:.2em}
+.plate p.say{margin:0;font:500 17.5px/1.32 var(--font-text);text-wrap:pretty}
+.plate .act{margin-top:8px;font:italic 500 15.5px/1.2 var(--font-text);color:var(--ink-soft);display:flex;align-items:center;gap:6px}
+.plate .pt{position:absolute;left:0;width:5px;height:5px;margin-left:-3px;background:var(--ink);box-shadow:0 0 0 1px var(--casing);transform:rotate(45deg);animation:point .55s var(--ease-engrave) .2s both}
+.plate .pt.u{top:-3px}.plate .pt.d{bottom:-3px}
+@keyframes burin{to{mask-position:45% 0}}
+@keyframes point{0%{left:0;opacity:1}88%{opacity:1}100%{left:110%;opacity:0}}
+
+/* ===== A3 Banner ============================================================================= */
+.banner{position:absolute;left:50%;top:52px;transform:translateX(-50%);width:640px;animation:banner-in .5s var(--ease-settle) both}
+.banner .hang{position:absolute;top:0;width:1px;height:12px;background:linear-gradient(var(--ink-soft),rgb(207 196 171/30%))}
+.banner .hang.l{left:46px}.banner .hang.r{right:46px}
+.banner .strip{position:relative;margin-top:11px;padding:11px 22px 12px;border:1px solid rgb(236 228 209/58%);background:rgb(14 12 9/95%);
+  box-shadow:inset 0 0 0 3px rgb(14 12 9/95%),inset 0 0 0 4px rgb(236 228 209/22%),0 12px 30px rgb(0 0 0/50%);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:18px}
+.banner .strip::before,.banner .strip::after{content:'';position:absolute;top:-4px;width:7px;height:7px;transform:rotate(45deg);background:var(--ink-soft);box-shadow:0 0 0 1px var(--casing)}
+.banner .strip::before{left:42px}.banner .strip::after{right:42px}
+.banner .num{font:500 22px/1 var(--font-display);letter-spacing:.06em;color:var(--ink-soft);padding-right:16px;border-right:1px solid var(--line)}
+.banner p.say{margin:0;font:500 17.5px/1.3 var(--font-text);text-wrap:pretty}
+.banner .steps{gap:7px}
+@keyframes banner-in{from{opacity:0;transform:translate(-50%,-10px)}}
+
+/* ===== The marks on the map (SVG) ========================================================== */
+svg.marks{position:absolute;inset:0;width:1280px;height:800px;overflow:visible;pointer-events:none}
+/* Motion stops by itself within about 10 s (WCAG 2.2.2); less motion holds every mark still. */
+.spin{transform-box:fill-box;transform-origin:center;animation:spin 9s var(--ease-travel) 1 both}
+@keyframes spin{to{transform:rotate(360deg)}}
+.breathe{animation:breathe 2.4s var(--ease-engrave) 4 alternate both}
+@keyframes breathe{from{opacity:.25}to{opacity:.85}}
+.march{stroke-dasharray:2 9;animation:march 1.1s linear 8}
+@keyframes march{to{stroke-dashoffset:-11}}
+.draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:rule-in 1.1s var(--ease-engrave) forwards}
+.bob{animation:bob 1.6s var(--ease-engrave) 6 alternate}
+@keyframes bob{to{transform:translateY(-6px)}}
+.fadein{opacity:0;animation:ink .5s var(--ease-settle) .9s forwards}
+.lantern{animation:ink .6s var(--ease-settle) both}
+
+/* ===== Out-of-game screens ================================================================= */
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgb(12 11 9/0%) 0%,rgb(12 11 9/0%) 38%,rgb(12 11 9/78%) 72%,rgb(12 11 9/92%) 100%)}
+.shade.full{background:rgb(14 12 10/62%)}
+.blurstone{position:absolute;inset:0;background:var(--stone-tex) rgb(22 19 15/80%);backdrop-filter:blur(9px) saturate(.55)}
+.dim{position:absolute;inset:0;background:rgb(8 7 6/58%)}
+.foot{position:absolute;left:50px;right:50px;bottom:42px;height:240px;padding:34px 46px 30px;display:grid;grid-template-columns:1fr auto;column-gap:40px;align-items:center;
+  box-shadow:0 26px 60px rgb(0 0 0/55%);animation:rise .9s var(--ease-settle) both}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}}
+.foot .marker{position:absolute;top:-1px;left:94px;width:220px;height:9px}
+.foot h1{margin:8px 0 6px;font:500 46px/1.05 var(--font-display);letter-spacing:.04em;color:var(--ink)}
+.foot .why{margin:0;font:italic 500 21px/1.35 var(--font-text);color:var(--ink-soft);max-width:560px}
+.foot .right{display:flex;flex-direction:column;align-items:center;gap:16px}
+.btn.tab{height:78px;min-width:300px;font-size:24px;letter-spacing:.26em}
+.chrow{display:flex;align-items:center;gap:12px;margin-top:18px;font:500 11px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim)}
+.chrow .k{display:flex;align-items:center;gap:7px}
+.chrow .k.now{color:var(--ink)}
+.chrow .rl{width:26px;height:1px;background:var(--line)}
+
+.sheet{position:absolute;left:50%;top:50%;width:980px;transform:translate(-50%,-50%);padding:44px 52px 40px;display:grid;grid-template-columns:1fr 420px;column-gap:46px;box-shadow:0 30px 60px rgb(0 0 0/50%);animation:sheet-in .7s var(--ease-settle) both}
+@keyframes sheet-in{from{opacity:0;transform:translate(-50%,-46%)}}
+.sheet h1{margin:10px 0 14px;font:500 44px/1.06 var(--font-display);letter-spacing:.04em}
+.sheet .why{margin:0 0 22px;font:italic 500 20px/1.38 var(--font-text);color:var(--ink-soft)}
+.goals{margin:0 0 26px;padding:0;list-style:none;display:grid;gap:9px}
+.goals li{display:flex;align-items:center;gap:12px;font:500 19px/1.25 var(--font-text)}
+.goals li .lz{flex:none}
+.mapcard{position:relative;align-self:center;width:420px;height:300px;overflow:hidden;background:#100e0b;box-shadow:inset 0 0 0 1px var(--line),inset 0 0 0 4px #100e0b,inset 0 0 0 5px rgb(214 200 172/12%)}
+.mapcard svg{position:absolute;inset:14px;width:calc(100% - 28px);height:calc(100% - 28px)}
+.mapcard .cap{position:absolute;left:0;right:0;bottom:0;padding:22px 16px 11px;background:linear-gradient(rgb(10 9 7/0),rgb(10 9 7/85%));color:var(--ink-soft)}
+.mapcard::after{content:'';position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px var(--line),inset 0 0 0 4px rgb(16 14 11/70%),inset 0 0 0 5px rgb(214 200 172/14%)}
+
+.result-page{position:absolute;left:128px;top:178px;width:1024px}
+.result-page .kick{display:flex;gap:10px}
+.result-page h1{display:flex;align-items:center;gap:26px;margin:22px 0 8px;font:500 84px/1 var(--font-display);letter-spacing:.06em;color:var(--ink)}
+.result-page .why{margin:0 0 34px;font:italic 500 25px/1.3 var(--font-text);color:var(--ink-soft)}
+.learned{display:grid;grid-template-columns:repeat(3,1fr);gap:0 34px;margin:0 0 36px;padding:22px 0 0;background:linear-gradient(var(--cut),var(--cut)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 1px/100% 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 0 4px/100% 1px no-repeat}
+.learned div{padding:14px 0 16px;border-bottom:1px solid var(--line)}
+.learned .lab{margin-bottom:9px}
+.learned p{margin:0;font:500 20px/1.3 var(--font-text)}
+.rail3{display:flex;align-items:center;gap:0;margin-bottom:36px}
+.rail3 .st{display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:220px}
+.rail3 .st .lab{font-size:10.5px}
+.rail3 .st .t{font:500 19px/1.2 var(--font-text)}
+.rail3 .st.done .t{color:var(--ink)}
+.rail3 .st.todo .t{color:var(--ink-dim)}
+.acts{display:flex;align-items:center;gap:28px}
+
+.window{position:absolute;left:50%;top:50%;width:600px;transform:translate(-50%,-50%);padding:58px 52px 40px;text-align:center;box-shadow:0 30px 60px rgb(0 0 0/55%);animation:sheet-in2 .7s var(--ease-settle) both}
+@keyframes sheet-in2{from{opacity:0;transform:translate(-50%,-46%)}}
+.seal{position:absolute;left:50%;top:0;width:92px;height:92px;transform:translate(-50%,-50%)}
+.window h2{margin:6px 0 10px;font:500 34px/1.1 var(--font-display);letter-spacing:.06em}
+.window .lesson{margin:22px auto 30px;padding:0;list-style:none;display:grid;gap:10px;text-align:left;width:max-content;max-width:100%}
+.window .lesson li{display:flex;align-items:center;gap:14px;font:500 20px/1.25 var(--font-text)}
+.window .acts{justify-content:center}
+
+.selpage{position:absolute;left:96px;right:96px;top:176px}
+.selpage h1{margin:10px 0 6px;font:500 46px/1.05 var(--font-display);letter-spacing:.05em}
+.selpage .why{margin:0 0 30px;font:italic 500 20px/1.35 var(--font-text);color:var(--ink-soft)}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:26px}
+.ccard{position:relative;padding:18px 18px 18px;background:rgb(22 19 15/86%);box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 3px rgb(22 19 15/86%),inset 0 0 0 4px var(--rule-faint);cursor:pointer;text-align:left;border:0;color:var(--ink);font:inherit}
+.ccard:hover{box-shadow:inset 0 0 0 1px var(--ink-soft),inset 0 0 0 3px rgb(22 19 15/86%),inset 0 0 0 4px var(--rule-faint)}
+.ccard.next{box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px rgb(30 26 20/92%),inset 0 0 0 4px rgb(236 228 209/35%);background:rgb(30 26 20/92%)}
+.ccard:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.ccard .mini{position:relative;height:132px;margin:12px 0 14px;overflow:hidden;background:#100e0b;box-shadow:inset 0 0 0 1px var(--line)}
+.ccard .mini::after{content:'';position:absolute;inset:0;box-shadow:inset 0 0 0 1px var(--line)}
+.ccard .mini svg{width:100%;height:100%}
+.ccard h3{margin:0 0 6px;font:500 19px/1.15 var(--font-display);letter-spacing:.05em}
+.ccard .st{display:flex;align-items:center;gap:8px;font:italic 500 16px/1.2 var(--font-text);color:var(--ink-soft)}
+.ccard.next .st{color:var(--ink)}
+.selfoot{display:flex;align-items:center;justify-content:space-between;margin-top:30px}
+
+.road{position:absolute;left:0;right:0;top:150px;height:330px}
+.road svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rnode{cursor:pointer}
+.rnode:focus-visible{outline:none}
+.rnode:focus-visible .focusring{opacity:1}
+.focusring{opacity:0}
+.rtitle{font:500 15px var(--font-display);letter-spacing:.14em;text-transform:uppercase;fill:var(--ink)}
+.rsub{font:italic 500 16px var(--font-text);fill:var(--ink-soft)}
+.pulse{animation:pulse 2.2s var(--ease-engrave) 4}
+@keyframes pulse{0%{opacity:.75;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}
+.pulse{transform-box:fill-box;transform-origin:center}
+
+/* ===== The hints of the first match ======================================================== */
+.toast{position:absolute;top:60px;right:12px;width:372px;padding:10px 12px 11px 13px;border:1px solid rgb(236 228 209/55%);border-left:3px solid var(--ink-soft);background:rgb(14 12 9/96%);
+  box-shadow:inset 0 0 0 2px rgb(14 12 9/96%),inset 0 0 0 3px rgb(236 228 209/18%),0 12px 30px rgb(0 0 0/45%);display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;animation:toast-in .2s var(--ease-settle) both}
+@keyframes toast-in{from{opacity:0;transform:translateX(14px)}}
+.toast .ico{grid-row:1/3;width:24px;height:24px;margin-top:2px}
+.toast .lab{align-self:center;font-size:11px}
+.toast p{grid-column:2/3;margin:0;font:500 16px/1.32 var(--font-text);text-wrap:pretty}
+.toast .x,.plate .x{border:0;background:none;padding:0;margin:-4px -4px 0 0;color:var(--ink-dim);cursor:pointer;width:28px;height:28px;display:grid;place-items:center}
+.toast .x:focus-visible,.plate .x:focus-visible,.linkish:focus-visible,.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.toast .x:hover,.plate .x:hover{color:var(--ink)}
+.toast .row,.plate .row{grid-column:2/4;display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:7px;border-top:1px solid var(--line)}
+.linkish{border:0;background:none;padding:0;color:var(--ink-soft);font:italic 500 15px/1.2 var(--font-text);text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px;cursor:pointer}
+.linkish:hover{color:var(--ink)}
+.go{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;color:var(--ink);font:500 10.5px/1 var(--font-display);letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+.go:hover{text-decoration:underline;text-underline-offset:4px}
+
+html.rm *{animation-duration:1ms!important;animation-delay:0ms!important;animation-iteration-count:1!important}
+html.rm .plate{mask:none}
+html.rm .breathe{opacity:.6}
+html.rm .pulse{opacity:0}
+</style>
+</head>
+<body>
+<nav class="bar" id="bar" aria-label="Mockup switches">
+  <div class="grp" role="group" aria-label="Piece"><span class="lab">Piece</span><span id="els"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="grp" role="group" aria-label="Variant"><span class="lab">Variant</span><span id="vars"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="grp" role="group" aria-label="Moment" id="momgrp"><span class="lab">Moment</span><span id="moms"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <button class="ch" id="moreBtn" aria-expanded="false">More</button>
+  <div class="grp more" id="more"><button class="ch" id="rmBtn" aria-pressed="false">Less motion</button><button class="ch" id="gBtn" aria-pressed="false">Grey</button><button class="ch" id="replay">Replay motion</button></div>
+</nav>
+<div class="view" id="view"><div class="stage" id="stage"><div class="art" id="art"></div></div></div>
+
+<script>
+// ---------------------------------------------------------------------------------------------
+// The chapter maps of docs/design/tutorial.md, section 4, are 1200 x 700 world units; the client's fit
+// puts the world at x' = 53 + 0.978 x, y' = 83 + 0.979 y of the 1280 x 800 frames.
+// ---------------------------------------------------------------------------------------------
+const W = (x) => 53 + 0.978 * x, H = (y) => 83 + 0.979 * y;
+
+// ---------------------------------------------------------------------------------------------
+// The moments of a chapter (a beat of tutorial.md, section 4) and of the first match (section 5).
+// t: the target: node {x,y,r}, road {x1,y1,x2,y2}, box {x,y,w,h}. Every number in a text stands for
+// a `ruleset_public` value of mvp-7 on these maps (the client formats it, tutorial.md 7.7).
+// ---------------------------------------------------------------------------------------------
+const CH = {1: 'Move and capture', 2: 'Fight', 3: 'Strike with a plan'};
+const ROMAN = {1: 'I', 2: 'II', 3: 'III'};
+const MOMENTS = [
+  {id: '1.2', img: 'c1-start', ch: 1, step: 2, of: 5, at: [70, 128], t: {x: W(370), y: H(270), r: 26},
+   say: 'Click <b>Ashford</b> to march there. An order costs <b>1&nbsp;CP</b>.', act: '<span class="mouse l"></span> on Ashford'},
+  {id: '1.4', img: 'c1-flow', ch: 1, step: 4, of: 5, at: [70, 128], t: {x1: W(190), y1: H(350), x2: W(370), y2: H(270)},
+   say: 'Your capital makes charges, and the flow carries them to the front by itself.', act: 'Watch the road'},
+  {id: '2.2', img: 'c2-mountain', ch: 2, step: 2, of: 5, at: [56, 236], w: 300, t: {x: 368, y: 143, w: 191, h: 73, foot: [464, 279]},
+   say: 'Highcrag stands in the mountains: its defenders get <b>1 bonus shot</b> <span class="bonus"></span>, fired first.', act: 'Watch the rounds'},
+  {id: '2.5', img: 'c2-burn', ch: 2, step: 5, of: 5, at: [884, 118], t: {x: 642, y: 388, w: 192, h: 71, foot: [737, 523]},
+   say: 'No retreat: nobody can leave this fight until it ends. You can only send more.', act: '<span class="mouse l"></span> on a group, then on Flatford'},
+  {id: '3.4', img: 'c3-gather', ch: 3, step: 4, of: 5, at: [470, 592], w: 300, t: {x: W(420), y: H(350), r: 28},
+   say: 'Your squad waits in Fernhold and gathers <b>+1 bonus every 3&nbsp;s</b> from the warehouse there. At +3 it sets off.', act: 'The arrow is public; the bonus is not'},
+  {id: '3.5', img: 'c3-strike', ch: 3, step: 5, of: 5, at: [905, 112], w: 320, t: {x: 622, y: 290, w: 192, h: 71, foot: [718, 425]},
+   say: 'Bonus shots <span class="bonus"></span> fire first and cancel the defenders’ charges. Your own charges are left to kill and to pay for the capture.', act: 'Watch the rounds'},
+];
+const HINTS = [
+  {id: 'H1', img: 'm-rally', title: 'Factories', t: {x: 533, y: 520, r: 30},
+   say: 'Build a factory in a city near the front: <b>4 charges</b>, and it makes charges like your capital.', key: 'Open the city’s menu: <span class="mouse l"></span>'},
+  {id: 'H2', img: 'm-factory', title: 'Paid by your units', t: {x: 532, y: 553, r: 30},
+   say: 'The warehouse had too few charges, so the units standing there paid the rest. The flow recharges them.', key: ''},
+  {id: 'H3', img: 'm-rally', title: 'Rally point', t: {x: 557, y: 330, r: 32},
+   say: 'Recruit in a city with a barracks (<b>1&nbsp;CP</b> a unit). Set a rally point and new units walk to the front by themselves, <b>0.5&nbsp;CP</b> each.', key: 'Recruit <span class="kbd">R</span> · Rally point <span class="kbd">P</span>'},
+  {id: 'H4', img: 'm-pocket', title: 'Stances', t: {x: 326, y: 12, w: 66, h: 29, foot: [358, 41]},
+   say: 'Your CP are full, so new ones are lost. Economy gives more charges and fewer CP; War the other way round.', key: 'Stance <span class="kbd">Q</span>'},
+  {id: 'H5', img: 'm-pocket', title: 'Cut off', at: [928, 372], w: 268, t: {x: 887, y: 320, r: 32},
+   say: 'West Shoulder is cut off from your capital: no supply reaches it, and without a factory its units starve. Reconnect it.', key: ''},
+  {id: 'H6', img: 'm-fort', title: 'Road forts', t: {x: 624, y: 520, r: 34},
+   say: 'An enemy road fort took a charge from your group: 1 per 3 units, rounded up, and only on the way into its city. Take the city and the fort is gone.', key: 'Your own: city menu, <span class="kbd">B</span>, <b>1.5&nbsp;CP</b>'},
+  {id: 'H7', img: 'm-pocket', title: 'Victory points', t: {x: 538, y: 10, w: 184, h: 34, foot: [630, 44]},
+   say: 'Every 30&nbsp;s each city gives VP; the small number is your next gain. Take the enemy capital to win at once, or have more VP when time runs out.', key: ''},
+];
+
+// ---------------------------------------------------------------------------------------------
+// The pieces and their variants. "rec" marks the recommendation of tutorial.md, section 8 / #806.
+// ---------------------------------------------------------------------------------------------
+const ELS = [
+  {id: 'card', name: 'Hint card', moments: 'chapter', vars: [
+    {id: 'a', name: 'Leader', rec: true}, {id: 'b', name: 'Tablet'}, {id: 'c', name: 'Banner'}]},
+  {id: 'mark', name: 'Goal mark', moments: 'chapter', vars: [
+    {id: 'a', name: 'Compass', rec: true}, {id: 'b', name: 'Lantern'}, {id: 'c', name: 'Burin'}]},
+  {id: 'intro', name: 'Chapter intro', moments: 'chapters', vars: [
+    {id: 'a', name: 'Plinth', rec: true}, {id: 'b', name: 'Sheet'}]},
+  {id: 'result', name: 'Result', moments: 'chapters', vars: [
+    {id: 'a', name: 'Seal', rec: true}, {id: 'b', name: 'Page'}]},
+  {id: 'select', name: 'Chapter select', moments: null, vars: [
+    {id: 'a', name: 'Road', rec: true}, {id: 'b', name: 'Cards'}]},
+  {id: 'hint', name: 'Match hint', moments: 'hints', vars: [
+    {id: 'a', name: 'Toast', rec: true}, {id: 'b', name: 'Leader'}]},
+];
+
+const state = {el: 'card', v: 'a', m: '1.2', rm: false, g: false};
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (ELS.some((e) => e.id === p.get('el'))) state.el = p.get('el');
+  const el = ELS.find((e) => e.id === state.el);
+  state.v = el.vars.some((v) => v.id === p.get('v')) ? p.get('v') : el.vars[0].id;
+  const ms = momentsOf(el).map((m) => m.id);
+  state.m = ms.includes(p.get('m')) ? p.get('m') : (ms[0] ?? '');
+  state.rm = p.get('rm') === '1' || (!p.has('rm') && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  state.g = p.get('g') === '1';
+}
+function writeHash() {
+  const p = new URLSearchParams({el: state.el, v: state.v});
+  if (state.m) p.set('m', state.m);
+  if (state.rm) p.set('rm', '1');
+  if (state.g) p.set('g', '1');
+  history.replaceState(null, '', '#' + p.toString());
+}
+function momentsOf(el) {
+  if (el.moments === 'chapter') return MOMENTS.map((m) => ({id: m.id, name: m.id}));
+  if (el.moments === 'chapters') return [1, 2, 3].map((c) => ({id: String(c), name: ROMAN[c]}));
+  if (el.moments === 'hints') return HINTS.map((h) => ({id: h.id, name: h.id + ' ' + h.title}));
+  return [];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Drawing helpers.
+// ---------------------------------------------------------------------------------------------
+const NS = 'http://www.w3.org/2000/svg';
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+function stepsHtml(step, of) {
+  let s = '<span class="steps" aria-label="Step ' + step + ' of ' + of + '">';
+  for (let i = 1; i <= of; i++) s += '<span class="lz ' + (i < step ? 'on' : i === step ? 'now' : '') + '"></span>';
+  return s + '</span>';
+}
+function centerOf(t) {
+  if ('r' in t) return [t.x, t.y];
+  if ('x1' in t) return [(t.x1 + t.x2) / 2, (t.y1 + t.y2) / 2];
+  return [t.x + t.w / 2, t.y + t.h / 2];
+}
+function bg(img) { return '<img class="bg" alt="" src="assets/tutorial/' + img + '.webp">'; }
+
+// The goal mark: one SVG per variant. Ivory ink on a dark casing: never the own, enemy or alert colour.
+function markSvg(t, v) {
+  let s = '<svg class="marks" viewBox="0 0 1280 800" aria-hidden="true"><defs>' +
+    '<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>' +
+    '<radialGradient id="hole"><stop offset="0" stop-color="#000"/><stop offset=".72" stop-color="#000"/><stop offset="1" stop-color="#fff"/></radialGradient>' +
+    '</defs>';
+  if (v === 'a') s += compass(t);
+  else if (v === 'b') s += lantern(t);
+  else s += burin(t);
+  return s + '</svg>';
+}
+function lozengePath(x, y, r) { return `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`; }
+function compass(t) {
+  if ('x1' in t) return roadMark(t, 'compass');
+  if ('w' in t) return boxMark(t, 'compass');
+  const R1 = t.r + 9, R2 = t.r + 15, c = `${t.x} ${t.y}`;
+  let s = `<g><circle cx="${t.x}" cy="${t.y}" r="${R2 + 2}" fill="none" stroke="rgb(236 228 209/.5)" stroke-width="7" filter="url(#soft)" class="breathe"/>`;
+  s += `<circle cx="${t.x}" cy="${t.y}" r="${R1}" fill="none" stroke="#060504" stroke-width="4"/><circle cx="${t.x}" cy="${t.y}" r="${R1}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>`;
+  s += `<circle cx="${t.x}" cy="${t.y}" r="${R2}" fill="none" stroke="#060504" stroke-width="3"/><circle cx="${t.x}" cy="${t.y}" r="${R2}" fill="none" stroke="rgb(236 228 209/.55)" stroke-width="1" stroke-dasharray="3 5"/>`;
+  s += `<g class="spin">` + [0, 90, 180, 270].map((a) => {
+    const rad = a * Math.PI / 180, x = t.x + R2 * Math.cos(rad), y = t.y + R2 * Math.sin(rad);
+    // a compass point: a long lozenge along the radius, so it reads the same at every angle of the turn
+    const ux = Math.cos(rad), uy = Math.sin(rad), L = 7.5, Wd = 3.6;
+    const p = [[x - ux * L, y - uy * L], [x - uy * Wd, y + ux * Wd], [x + ux * L, y + uy * L], [x + uy * Wd, y - ux * Wd]];
+    return `<path d="M${p.map((q) => q.map((v) => v.toFixed(1)).join(' ')).join('L')}Z" fill="#ece4d1" stroke="#060504" stroke-width="1.2" stroke-linejoin="round"/>`;
+  }).join('') + `<circle cx="${t.x}" cy="${t.y}" r="${R2}" fill="none" stroke="none"/></g></g>`;
+  return s;
+}
+function lantern(t) {
+  const [cx, cy] = centerOf(t);
+  let hole;
+  if ('r' in t) hole = `<circle cx="${cx}" cy="${cy}" r="${t.r + 44}" fill="url(#hole)"/>`;
+  else if ('x1' in t) {
+    const pad = 46, a = Math.atan2(t.y2 - t.y1, t.x2 - t.x1) * 180 / Math.PI, len = Math.hypot(t.x2 - t.x1, t.y2 - t.y1);
+    hole = `<rect x="${-pad}" y="${-pad}" width="${len + 2 * pad}" height="${2 * pad}" rx="${pad}" fill="#000" filter="url(#soft)" transform="translate(${t.x1} ${t.y1}) rotate(${a})"/>`;
+  } else hole = `<rect x="${t.x - 18}" y="${t.y - 18}" width="${t.w + 36}" height="${t.h + 36}" fill="#000" filter="url(#soft)"/>` +
+    (t.foot ? `<circle cx="${t.foot[0]}" cy="${t.foot[1]}" r="52" fill="url(#hole)"/>` : '');
+  let s = `<mask id="lmask"><rect width="1280" height="800" fill="#fff"/>${hole}</mask>`;
+  s += `<g class="lantern"><rect x="0" y="52" width="1280" height="748" fill="rgb(6 5 4/.62)" mask="url(#lmask)"/>`;
+  if ('r' in t) s += `<circle cx="${cx}" cy="${cy}" r="${t.r + 12}" fill="none" stroke="#060504" stroke-width="3.5"/><circle cx="${cx}" cy="${cy}" r="${t.r + 12}" fill="none" stroke="#ece4d1" stroke-width="1.3"/>`;
+  else if ('x1' in t) s += roadMark(t, 'plain');
+  else s += `<rect x="${t.x - 5}" y="${t.y - 5}" width="${t.w + 10}" height="${t.h + 10}" fill="none" stroke="#060504" stroke-width="3.5"/><rect x="${t.x - 5}" y="${t.y - 5}" width="${t.w + 10}" height="${t.h + 10}" fill="none" stroke="#ece4d1" stroke-width="1.2"/>`;
+  return s + '</g>';
+}
+function burin(t) {
+  if ('x1' in t) return roadMark(t, 'burin');
+  if ('w' in t) return boxMark(t, 'burin');
+  const R = t.r + 11, len = (2 * Math.PI * R).toFixed(1);
+  let s = `<g><circle cx="${t.x}" cy="${t.y}" r="${R}" fill="none" stroke="#060504" stroke-width="4.5" style="--len:${len}" class="draw" transform="rotate(-90 ${t.x} ${t.y})"/>`;
+  s += `<circle cx="${t.x}" cy="${t.y}" r="${R}" fill="none" stroke="#ece4d1" stroke-width="1.8" style="--len:${len}" class="draw" transform="rotate(-90 ${t.x} ${t.y})"/>`;
+  for (let i = 0; i < 24; i++) {
+    const a = i * 15 * Math.PI / 180, r1 = R + 3, r2 = R + (i % 6 === 0 ? 10 : 6);
+    s += `<line class="fadein" x1="${t.x + r1 * Math.cos(a)}" y1="${t.y + r1 * Math.sin(a)}" x2="${t.x + r2 * Math.cos(a)}" y2="${t.y + r2 * Math.sin(a)}" stroke="rgb(236 228 209/${i % 6 === 0 ? .9 : .45})" stroke-width="${i % 6 === 0 ? 1.4 : 1}"/>`;
+  }
+  s += pointer(t.x, t.y - R - 16) + '</g>';
+  return s;
+}
+function pointer(x, y) {
+  return `<g class="fadein"><g class="bob"><path d="M${x - 9} ${y - 14}L${x + 9} ${y - 14}L${x} ${y}Z" fill="#ece4d1" stroke="#060504" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<path d="M${x - 4} ${y - 11}L${x + 4} ${y - 11}L${x} ${y - 5}Z" fill="#060504" opacity=".35"/></g></g>`;
+}
+function roadMark(t, kind) {
+  const {x1, y1, x2, y2} = t, len = Math.hypot(x2 - x1, y2 - y1), a = Math.atan2(y2 - y1, x2 - x1);
+  const ox = Math.sin(a) * 9, oy = -Math.cos(a) * 9;
+  let s = '<g>';
+  for (const k of [1, -1]) {
+    const p = `M${x1 + ox * k} ${y1 + oy * k}L${x2 + ox * k} ${y2 + oy * k}`;
+    s += `<path d="${p}" stroke="#060504" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+    s += `<path d="${p}" stroke="#ece4d1" stroke-width="1.3" fill="none" stroke-linecap="round" ${kind === 'burin' ? `style="--len:${len.toFixed(1)}" class="draw"` : kind === 'compass' ? 'class="march"' : ''}/>`;
+  }
+  if (kind !== 'plain') {
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    s += `<g class="${kind === 'burin' ? 'fadein' : ''}"><path d="M${mx - 8} ${my}L${mx} ${my - 8}L${mx + 8} ${my}" transform="rotate(${a * 180 / Math.PI + 90} ${mx} ${my})" fill="none" stroke="#060504" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<path d="M${mx - 8} ${my}L${mx} ${my - 8}L${mx + 8} ${my}" transform="rotate(${a * 180 / Math.PI + 90} ${mx} ${my})" fill="none" stroke="#ece4d1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  }
+  return s + '</g>';
+}
+function boxMark(t, kind) {
+  const x = t.x - 7, y = t.y - 7, w = t.w + 14, h = t.h + 14, perim = 2 * (w + h);
+  let s = '<g>';
+  if (kind === 'compass') s += `<rect x="${x - 3}" y="${y - 3}" width="${w + 6}" height="${h + 6}" fill="none" stroke="rgb(236 228 209/.45)" stroke-width="6" filter="url(#soft)" class="breathe"/>`;
+  s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#060504" stroke-width="4"/>`;
+  s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#ece4d1" stroke-width="1.5" ${kind === 'burin' ? `style="--len:${perim}" class="draw"` : ''}/>`;
+  for (const [cx, cy] of [[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
+    s += `<path class="${kind === 'burin' ? 'fadein' : ''}" d="${lozengePath(cx, cy, 5)}" fill="#ece4d1" stroke="#060504" stroke-width="1.2"/>`;
+  if (kind === 'burin') s += pointer(x + w / 2, y - 12);
+  return s + '</g>';
+}
+
+// The hint card of a chapter, in the three looks.
+function cardHtml(m, v) {
+  const kick = `<span class="lab">${ROMAN[m.ch]} · ${esc(CH[m.ch])}</span>`;
+  if (v === 'b') {
+    const side = m.dock ?? 'right';
+    return `<section class="tablet stone rule-frame ${side}" aria-live="polite"><div class="head">${kick}${stepsHtml(m.step, m.of)}</div>` +
+      `<p class="say">${m.say}</p><div class="act">${m.act}</div></section>`;
+  }
+  if (v === 'c') {
+    return `<section class="banner" aria-live="polite"><span class="hang l"></span><span class="hang r"></span><div class="strip">` +
+      `<span class="num">${ROMAN[m.ch]}</span><p class="say">${m.say}</p>${stepsHtml(m.step, m.of)}</div></section>`;
+  }
+  return leaderHtml(m.t, `<div class="head">${kick}${stepsHtml(m.step, m.of)}</div><p class="say">${m.say}</p><div class="act">${m.act}</div>`, m.w ?? 330, '', m.at);
+}
+
+// A plate tied to its place by a ruled leader (the map tip "Leader" of ui-style 63), placed where it
+// covers neither the place nor the top bar: up and right, else left, else below.
+function leaderHtml(t, inner, w, extra = '', at = null) {
+  const [cx, cy] = centerOf(t);
+  const anchor = t.foot ?? [cx, cy];
+  const reach = 'r' in t ? t.r + 18 : 0;
+  const hEst = 150, gap = 46;
+  let px, py, fx, fy;
+  const box = 'w' in t;
+  if (box) {
+    // a box (an arena, a top bar piece): the plate sits beside it, the leader from the box's edge
+    const right = t.x + t.w + gap + w < 1260;
+    px = right ? t.x + t.w + gap : t.x - gap - w;
+    py = Math.max(64, t.y);
+    fx = right ? t.x + t.w + 6 : t.x - 6; fy = t.y + Math.min(t.h, 40) / 2 + 6;
+    if (t.y < 52) { px = Math.min(1260 - w, Math.max(20, cx - w / 2 + 60)); py = 92; fx = cx; fy = t.y + t.h + 5; }
+  } else if ('x1' in t) {
+    px = cx + 40; py = cy - hEst - 50; fx = cx; fy = cy - 12;
+  } else {
+    const right = cx + reach + gap + w < 1260;
+    px = right ? cx + reach + gap : cx - reach - gap - w;
+    py = cy - reach - hEst + 10;
+    if (py < 64) py = cy + reach + 20;
+    const ang = Math.atan2((py + 30) - cy, (right ? px : px + w) - cx);
+    fx = cx + Math.cos(ang) * (t.r + 16); fy = cy + Math.sin(ang) * (t.r + 16);
+  }
+  if (at) {
+    [px, py] = at;
+    // the leader leaves the target towards the plate's nearer side
+    const tx = px > cx ? px : px + w, ty = py > cy ? py : py + 70;
+    if (box) { fx = px > t.x + t.w ? t.x + t.w + 6 : px + w < t.x ? t.x - 6 : cx; fy = py > t.y + t.h ? t.y + t.h + 6 : py + 70 < t.y ? t.y - 6 : t.y + t.h / 2; }
+    else if (!('x1' in t)) { const ang = Math.atan2(ty - cy, tx - cx); fx = cx + Math.cos(ang) * (t.r + 16); fy = cy + Math.sin(ang) * (t.r + 16); }
+  }
+  let ex = box && t.y < 52 && !at ? cx : (px < fx ? px + w : px), ey = box && t.y < 52 && !at ? py : py + 30;
+  if (at) { ex = px > fx ? px : px + w; ey = py > fy ? py + 18 : py + 60; if (fx > px && fx < px + w) { ex = Math.min(px + w - 20, Math.max(px + 20, fx)); ey = py > fy ? py : py + 90; } }
+  const len = Math.hypot(ex - fx, ey - fy).toFixed(1);
+  const path = `M${fx} ${fy}L${ex} ${ey}`;
+  return `<div class="leadwrap"><svg viewBox="0 0 1280 800" aria-hidden="true"><path class="leadcase" style="--len:${len}" d="${path}"/><path class="leadline" style="--len:${len}" d="${path}"/>` +
+    `<path class="leadfoot" d="${lozengePath(fx, fy, 4)}"/></svg>` +
+    `<section class="plate ${extra}" style="left:${px}px;top:${py}px;width:${w}px" aria-live="polite"><span class="pt u"></span><span class="pt d"></span>${inner}</section></div>`;
+}
+
+function star(x, y, R, r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R;
+    d += (i ? 'L' : 'M') + (x + rr * Math.cos(a)).toFixed(1) + ' ' + (y + rr * Math.sin(a)).toFixed(1);
+  }
+  return d + 'Z';
+}
+
+// A crop of a chapter's first frame (the client's own picture of the chapter map) for a card w x h,
+// with the goals ringed when asked. The crop rectangles are in the pixels of the 1280 x 800 frame.
+const CROP = {1: ['c1-start', 150, 110, 760, 560], 2: ['c2-start', 140, 150, 800, 640], 3: ['c3-start', 150, 170, 800, 640]};
+const GOALS = {1: [[370, 270], [540, 160], [560, 410]], 2: [[420, 200], [700, 450]], 3: [[680, 350]]};
+function cropRect(img, x0, y0, x1, y1, w, h) {
+  const cw = x1 - x0, ch = y1 - y0, k = Math.max(w / cw, h / ch), ox = x0 * k + (cw * k - w) / 2, oy = y0 * k + (ch * k - h) / 2;
+  return `<div style="position:absolute;inset:0;background:url(assets/tutorial/${img}.webp) -${ox.toFixed(1)}px -${oy.toFixed(1)}px/${(1280 * k).toFixed(1)}px ${(800 * k).toFixed(1)}px no-repeat"></div>`;
+}
+function cropHtml(c, w, h, goals) {
+  const [img, x0, y0, x1, y1] = CROP[c], cw = x1 - x0, ch = y1 - y0;
+  const k = Math.max(w / cw, h / ch), ox = x0 * k + (cw * k - w) / 2, oy = y0 * k + (ch * k - h) / 2;
+  let s = `<div style="position:absolute;inset:0;background:url(assets/tutorial/${img}.webp) -${ox.toFixed(1)}px -${oy.toFixed(1)}px/${(1280 * k).toFixed(1)}px ${(800 * k).toFixed(1)}px no-repeat"></div>`;
+  if (goals) {
+    s += `<svg viewBox="0 0 ${w} ${h}" style="position:absolute;inset:0;width:${w}px;height:${h}px" aria-hidden="true">`;
+    for (const [gx, gy] of GOALS[c]) {
+      const x = W(gx) * k - ox, y = H(gy) * k - oy, r = 26 * k + 9;
+      s += `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#060504" stroke-width="3.5"/><circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#ece4d1" stroke-width="1.4"/>`;
+      s += `<path d="${lozengePath(x, y - r, 4)}" fill="#ece4d1" stroke="#060504"/>`;
+    }
+    s += '</svg>';
+  }
+  return s;
+}
+const CH_WHY = {
+  1: 'Take three places with a small army, and watch the front refill itself.',
+  2: 'Hold a city in the mountains, then take one on the plains.',
+  3: 'Gather a bonus in the open, then strike with it.',
+};
+const CH_GOALS = {
+  1: ['Take Ashford, Elmstead and Fordham'],
+  2: ['Hold Highcrag', 'Take Flatford'],
+  3: ['Take Ashwood with a planned order'],
+};
+const CH_LESSON = {
+  1: ['A charge is a shot.', 'A capture costs one.', 'The flow refills the front.'],
+  2: ['Mountains help the defender.', 'Plains hurt it.', 'No retreat; help may join.'],
+  3: ['Everyone sees a plan, not its size.', 'The bonus fires first.', 'Strike with a squad of three.'],
+};
+const CH_END = {1: 'c1-flow', 2: 'c2-burn', 3: 'c3-strike'};
+
+function chapterRow(now, done) {
+  let s = '<div class="chrow" aria-label="Chapters">';
+  [1, 2, 3].forEach((c, i) => {
+    if (i) s += '<span class="rl"></span>';
+    s += `<span class="k ${c === now ? 'now' : ''}"><span class="lz ${c < done + 1 && c !== now ? 'on' : c === now ? 'now' : ''}"></span>${ROMAN[c]} ${esc(CH[c])}</span>`;
+  });
+  return s + '<span class="rl"></span><span class="k"><span class="lz"></span>First match</span></div>';
+}
+
+// ---------------------------------------------------------------------------------------------
+// The frame of the chosen piece.
+// ---------------------------------------------------------------------------------------------
+function render() {
+  const art = document.getElementById('art');
+  const el = ELS.find((e) => e.id === state.el);
+  let html = '';
+  if (el.id === 'card' || el.id === 'mark') {
+    const m = MOMENTS.find((x) => x.id === state.m);
+    html = bg(m.img) + markSvg(m.t, el.id === 'mark' ? state.v : 'a') + cardHtml(m, el.id === 'card' ? state.v : 'a');
+  } else if (el.id === 'intro') {
+    const c = Number(state.m);
+    if (state.v === 'a') {
+      html = bg('menu') + '<div class="shade"></div>' +
+        `<section class="foot stone rule-frame" aria-labelledby="ttl">` +
+        `<div><p class="lab">Tutorial · Chapter ${ROMAN[c]} of III</p><h1 id="ttl">${esc(CH[c])}</h1><p class="why">${esc(CH_WHY[c])}</p>${chapterRow(c, c - 1)}</div>` +
+        `<div class="right"><button class="btn primary tab">Start</button>${c === 1 ? '<button class="quiet">Skip the tutorial</button>' : '<button class="quiet">All chapters</button>'}</div></section>`;
+    } else {
+      html = bg('menu') + '<div class="blurstone"></div>' +
+        `<section class="sheet stone rule-frame" aria-labelledby="ttl"><div><p class="lab">Tutorial · Chapter ${ROMAN[c]} of III</p><h1 id="ttl">${esc(CH[c])}</h1><p class="why">${esc(CH_WHY[c])}</p>` +
+        `<p class="lab sec" style="margin-bottom:12px">Goal</p><ul class="goals">${CH_GOALS[c].map((g) => `<li><span class="lz"></span>${esc(g)}</li>`).join('')}</ul>` +
+        `<div class="acts"><button class="btn primary">Start</button>${c === 1 ? '<button class="quiet">Skip the tutorial</button>' : '<button class="quiet">All chapters</button>'}</div></div>` +
+        `<div class="mapcard">${cropHtml(c, 420, 300, true)}<span class="lab cap">About a minute</span></div></section>`;
+    }
+  } else if (el.id === 'result') {
+    const c = Number(state.m);
+    const next = c < 3 ? `Next: ${CH[c + 1]}` : 'Play your first match';
+    if (state.v === 'a') {
+      html = bg(CH_END[c]) + '<div class="dim"></div>' +
+        `<section class="window stone rule-frame" aria-labelledby="ttl">${sealSvg(c)}<p class="lab">Chapter ${ROMAN[c]} · ${esc(CH[c])}</p><h2 id="ttl">Complete</h2>` +
+        `<ul class="lesson">${CH_LESSON[c].map((l) => `<li><span class="lz on"></span>${esc(l)}</li>`).join('')}</ul>` +
+        `<div class="acts"><button class="btn primary">${esc(next)}</button><button class="quiet">Replay chapter</button></div></section>`;
+    } else {
+      html = bg('menu') + '<div class="blurstone"></div>' +
+        `<section class="result-page" aria-labelledby="ttl"><p class="lab">Tutorial · Chapter ${ROMAN[c]} of III</p>` +
+        `<h1 id="ttl">${sealSvg(c, 74, true)}Complete</h1><p class="why">${esc(CH_LESSON[c].join(' '))}</p>` +
+        `<div class="rail3">${[1, 2, 3].map((k) => `<div class="st ${k <= c ? 'done' : 'todo'}"><span class="lab"><span class="lz ${k <= c ? 'on' : ''}"></span>&nbsp; Chapter ${ROMAN[k]}</span><span class="t">${esc(CH[k])}</span></div>`).join('')}` +
+        `<div class="st todo"><span class="lab"><span class="lz"></span>&nbsp; Then</span><span class="t">First match</span></div></div>` +
+        `<div class="acts"><button class="btn primary">${esc(next)}</button><button class="quiet">Replay the chapter</button><button class="quiet">Rules</button></div></section>`;
+    }
+  } else if (el.id === 'select') {
+    html = bg('menu') + '<div class="blurstone"></div>' + (state.v === 'a' ? roadSelect() : cardSelect());
+  } else if (el.id === 'hint') {
+    const h = HINTS.find((x) => x.id === state.m);
+    const inner = `<div class="head"><span class="lab">Hint · ${esc(h.title)}</span><button class="x" aria-label="Close">${xIcon()}</button></div><p class="say">${h.say}</p>` +
+      `${h.key ? `<div class="act">${h.key}</div>` : ''}<div class="row"><span></span><button class="linkish">Turn off hints</button></div>`;
+    if (state.v === 'a') {
+      html = bg(h.img) + markSvg(h.t, 'a') +
+        `<section class="toast" aria-live="polite">${hintIcon()}<span class="lab">Hint · ${esc(h.title)}</span><button class="x" aria-label="Close">${xIcon()}</button>` +
+        `<p>${h.say}</p>${h.key ? `<p style="color:var(--ink-soft);font-style:italic;font-size:15px">${h.key}</p>` : ''}` +
+        `<div class="row"><button class="go">${goIcon()} Go there</button><button class="linkish">Turn off hints</button></div></section>`;
+    } else {
+      html = bg(h.img) + markSvg(h.t, 'a') + leaderHtml(h.t, inner, h.w ?? 320, '', h.at ?? null);
+    }
+  }
+  art.innerHTML = html;
+}
+function xIcon() { return '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'; }
+function goIcon() { return '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="7" r="1.6" fill="currentColor"/><path d="M7 0v2.4M7 11.6V14M0 7h2.4M11.6 7H14" stroke="currentColor" stroke-width="1.2"/></svg>'; }
+function hintIcon() {
+  return '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 22.5 12 12 22.5 1.5 12Z" fill="#0e0c09" stroke="#ece4d1" stroke-width="1.3"/>' +
+    '<path d="M12 4.5 19.5 12 12 19.5 4.5 12Z" fill="none" stroke="rgb(236 228 209/.3)" stroke-width="1"/><text x="12" y="16.2" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="11" fill="#ece4d1">?</text></svg>';
+}
+function sealSvg(c, size = 92, inline = false) {
+  const st = inline ? `width="${size}" height="${size}" style="flex:none"` : `class="seal"`;
+  return `<svg ${st} viewBox="0 0 92 92" aria-hidden="true"><defs><radialGradient id="sg${c}${size}" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#2b261e"/><stop offset="1" stop-color="#14110d"/></radialGradient></defs>` +
+    `<path d="${lozengePath(46, 46, 44)}" fill="url(#sg${c}${size})" stroke="#050403" stroke-width="2"/>` +
+    `<path d="${lozengePath(46, 46, 41)}" fill="none" stroke="rgb(214 200 172/.38)" stroke-width="1"/>` +
+    `<path d="${lozengePath(46, 46, 34)}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>` +
+    `<path d="${lozengePath(46, 46, 30)}" fill="none" stroke="rgb(236 228 209/.25)" stroke-width="1"/>` +
+    `<text x="46" y="${c === 3 ? 53.5 : 54}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${c === 3 ? 20 : 23}" letter-spacing="1" fill="#ece4d1">${ROMAN[c]}</text></svg>`;
+}
+function roadSelect() {
+  // The chapters as places on one road; the first match is the enemy capital at its end. Two chapters done.
+  const pts = [[230, 210], [470, 150], [710, 220], [1010, 160]];
+  const status = ['done', 'done', 'next', 'todo'];
+  let s = `<section class="selpage" style="top:96px" aria-labelledby="ttl"><p class="lab">How to play</p><h1 id="ttl">Tutorial</h1><p class="why">Three short chapters, then your first match against an easy bot.</p></section>`;
+  s += '<div class="road"><svg viewBox="0 0 1280 330" aria-label="Chapters"><g>';
+  let d = `M${pts[0][0] - 170} ${pts[0][1] + 40}`;
+  d += ` C${pts[0][0] - 90} ${pts[0][1] + 30} ${pts[0][0] - 60} ${pts[0][1]} ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], mx = (ax + bx) / 2;
+    d += ` C${mx} ${ay} ${mx} ${by} ${bx} ${by}`;
+  }
+  s += `<path d="${d}" fill="none" stroke="#060504" stroke-width="13" stroke-linecap="round"/>`;
+  s += `<path d="${d}" fill="none" stroke="#7d7363" stroke-width="4" stroke-dasharray="12 10" stroke-linecap="round"/>`;
+  // the part already walked, in the own colour
+  let dd = `M${pts[0][0] - 170} ${pts[0][1] + 40} C${pts[0][0] - 90} ${pts[0][1] + 30} ${pts[0][0] - 60} ${pts[0][1]} ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < 3; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], mx = (ax + bx) / 2; dd += ` C${mx} ${ay} ${mx} ${by} ${bx} ${by}`; }
+  s += `<path d="${dd}" fill="none" stroke="#86a6ea" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>`;
+  const names = ['I · Move and capture', 'II · Fight', 'III · Strike with a plan', 'First match'];
+  const subs = ['Done', 'Done', 'Next', 'Easy bot · Narrows'];
+  pts.forEach(([x, y], i) => {
+    const st = status[i], capital = i === 3;
+    s += `<g class="rnode" tabindex="0" role="button" aria-label="${names[i]}, ${subs[i]}">`;
+    if (st === 'next') s += `<circle cx="${x}" cy="${y}" r="40" fill="none" stroke="#ece4d1" stroke-width="2" class="pulse"/>`;
+    s += `<circle class="focusring" cx="${x}" cy="${y}" r="48" fill="none" stroke="#ece4d1" stroke-width="2"/>`;
+    s += `<circle cx="${x}" cy="${y}" r="36" fill="#060504"/>`;
+    s += `<circle cx="${x}" cy="${y}" r="32" fill="none" stroke="${st === 'next' ? '#ece4d1' : '#cfc4ab'}" stroke-opacity="${st === 'next' ? 1 : .7}" stroke-width="${st === 'next' ? 2.4 : 2}"/>`;
+    s += `<circle cx="${x}" cy="${y}" r="29" fill="none" stroke="rgb(214 200 172/.2)" stroke-width="1"/>`;
+    const fill = st === 'done' ? '#86a6ea' : capital ? '#e5785e' : '#221e18';
+    s += `<circle cx="${x}" cy="${y}" r="25" fill="${fill}" ${st === 'next' ? 'stroke="#7d7363" stroke-width="1.5"' : ''}/>`;
+    if (capital) s += `<path d="${star(x, y, 13, 5.4)}" fill="#060504"/>`;
+    else s += `<text x="${x}" y="${y + 7}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${i === 2 ? 17 : 19}" fill="${st === 'done' ? '#0b0d14' : '#ece4d1'}">${ROMAN[i + 1]}</text>`;
+    if (st === 'done') s += `<path d="${lozengePath(x + 25, y - 25, 7)}" fill="#ece4d1" stroke="#060504" stroke-width="1.4"/><path d="M${x + 21.5} ${y - 25}l2.4 2.6 4.6-5" fill="none" stroke="#060504" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const below = y < 190 ? 72 : 70;
+    s += `<text class="rtitle" x="${x}" y="${y + below}" text-anchor="middle">${names[i]}</text><text class="rsub" x="${x}" y="${y + below + 24}" text-anchor="middle">${subs[i]}</text></g>`;
+  });
+  s += '</g></svg></div>';
+  s += `<section class="foot stone rule-frame" style="height:178px;padding:28px 46px" aria-label="Chapter III"><div><p class="lab">Chapter III of III · About a minute</p><h1 style="font-size:36px;margin:6px 0 4px">Strike with a plan</h1><p class="why" style="font-size:19px">${esc(CH_WHY[3])}</p></div>` +
+    `<div class="right" style="gap:12px"><button class="btn primary tab" style="height:64px;min-width:250px;font-size:20px">Start</button><button class="quiet" style="font-size:17px">Rules</button></div></section>`;
+  return s;
+}
+function cardSelect() {
+  const st = ['Done', 'Done', 'Next', 'Easy bot · Narrows'];
+  let s = `<section class="selpage" aria-labelledby="ttl"><p class="lab">How to play</p><h1 id="ttl">Tutorial</h1><p class="why">Three short chapters, then your first match against an easy bot.</p><div class="cards">`;
+  [1, 2, 3].forEach((c, i) => {
+    s += `<button class="ccard ${i === 2 ? 'next' : ''}"><span class="lab">Chapter ${ROMAN[c]}</span><div class="mini">${cropHtml(c, 232, 132, false)}</div><h3>${esc(CH[c])}</h3>` +
+      `<span class="st"><span class="lz ${i < 2 ? 'on' : 'now'}"></span>${st[i]}</span></button>`;
+  });
+  s += `<button class="ccard"><span class="lab">Then</span><div class="mini">${cropRect('m-pocket', 40, 120, 1000, 700, 232, 132)}</div><h3>First match</h3><span class="st"><span class="lz"></span>${st[3]}</span></button>`;
+  s += `</div><div class="selfoot"><button class="quiet">Rules</button><button class="btn primary">Start chapter III</button></div></section>`;
+  return s;
+}
+// ---------------------------------------------------------------------------------------------
+// The shell.
+// ---------------------------------------------------------------------------------------------
+function button(label, pressed, on, extra = '') {
+  const b = document.createElement('button');
+  b.className = 'ch'; b.setAttribute('aria-pressed', String(pressed)); b.innerHTML = label + extra; b.onclick = on;
+  return b;
+}
+function buildBar() {
+  const els = document.getElementById('els'); els.innerHTML = '';
+  ELS.forEach((e) => els.append(button(esc(e.name), e.id === state.el, () => { state.el = e.id; const el = ELS.find((x) => x.id === e.id); state.v = el.vars[0].id; state.m = momentsOf(el)[0]?.id ?? ''; update(); })));
+  const el = ELS.find((e) => e.id === state.el);
+  const vars = document.getElementById('vars'); vars.innerHTML = '';
+  el.vars.forEach((v, i) => vars.append(button(`<span class="n">${String.fromCharCode(65 + i)}</span>${esc(v.name)}`, v.id === state.v, () => { state.v = v.id; update(); }, v.rec ? '<span class="rec" title="Recommended" aria-label="recommended"></span>' : '')));
+  const moms = document.getElementById('moms'); moms.innerHTML = '';
+  const ms = momentsOf(el);
+  document.getElementById('momgrp').style.display = ms.length ? '' : 'none';
+  ms.forEach((m) => moms.append(button(esc(m.name), m.id === state.m, () => { state.m = m.id; update(); })));
+  document.getElementById('rmBtn').setAttribute('aria-pressed', String(state.rm));
+  document.getElementById('gBtn').setAttribute('aria-pressed', String(state.g));
+}
+function fit() {
+  const view = document.getElementById('view'), stage = document.getElementById('stage');
+  const k = Math.min((view.clientWidth - 24) / 1280, (view.clientHeight - 24) / 800, 1.25);
+  stage.style.transform = `scale(${k})`;
+}
+function update() {
+  document.documentElement.classList.toggle('rm', state.rm);
+  document.documentElement.classList.toggle('gray', state.g);
+  writeHash(); buildBar(); render();
+}
+document.getElementById('moreBtn').onclick = () => {
+  const bar = document.getElementById('bar'), open = !bar.classList.contains('open');
+  bar.classList.toggle('open', open); document.getElementById('moreBtn').setAttribute('aria-expanded', String(open));
+};
+document.getElementById('rmBtn').onclick = () => { state.rm = !state.rm; update(); };
+document.getElementById('gBtn').onclick = () => { state.g = !state.g; update(); };
+document.getElementById('replay').onclick = () => render();
+addEventListener('resize', fit);
+addEventListener('hashchange', () => { readHash(); update(); });
+readHash();
+Promise.all([document.fonts.load('500 13px Cinzel'), document.fonts.load("500 16px 'EB Garamond'"), document.fonts.load("italic 500 16px 'EB Garamond'")])
+  .catch(() => null).then(() => { fit(); update(); document.body.classList.add('ready'); });
+</script>
+</body>
+</html>
