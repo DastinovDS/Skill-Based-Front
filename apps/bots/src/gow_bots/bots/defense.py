@@ -118,6 +118,11 @@ CUT_TICKS: Final = 20
 """The cut-off counts of the front nodes are recomputed this often."""
 SEAL_GROUPS: Final = 3
 """Groups a retake combines at most (``seal``)."""
+HIDDEN_STRIKE: Final = 4
+"""#1032: charged units a visible strike brings at least while its origin shows no charged enemy
+(the fog or a stale sighting hides it: a plan gathers in its node, so the node is not empty). The
+owner's hidden strikes in his matches of 2026-11-12 and 2026-11-13 carried 4 to 5 units with the
+full bonus; the old estimate (an empty origin: 2 shots) fed single units into a strike of 10."""
 ANSWER_HOPS: Final = 4
 """Farthest own node a reinforcement of a strike comes from, in road hops."""
 
@@ -145,6 +150,9 @@ class Defense:
     """Opaque intent id to the tick it was answered."""
     cut: dict[int, int] = field(default_factory=dict[int, int])
     cut_tick: int = -CUT_TICKS
+    strikes: dict[int, int] = field(default_factory=dict[int, int])
+    """Opaque intent id of a visible enemy strike to the most shots it was seen with (#1032: once
+    the strike leaves, its origin looks empty, and the strike is not weaker for that)."""
 
     def hold(self, node: int) -> int:
         h = self.line.hold
@@ -297,6 +305,8 @@ def read(bot: "SmartBot", view: PlayerView, d: Defense) -> None:
         if tick - t <= RETAKE_TICKS and view.nodes[n].owner == enemy
     }
     d.answered = {i: t for i, t in sorted(d.answered.items()) if tick - t <= RETAKE_TICKS}
+    live = {i.id: True for i in view.intents}
+    d.strikes = {i: s for i, s in sorted(d.strikes.items()) if i in live}
     d.line = plan_line(bot, view, d)
     d.bonus = {}
     if not bot.defending():
@@ -334,21 +344,45 @@ def _send(bot: "SmartBot", ctx: "Ctx", g: GroupView, dest: int) -> bool:
 
 
 def answer(bot: "SmartBot", ctx: "Ctx", strikes: Sequence[IntentView]) -> None:
-    """Item 3: every visible enemy strike at an own node not answered yet."""
+    """Item 3: every visible enemy strike at an own node not answered yet, against the sum of
+    every visible strike at that node (``shots_at``)."""
     d = bot.defense
     view, tick = ctx.view, ctx.tick
+    total = shots_at(bot, view, tick)
     for intent in strikes:
         target = intent.target
         if target is None or intent.id in d.answered or target == bot.home:
             continue
-        shots = strike_shots(bot, view, intent.origin, tick)
+        shots = total.get(target, 0)
         if held_shots(bot, ctx, target, 0, 0) > shots:
             d.answered[intent.id] = tick
             continue
-        arrive = bot.arrival(intent) + (shots // 2) * bot.rules.orders.plan_ticks_per_bonus
+        own = d.strikes.get(intent.id, 0)
+        arrive = bot.arrival(intent) + (own // 2) * bot.rules.orders.plan_ticks_per_bonus
         within = arrive - tick
         if reinforce(bot, ctx, target, shots, within) or pull_out(bot, ctx, target, shots):
             d.answered[intent.id] = tick
+
+
+def shots_at(bot: "SmartBot", view: PlayerView, tick: int) -> dict[int, int]:
+    """#1032: by own node the shots of every visible enemy strike at it together. A strike counts
+    the most it was seen with (``Defense.strikes``: once it leaves, its origin looks empty), and at
+    least ``HIDDEN_STRIKE`` charged units twice while its origin shows no charged enemy (a plan
+    gathers in its node; the fog or a stale sighting hides it)."""
+    d = bot.defense
+    me, enemy = view.player, 1 - view.player
+    total: dict[int, int] = {}
+    for i in view.intents:
+        target = i.target
+        if i.owner != enemy or target is None or view.nodes[target].owner != me:
+            continue
+        shots = max(d.strikes.get(i.id, 0), strike_shots(bot, view, i.origin, tick))
+        seen = bot.enemy_at(view, i.origin)
+        if seen is None or seen[1] <= 0:
+            shots = max(shots, 2 * HIDDEN_STRIKE)
+        d.strikes[i.id] = shots
+        total[target] = total.get(target, 0) + shots
+    return total
 
 
 def reinforce(bot: "SmartBot", ctx: "Ctx", target: int, shots: int, within: int) -> bool:
@@ -381,6 +415,9 @@ def reinforce(bot: "SmartBot", ctx: "Ctx", target: int, shots: int, within: int)
             break
     else:
         return False
+    price = bot.cost(Move(picked[0].id, target)) * len(picked)
+    if price > ctx.budget - max(ctx.held, ctx.saved):
+        return False  # #1032: all of them or none, never the first one alone
     sent = False
     for g in picked:
         sent = _send(bot, ctx, g, target) or sent
@@ -451,7 +488,10 @@ def retake(bot: "SmartBot", ctx: "Ctx", target: int) -> bool:
         toll = bot.toll_from(view, here, target, g.units, g.charged)
         found.append((way.ticks, bot.group_order(g), g, toll))
     found.sort(key=lambda x: (x[0], x[1]))
+    thin = bot.thin()  # #1032: a small army retakes with two units at least
     for _, _, g, toll in found:
+        if thin and g.units < 2:
+            continue
         bonus = bot.plan_bonus(view, node_of(g), g.charged) if need > 0 else 0
         if not takes(rules, g.charged, bonus, need, toll):
             continue
@@ -500,8 +540,9 @@ def block(bot: "SmartBot", ctx: "Ctx", target: int) -> None:
         (g for g in bot.free_groups(ctx) if g.charged > 0 and node_of(g) != rear),
         key=lambda g: (ticks[node_of(g)][rear], bot.group_order(g)),
     )
+    thin = bot.thin()  # #1032: a small army blocks with two units at least
     for g in groups:
-        if g.units > bot.room(ctx, rear) or not bot.may_leave(ctx, g):
+        if g.units > bot.room(ctx, rear) or not bot.may_leave(ctx, g) or (thin and g.units < 2):
             continue
         if rear in bot.reachable(view, node_of(g), ANSWER_HOPS, g.units):
             _send(bot, ctx, g, rear)

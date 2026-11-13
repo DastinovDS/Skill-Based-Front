@@ -64,6 +64,8 @@ class SmartHoarder(SmartBot):
     name: ClassVar[str] = "smart_hoarder"
     DEFENSE: ClassVar[bool] = False
     """A benchmark: no defense of ``SmartBot`` item 29 (#1022)."""
+    UPKEEP: ClassVar[bool] = False
+    """Item 30 of ``SmartBot`` off (#1032): the benchmark stays fixed."""
     STRIKE: ClassVar[bool] = True
     STRIKE_ONLY: ClassVar[bool] = True
     STRIKE_BANK: ClassVar[bool] = True

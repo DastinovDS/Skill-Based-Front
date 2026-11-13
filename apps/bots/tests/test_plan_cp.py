@@ -14,7 +14,7 @@ import pytest
 import gow_bots.bots.campaign as campaign
 from gow_bots.bots import ParamRange, SmartBot, SmartRusher, bot_factory
 from gow_bots.bots.base import node_of
-from gow_bots.bots.smart import PERSONALITIES
+from gow_bots.bots.smart import PERSONALITIES, SmartTurtle
 from gow_sim.commands import Command, Move
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match
@@ -169,8 +169,11 @@ def _target(mapdef: MapDef, view: PlayerView) -> int:
 
 
 def test_a_strike_at_a_lesser_city_is_answered_when_it_is_worth_it(
-    web: MapDef, rules: Ruleset
+    web: MapDef, rules: Ruleset, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Item 11 is the answer of a bot without item 30 (the benchmarks; #1032: item 30 answers a
+    # lesser city only when the sum of forces holds).
+    monkeypatch.setattr(SmartRusher, "UPKEEP", False)
     view = _view(web, rules, 800)
     target = _target(web, view)
     seen = dataclasses.replace(view, intents=(_strike(web, target),))
@@ -187,8 +190,9 @@ def test_a_strike_at_a_lesser_city_is_answered_when_it_is_worth_it(
 
 
 def test_a_strike_at_a_lesser_city_is_noticed_after_the_reaction_delay(
-    web: MapDef, rules: Ruleset
+    web: MapDef, rules: Ruleset, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(SmartTurtle, "UPKEEP", False)  # the answer of item 11 (#1032)
     view = _view(web, rules, 800)
     target = _target(web, view)
     bot = bot_factory("smart_turtle@normal")(web, rules, seed=0, player=0)
