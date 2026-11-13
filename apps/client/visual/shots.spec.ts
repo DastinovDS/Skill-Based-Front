@@ -2,7 +2,14 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DRAWN_MAP_VARIANCE, columnLuminance, mapVariance } from './mapPixels.ts';
-import { DOCK_CLICKS, GATE_SHOTS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
+import {
+  DOCK_CLICKS,
+  GATE_SHOTS,
+  HINT_SHOTS,
+  MENU_SCENES,
+  SCENES,
+  STATUS_SCENES,
+} from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
 // comparison with a reference. Per scene: `<scene>.png` is the whole screen with the HUD,
@@ -43,6 +50,20 @@ for (const shot of GATE_SHOTS) {
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
     await page.mouse.move(5, 5);
     await page.screenshot({ path: join(OUT, `gate-${shot.name}.png`) });
+  });
+}
+
+// A hint of the first match over a frozen scene (#806): the card, its leader and the mark.
+for (const shot of HINT_SHOTS) {
+  test(`shot of the first-match hint ${shot.name}`, async ({ page }) => {
+    await page.goto(`/?scene=${shot.scene}&hint=${shot.hint}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(shot.tick));
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await expect(page.locator('.hints .plate.placed')).toBeVisible();
+    await page.mouse.move(5, 5);
+    // The burin and the leader finish their entrance.
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(OUT, `hint-${shot.name}.png`) });
   });
 }
 
@@ -1004,7 +1025,7 @@ for (const size of SCREEN_SIZES) {
 
 // The other screens before and after a match fit the same windows without a scroll bar (#928). Not
 // here: Profile (its match list grows with the matches: at 1280x720 it may scroll, a thin bar) and
-// How to play (a long page that scrolls at every size).
+// the rules reference (two columns of text: a short window scrolls it).
 for (const size of SCREEN_SIZES) {
   for (const id of [
     'welcome',
@@ -1579,17 +1600,6 @@ test('shot of the whole settings of a match', async ({ page }) => {
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.screenshot({ path: join(OUT, 'match-settings-tall.png') });
-});
-
-// The whole page of the rules at once: a tall window, so the panel needs no scrolling.
-test('shot of the whole How to play screen (CLI-13)', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 2300 });
-  await page.goto('/?menu=howto');
-  await expect(page.locator('.hw')).toBeVisible();
-  await page.mouse.move(1000, 2200);
-  await page.screenshot({ path: join(OUT, 'screen-howto-tall.png') });
-  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
-  await page.screenshot({ path: join(OUT, 'screen-howto-tall-gray.png') });
 });
 
 test('shot of the forfeit dialog in the match', async ({ page }) => {

@@ -11,7 +11,7 @@ export const TUTORIAL_STORAGE_KEY = 'sbf.tutorial';
 
 /** The hints of the first match (section 5): H1 to H5. */
 export type HintId = 'H1' | 'H2' | 'H3' | 'H4' | 'H5';
-const HINT_IDS: readonly HintId[] = ['H1', 'H2', 'H3', 'H4', 'H5'];
+export const HINT_IDS: readonly HintId[] = ['H1', 'H2', 'H3', 'H4', 'H5'];
 
 export interface TutorialProgress {
   readonly v: 1;
@@ -21,9 +21,14 @@ export interface TutorialProgress {
   readonly offerOff: boolean;
   /** The first match (from the chapter select) was played: the tutorial counts as finished. */
   readonly firstMatch: boolean;
-  /** The first-match hints already shown (PR 3). */
+  /**
+   * The match the chapter select started as the first match while it runs: a reload returns to it
+   * with its hints, and its end marks the tutorial finished (`firstMatch`).
+   */
+  readonly firstMatchId: string | null;
+  /** The first-match hints already shown (section 5). */
   readonly hints: readonly HintId[];
-  /** "Turn off hints" (PR 3). */
+  /** "Turn off hints". */
   readonly hintsOff: boolean;
 }
 
@@ -32,6 +37,7 @@ export const EMPTY_PROGRESS: TutorialProgress = {
   done: [],
   offerOff: false,
   firstMatch: false,
+  firstMatchId: null,
   hints: [],
   hintsOff: false,
 };
@@ -43,12 +49,16 @@ export function loadProgress(storage: () => Storage): TutorialProgress {
     if (raw === null) return EMPTY_PROGRESS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return EMPTY_PROGRESS;
-    const { done, offerOff, firstMatch, hints, hintsOff } = parsed as Record<string, unknown>;
+    const { done, offerOff, firstMatch, firstMatchId, hints, hintsOff } = parsed as Record<
+      string,
+      unknown
+    >;
     return {
       v: 1,
       done: Array.isArray(done) ? [...new Set(done.filter(isChapterId))] : [],
       offerOff: offerOff === true,
       firstMatch: firstMatch === true,
+      firstMatchId: typeof firstMatchId === 'string' ? firstMatchId : null,
       hints: Array.isArray(hints) ? HINT_IDS.filter((id) => hints.includes(id)) : [],
       hintsOff: hintsOff === true,
     };

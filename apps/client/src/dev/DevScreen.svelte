@@ -28,6 +28,12 @@
   import { GatedSource } from '../render/renderGate.ts';
   import { FULL_GATE, UI_FLAGS } from '../tutorial/gate.ts';
   import type { UiFlag } from '../protocol.gen.ts';
+  import HintCard from '../hud/HintCard.svelte';
+  import { EMPTY_PROGRESS } from '../tutorial/progress.ts';
+  import { HintCoach } from '../tutorial/hintCoach.svelte.ts';
+  import { HintWatcher } from '../tutorial/hints.ts';
+  import { HintSource } from '../tutorial/hintSource.ts';
+  import { parseHint } from './hintPin.ts';
 
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
   // or a live match against the dev server). The lobby replaces it.
@@ -107,6 +113,8 @@
     gateParam === null
       ? null
       : new Set(UI_FLAGS.filter((flag) => gateParam.split(',').includes(flag)));
+  // `?hint=<id>[,<node>]`: a hint of the first match pinned over a frozen scene (#806, `hintPin.ts`).
+  const hintPinned = parseHint(params.get('hint'));
   const rules = {
     ...DEV_RULES,
     ...(capturePinned === null ? {} : { capture: { charge_cost: 1 } }),
@@ -143,6 +151,17 @@
   });
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
+  // A pinned hint fires no trigger: its watcher never reads the map.
+  const hintCoach = (() => {
+    if (hintPinned === null) return null;
+    const coach = new HintCoach(new HintWatcher(DEFAULT_MAP, DEV_PLAYER, DEV_RULES.tick_hz), {
+      current: EMPTY_PROGRESS,
+      hintShown: () => undefined,
+      turnHintsOff: () => undefined,
+    });
+    coach.pin(hintPinned);
+    return coach;
+  })();
   const fixture = $derived(fixtureScene(sceneId));
   // A scene may give the players their colours (DEC-49): the map, the HUD and the arena follow.
   const colours = $derived(fixture?.colours ?? null);
@@ -181,7 +200,11 @@
           ? null
           : frozenSource(fixture, at, floodPinned)
         : match.session;
-    return plain === null || gate === null ? plain : new GatedSource(plain, gate);
+    const gated = plain === null || gate === null ? plain : new GatedSource(plain, gate);
+    const hinter = hintCoach;
+    return gated === null || hinter === null
+      ? gated
+      : new HintSource(gated, () => ({ hint: hinter.current, seq: hinter.seq }));
   });
 
   $effect(() => {
@@ -431,6 +454,16 @@
       group: (id: string) => canvas?.groupAnchor(id) ?? null,
     }}
   />
+  {#if hintCoach !== null}
+    <HintCard
+      coach={hintCoach}
+      {map}
+      anchors={{
+        node: (id: number) => canvas?.nodeAnchor(id) ?? null,
+        group: (id: string) => canvas?.groupAnchor(id) ?? null,
+      }}
+    />
+  {/if}
   {#if status !== null}
     <MatchStatus view={status} lifted={rendererFailed} onaction={() => undefined} />
   {/if}

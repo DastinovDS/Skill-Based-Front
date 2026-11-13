@@ -256,7 +256,7 @@
               >{t('legal.licenses')}</a
             >
           </p>
-          <p class="small">{t('howto.copyright')}</p>
+          <p class="small">{t('settings.about.copyright')}</p>
         </section>
       </div>
     </div>

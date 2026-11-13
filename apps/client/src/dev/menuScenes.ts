@@ -49,7 +49,7 @@ export const MENU_SCENE_IDS = [
   ...PLAY_SCENE_IDS,
   'password-set',
   'password-change',
-  'howto',
+  'rules',
   'result-guest',
   'result-defeat',
   'result-draw',

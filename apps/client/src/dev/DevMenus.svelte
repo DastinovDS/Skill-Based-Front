@@ -4,7 +4,6 @@
   import SettingsScreen from '../app/SettingsScreen.svelte';
   import { Api } from '../api/http.ts';
   import CrashGuard from '../app/CrashGuard.svelte';
-  import HowToScreen from '../app/HowToScreen.svelte';
   import MatchLoading from '../app/MatchLoading.svelte';
   import MatchScreen from '../app/MatchScreen.svelte';
   import PasswordScreen from '../app/PasswordScreen.svelte';
@@ -27,6 +26,8 @@
   import Charter from '../app/tutorial/Charter.svelte';
   import ChapterSheet from '../app/tutorial/ChapterSheet.svelte';
   import TutorialOffer from '../app/tutorial/TutorialOffer.svelte';
+  import RulesScreen from '../app/tutorial/RulesScreen.svelte';
+  import { DEV_RULES } from '../hud/devFeed.ts';
   import { EMPTY_PROGRESS, type CharterSeat } from '../tutorial/progress.ts';
 
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
@@ -48,7 +49,7 @@
   const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
   // The brand of the bar goes home from the pages, as in the app (RootApp, #945).
-  const pages = id === 'howto' || id.startsWith('settings') || id.startsWith('password');
+  const pages = id === 'rules' || id.startsWith('settings') || id.startsWith('password');
   setContext(HOME_KEY, () => (board !== null || pages ? nothing : null));
   // The colour picker of the profile (DEC-49): a choice is kept at once, nothing is asked of a server.
   // `&colour=shell`: the player's chosen colour outside a match, for the shots.
@@ -125,8 +126,28 @@
     onrules={nothing}
     onprofile={nothing}
   />
-{:else if id === 'howto'}
-  <HowToScreen nick="Ember" hasPassword={false} {map} onprofile={nothing} onback={nothing} />
+{:else if id === 'rules'}
+  <!-- The rules reference on the numbers of the main ruleset (mvp-7: CP 0.5 every 5 s in Balance,
+       rally walks 0.5 CP, group orders); the server answers `GET /api/ruleset` with them. -->
+  <RulesScreen
+    nick="Ember"
+    hasPassword={false}
+    {map}
+    load={() =>
+      Promise.resolve({
+        ...DEV_RULES,
+        cp: { ...DEV_RULES.cp, per_period: 50 },
+        stances: {
+          ...DEV_RULES.stances,
+          cp_period_ticks: { ...DEV_RULES.stances.cp_period_ticks, balance: 50 },
+        },
+        recruit: { ...DEV_RULES.recruit, rally_point: true, rally_cost: 50 },
+        group_order: { max_groups: 16, rally_pct: 50 },
+        combat: { ...DEV_RULES.combat, retreat: 'none' as const },
+      })}
+    onprofile={nothing}
+    onback={nothing}
+  />
 {:else if id === 'password-set' || id === 'password-change'}
   <PasswordScreen
     nick="Ember"

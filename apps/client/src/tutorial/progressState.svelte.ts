@@ -1,9 +1,15 @@
 /**
  * The tutorial progress of this browser, reactive (`progress.ts`; `docs/design/tutorial.md`, 7.8):
- * a chapter done, the entry popup turned off, the first match played. Saved at once.
+ * a chapter done, the entry popup turned off, the first match and its hints. Saved at once.
  */
 import type { ChapterId } from '../protocol.gen.ts';
-import { EMPTY_PROGRESS, loadProgress, saveProgress, type TutorialProgress } from './progress.ts';
+import {
+  EMPTY_PROGRESS,
+  loadProgress,
+  saveProgress,
+  type HintId,
+  type TutorialProgress,
+} from './progress.ts';
 
 export class TutorialProgressState {
   current = $state.raw<TutorialProgress>(EMPTY_PROGRESS);
@@ -30,8 +36,33 @@ export class TutorialProgressState {
     if (!this.current.offerOff) this.#set({ ...this.current, offerOff: true });
   }
 
-  /** The first match of the chapter select was played: the tutorial counts as finished. */
+  /** The chapter select started the first match: kept, so a reload keeps its hints and its mark. */
+  startedFirstMatch(matchId: string): void {
+    if (this.current.firstMatchId !== matchId)
+      this.#set({ ...this.current, firstMatchId: matchId });
+  }
+
+  /** The match is the first match the chapter select started (it may run on after a reload). */
+  isFirstMatch(matchId: string): boolean {
+    return this.current.firstMatchId === matchId;
+  }
+
+  /** The first match ended: the tutorial counts as finished. */
   playedFirstMatch(): void {
-    if (!this.current.firstMatch) this.#set({ ...this.current, firstMatch: true });
+    if (!this.current.firstMatch || this.current.firstMatchId !== null) {
+      this.#set({ ...this.current, firstMatch: true, firstMatchId: null });
+    }
+  }
+
+  /** A hint of the first match showed: never again. */
+  hintShown(id: HintId): void {
+    if (!this.current.hints.includes(id)) {
+      this.#set({ ...this.current, hints: [...this.current.hints, id] });
+    }
+  }
+
+  /** "Turn off hints". */
+  turnHintsOff(): void {
+    if (!this.current.hintsOff) this.#set({ ...this.current, hintsOff: true });
   }
 }
