@@ -80,7 +80,7 @@ export const MENU_SCENES = [
   'invite-drawing-start',
   'password-set',
   'password-change',
-  'howto',
+  'rules',
   'result-guest',
   'result-defeat',
   'result-draw',
@@ -140,6 +140,21 @@ export const STATUS_SCENES = [
   'paused-enemy',
   'renderer',
 ] as const;
+
+/**
+ * The hints of the first match pinned over a frozen scene (#806, docs/design/tutorial.md section 5;
+ * `/?scene=<id>&hint=<id>[,<node>]`, src/dev/hintPin.ts): `mise run shots` takes `hint-<name>.png`.
+ * On `artery`: the capital Stonegate (0), the own city Watchpost (3), the fight in Forkway (4), the
+ * own city Wood Hollow (6). No `visual` references (the scene without a hint is the reference).
+ */
+export const HINT_SHOTS: readonly { name: string; scene: string; tick: number; hint: string }[] = [
+  { name: 'H1', scene: 'artery', tick: 2400, hint: 'H1,0' },
+  { name: 'H2', scene: 'artery', tick: 2400, hint: 'H2,3' },
+  { name: 'H3', scene: 'artery', tick: 2400, hint: 'H3' },
+  { name: 'H3cp', scene: 'artery', tick: 2400, hint: 'H3cp' },
+  { name: 'H4', scene: 'artery', tick: 2400, hint: 'H4,4' },
+  { name: 'H5', scene: 'artery', tick: 2400, hint: 'H5,6' },
+];
 
 /**
  * A tutorial beat's gate on a frozen scene (#806, docs/design/tutorial.md 4.9; `/?scene=<id>&gate=`):

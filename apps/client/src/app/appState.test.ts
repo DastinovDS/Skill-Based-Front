@@ -261,6 +261,54 @@ describe('AppState', () => {
     expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pass' });
   });
 
+  it('the first match keeps its mark across a reload and marks the tutorial finished at its end (#806)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const api = {
+      me: () =>
+        Promise.resolve({
+          player_id: 1,
+          nick: 'Me',
+          has_password: false,
+          colour: 'lapis' as const,
+        }),
+      createBotMatch: vi.fn(() =>
+        Promise.resolve({ match_id: 'm1', map_id: 'narrows', level: 'easy' as const, player: 0 }),
+      ),
+    } as const;
+    const { app } = setup('', storage, api);
+    await app.start();
+    await app.playFirstMatch();
+    expect(api.createBotMatch).toHaveBeenCalledWith(
+      't',
+      'easy',
+      'narrows',
+      expect.any(AbortSignal),
+    );
+    expect(app.tutorial.isFirstMatch('m1')).toBe(true);
+    // A reload: a new app on the same browser storage still knows the match (its hints, its mark).
+    const again = setup('', storage, api).app;
+    expect(again.tutorial.isFirstMatch('m1')).toBe(true);
+    expect(again.tutorial.isFirstMatch('m2')).toBe(false);
+    const end: MatchEndMsg = {
+      type: 'match_end',
+      tick: 9000,
+      reason: 'timer',
+      winner: 0,
+      vp: [10, 4],
+      rating: null,
+      rated: false,
+      unrated_reason: 'casual',
+      calibration: null,
+      stats: null,
+    };
+    again.finishMatch('m1', 'narrows', 0, end);
+    expect(again.tutorial.current.firstMatch).toBe(true);
+    expect(again.tutorial.isFirstMatch('m1')).toBe(false);
+    // Another bot match is not the first match.
+    again.finishMatch('m3', 'narrows', 0, end);
+    expect(again.tutorial.current.firstMatchId).toBeNull();
+  });
+
   it('Get the link asks for an invite on a map made for it (#919) and opens its waiting room', async () => {
     const createInvite = vi.fn(() => Promise.resolve(invite('new')));
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
@@ -601,13 +649,19 @@ describe('AppState', () => {
       expect(app.screen).toEqual({ name: 'menu' });
     });
 
-    it('How to play and the password open over the screen and go back to it', async () => {
+    it('the rules and the password open over the screen and go back to it', async () => {
       const { app } = setup('', saved(), { me, activeMatch: () => Promise.resolve(null) });
       await app.start();
+      app.openTutorial('match');
+      app.openPage('rules');
+      expect(app.screen).toEqual({ name: 'rules', back: { name: 'tutorial', sel: 'match' } });
+      // "Back to chapters".
+      app.closePage();
+      expect(app.screen).toEqual({ name: 'tutorial', sel: 'match' });
       app.go({ name: 'menu', way: 'bot', start: 'normal' });
-      app.openPage('howto');
+      app.openPage('password');
       expect(app.screen).toEqual({
-        name: 'howto',
+        name: 'password',
         back: { name: 'menu', way: 'bot', start: 'normal' },
       });
       // Coming back does not start the bot offer again.

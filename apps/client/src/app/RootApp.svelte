@@ -13,7 +13,6 @@
   import BootScreen from './BootScreen.svelte';
   import MatchLoading from './MatchLoading.svelte';
   import PasswordScreen from './PasswordScreen.svelte';
-  import HowToScreen from './HowToScreen.svelte';
   import type { MatchSummary } from './matchSummary.ts';
   import PlayScreen from './PlayScreen.svelte';
   import type { PlayContext, Way } from './play.ts';
@@ -22,6 +21,7 @@
   import Charter from './tutorial/Charter.svelte';
   import ChapterSheet from './tutorial/ChapterSheet.svelte';
   import TutorialOffer from './tutorial/TutorialOffer.svelte';
+  import RulesScreen from './tutorial/RulesScreen.svelte';
   import type { ChapterId } from '../protocol.gen.ts';
 
   interface Props {
@@ -71,7 +71,7 @@
     'tutorial',
     'profile',
     'settings',
-    'howto',
+    'rules',
     'password',
     'result',
     'replay',
@@ -104,11 +104,11 @@
 
   // The main-screen motion (#919, item 8) plays when the main screen comes in from the entry, a
   // match, the result or a replay; coming back from a page over the map (the profile, the settings,
-  // How to play, the password) it is already there.
+  // the tutorial, the rules, the password) it is already there.
   const PAGES: ReadonlySet<string> = new Set([
     'profile',
     'settings',
-    'howto',
+    'rules',
     'password',
     'tutorial',
     'chapter',
@@ -211,7 +211,7 @@
     }}
     onmatch={() => app.playFirstMatch()}
     onrules={() => {
-      app.openPage('howto');
+      app.openPage('rules');
     }}
     onprofile={() => {
       app.openAccountPage('profile');
@@ -226,11 +226,12 @@
       app.openTutorial();
     }}
   />
-{:else if screen.name === 'howto'}
-  <HowToScreen
+{:else if screen.name === 'rules'}
+  <RulesScreen
     nick={guest.nick}
     hasPassword={guest.hasPassword}
     map={app.backdrop}
+    load={() => app.api.ruleset()}
     onprofile={() => {
       app.openAccountPage('profile');
     }}
@@ -317,6 +318,9 @@
           matchId={screen.matchId}
           mapId={screen.mapId}
           chapter={screen.chapter ?? null}
+          hints={screen.chapter === undefined && app.tutorial.isFirstMatch(screen.matchId)
+            ? app.tutorial
+            : null}
           onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
             app.finishMatch(screen.matchId, screen.mapId, me, end, summary);
           }}

@@ -4,7 +4,7 @@
  * Plain TypeScript, no Svelte state. The token goes in the `Authorization` header only.
  */
 import type { components } from '../api.gen.ts';
-import type { MapFile } from '../protocol.gen.ts';
+import type { MapFile, RulesetPublic } from '../protocol.gen.ts';
 
 type Schemas = components['schemas'];
 export type Invite = Schemas['InviteOut'];
@@ -212,6 +212,11 @@ export class Api {
 
   maps(): Promise<MapSummary[]> {
     return this.#request('GET', '/api/maps', null);
+  }
+
+  /** The public numbers of the main ruleset, without map tempo: the rules reference (#806). */
+  ruleset(): Promise<RulesetPublic> {
+    return this.#request('GET', '/api/ruleset', null);
   }
 
   map(id: string): Promise<MapFile> {

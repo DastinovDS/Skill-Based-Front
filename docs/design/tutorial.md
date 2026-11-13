@@ -10,7 +10,8 @@ chapter select Charter, the Advanced chapter "Supply distribution", a popup inst
 on the intro, and a note per screen). The defaults of section 9 are in force until the owner changes them. PR 1 of
 section 7.10 (server, bots, data) is in the code; section 7 records what it built, and where it had to differ from the plan
 (each such place says so). PR 2 (the client's chapters) is in the code too; section 7.11 records where it had to differ.
-PR 3 (the first match's hints and the rules reference) is still the plan. The mockup is
+PR 3 (the first match's hints and the rules reference, How to play v1 removed) is in the code; section 7.12 records
+where it had to differ. The mockup is
 [`mockups/tutorial.html`](mockups/tutorial.html) (the chosen look); the whole tutorial, screen by screen with the final
 copy and the gating, is the walkthrough [`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html)
 (section 8). The texts of section 4 and section 5 are the final copy; the walkthrough shows them on the real frames.
@@ -1010,7 +1011,8 @@ disagree).
 ### 7.8 Progress
 
 `localStorage` `sbf.tutorial` (wrapped in `try`, as the other `sbf.*` keys): `{"v": 1, "done": ["units", "economy"],
-"offerOff": false, "firstMatch": false, "hints": ["H1"], "hintsOff": false}`. `offerOff` (round 5) is set by either
+"offerOff": false, "firstMatch": false, "firstMatchId": null, "hints": ["H1"], "hintsOff": false}` (`firstMatchId`:
+the first match while it runs, PR 3, 7.12). `offerOff` (round 5) is set by either
 button of the entry popup with "Don't show again" ticked; it replaces round 1's `skipped`. Whether the popup was shown in
 this visit is kept in memory only, so it shows at most once per entry. A guest and an account on the same browser share
 it (round 1: "in the browser"). No server state.
@@ -1078,7 +1080,7 @@ What the client PR built, and where it differs from 7.7 or from the walkthrough 
   split, merge and release are never in a chapter. A locked menu item has the radial's disabled look, its icon only
   and a padlock; the stance chip is at 40 % with a padlock; both say "Not yet".
 - **Screens.** "?" on the screens before a match now opens the chapter select (the help of #919 is the tutorial);
-  "Rules" on Charter opens the How to play page as it is until PR 3 replaces it. The Sheet's map is the chapter map
+  "Rules" on Charter opened the How to play page as it was until PR 3 replaced it (7.12). The Sheet's map is the chapter map
   drawn as an SVG over its baked ground (as the map cards of the menus), not a frame of the client: a frame needs a
   running chapter. The first match is the bot match of section 5 started from Charter; its end sets `firstMatch`.
 - **Privacy.** `sbf.tutorial` is listed in the privacy text with the other browser entries (`legal.svelte.test.ts`).
@@ -1086,6 +1088,52 @@ What the client PR built, and where it differs from 7.7 or from the walkthrough 
   `e2e/tests/tutorial.spec.ts` plays the popup, the intro, chapter I to its Seal with a reload in the middle, Charter
   in progress, the slides of IV.2 and leaving a chapter (on `test-short`, the e2e ruleset: a chapter counts ticks, and
   chapter I ends at tick 229 of its 600).
+
+### 7.12 PR 3 as built (the first match's hints, the rules reference)
+
+What the third PR built, and where it differs from sections 5, 6, 7.7 or the walkthrough (each with its reason):
+
+- **The first match across a reload.** `sbf.tutorial` keeps `firstMatchId`, the match the chapter select started as the
+  first match, while it runs (7.8 gains the field). A reload returns to the match (`GET /api/me/active-match`) and the
+  client still knows it for the first match: its hints go on, and its end (any end, a forfeit included, as in PR 2)
+  sets `firstMatch` and clears the id. PR 2 kept the id in memory only, so a reload lost both.
+- **Code.** The triggers are plain TypeScript (`tutorial/hints.ts`, `HintWatcher`: snapshots and own events in,
+  the hints ready out; no rule is worked out), the state is `tutorial/hintCoach.svelte.ts` (one hint at a time, the
+  12 s timer, "Turn off hints", the progress), the card is `hud/HintCard.svelte` (7.7 named it `hud/HintCoach.svelte`)
+  and the Compass of its place is the map's (`tutorial/hintSource.ts` gives `render/coachMarkView.ts` the marks, as a
+  chapter's source does). LiveMatch builds the coach only for the first match (`hints` from the progress).
+- **One hint at a time.** A trigger that fires while a hint is up waits; the next shows after the close and a gap of
+  1.5 s (`HINT_GAP_MS`), so two cards never read as one. H2 is read from the latest view, so a place that is no longer
+  over its capacity when its turn comes is not named. H3 is one hint: the first burn (charges or CP) decides its
+  version. A hint counts as shown when it appears, not when it closes. Its 12 s stand still while the pointer or the
+  focus is on the card (WCAG 2.2.1: a player reading it is not cut off) and run on when they leave.
+- **H1** fires on the first snapshot at or after 5 s of match ticks (`5 * tick_hz`), so a reload past 5 s still shows
+  it once. **H4** compares the own groups of a fight between two snapshots (a fight first seen after a reload does not
+  fire). **H5** counts the own `recruited` events of this page; a reload starts the count again.
+- **Placement.** The card stands within 260 px of its target, on the spot there that covers least: every place and
+  its name count (the walkthrough counted only the places within 170 px of the target, which on the client's denser
+  camera put cards over names), and the arena of the fight H4 points at, the HUD, the open menus, the notices with
+  room for one more (a notice that comes in moves the card) and the legal footer are kept clear. On a crowded map the
+  card may still lie over a place other than its own. A hint on the
+  HUD (H3) outlines the stance chip or the CP gauge like a chapter's HUD mark.
+- **The rules reference** is `app/tutorial/RulesScreen.svelte` (the sections and their numbers in
+  `tutorial/rules.ts`), a sheet of the pages' frame (`board/SheetFrame.svelte`: the top bar, "?" marked, which goes
+  back to the chapters like "Back to chapters" and Esc). Its text is the walkthrough's R.4 with these changes: a
+  section "Supply in detail" (section 6 lists it, R.4 lacked it); no "(the capital triple)" (the multiplier is not in
+  `ruleset_public`, 7.9); "the times above are for a middle-sized map" instead of "a map of 49 places" (the map tempo's
+  reference size is not in `ruleset_public`); "they rally for less" instead of "for half the price" (the rally share is
+  not among the numbers section 6 quotes, and the menu shows the price). "No retreat." shows only under
+  `combat.retreat = "none"`, the group order and rally point lines only when the ruleset has them. The numbers are
+  formatted by the locale (`0.5`, `5 s`, `15 minutes`); a failed request says so and offers "Try again".
+- **Removed** (section 6): `app/HowToScreen.svelte`, `apps/client/src/howto/`, the `howto.*` strings (the copyright
+  line moved to the settings' About), `scripts/export_howto.py`, `tests/test_export_howto.py`, the task
+  `regen:howto` (`regen` runs `regen:protocol` and `regen:api`) and its row in `AGENTS.md` section 3. The screen
+  `howto` of the app is `rules` now; the dev scene `/?menu=rules` replaces `/?menu=howto`.
+- **Shots.** `mise run shots -- --grep hint` takes the five hints (and the CP version of H3) pinned over the scene
+  `artery` (`?hint=<id>[,<node>]`, `src/dev/hintPin.ts`); `screen-rules.png` is the reference page. The e2e test
+  opens Rules from Charter and plays the first match to H1, across a reload, to "Turn off hints" and its end.
+
+This answers Q2 as its default (the hints only in the first match) and leaves the other questions as they are.
 
 ---
 

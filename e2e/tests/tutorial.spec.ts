@@ -177,3 +177,68 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   );
   await player.close();
 });
+
+/** The tutorial progress of the page (`sbf.tutorial`). */
+async function progress(page: Page): Promise<Record<string, unknown>> {
+  return page.evaluate(
+    () =>
+      JSON.parse(window.localStorage.getItem('sbf.tutorial') ?? '{}') as Record<string, unknown>,
+  );
+}
+
+test('the rules from the chapter select, and the first match with its hints across a reload', async ({
+  browser,
+  baseURL,
+}) => {
+  const player = await Player.create(browser, baseURL ?? '', nick('tutfm'));
+  const { page } = player;
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await player.enter();
+  await page.getByRole('button', { name: 'How to play' }).click();
+
+  // The rules reference: short sections, the numbers of the main ruleset from the server.
+  await page.getByRole('button', { name: 'Rules', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Rules', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CP and supply' })).toBeVisible();
+  await expect(page.getByText(/In Balance, CP come [\d.]+ every [\d.]+ s/)).toBeVisible();
+  await shot(page, '14-rules');
+  await page.getByRole('button', { name: 'Back to chapters' }).click();
+
+  // The first match from the chapter select: an easy bot, the hints on.
+  await page.getByRole('button', { name: 'First match' }).click();
+  await player.expectPlaying();
+  const hint = page.locator('.hints .plate');
+  await expect(hint).toContainText('Bigger maps run faster', { timeout: 30_000 });
+  await expect(hint).toContainText('Turn off hints');
+  // The card is placed and cut in (the burin) before it is shot.
+  await expect(page.locator('.hints .plate.placed')).toBeVisible();
+  await hint.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  await shot(page, '15-hint-H1');
+  await hint.getByRole('button', { name: 'Close the hint' }).click();
+  await expect(hint).toHaveCount(0);
+  const kept = await progress(page);
+  expect(kept['hints']).toEqual(['H1']);
+  expect(typeof kept['firstMatchId']).toBe('string');
+
+  // A reload returns to the first match with its hints: with H1 forgotten, it shows again.
+  await page.evaluate(() => {
+    const saved = JSON.parse(window.localStorage.getItem('sbf.tutorial') ?? '{}') as object;
+    window.localStorage.setItem('sbf.tutorial', JSON.stringify({ ...saved, hints: [] }));
+  });
+  await page.reload();
+  await player.expectPlaying();
+  await expect(hint).toContainText('Bigger maps run faster', { timeout: 30_000 });
+  await hint.getByRole('button', { name: 'Turn off hints' }).click();
+  await expect(hint).toHaveCount(0);
+  expect((await progress(page))['hintsOff']).toBe(true);
+
+  // Its end marks the tutorial finished.
+  await player.forfeit();
+  await expect(page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
+  const done = await progress(page);
+  expect(done['firstMatch']).toBe(true);
+  expect(done['firstMatchId']).toBeNull();
+  expect(errors).toEqual([]);
+  await player.close();
+});

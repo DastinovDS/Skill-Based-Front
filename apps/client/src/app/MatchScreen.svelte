@@ -5,6 +5,7 @@
   import type { GeoFile } from '../map/geography.ts';
   import type { ChapterId, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import type { MatchSummary } from './matchSummary.ts';
+  import type { HintProgress } from '../tutorial/hintCoach.svelte.ts';
   import FailurePanel from './FailurePanel.svelte';
   import LiveMatch from './LiveMatch.svelte';
   import MatchLoading from './MatchLoading.svelte';
@@ -21,6 +22,8 @@
     onchapters?: () => void;
     onreplay?: () => void;
     onchapterdone?: (chapter: ChapterId) => void;
+    /** The first match of the tutorial: its hints (see `LiveMatch`). */
+    hints?: HintProgress | null;
   }
 
   let {
@@ -34,6 +37,7 @@
     onchapters,
     onreplay,
     onchapterdone,
+    hints = null,
   }: Props = $props();
 
   let map = $state.raw<MapFile | null>(null);
@@ -84,6 +88,7 @@
     {onchapters}
     {onreplay}
     {onchapterdone}
+    {hints}
   />
 {:else if failed}
   <FailurePanel

@@ -32,6 +32,10 @@
   import { TutorialCoach } from '../tutorial/coach.svelte.ts';
   import { FULL_GATE } from '../tutorial/gate.ts';
   import { TutorialSource } from '../tutorial/tutorialSource.ts';
+  import HintCard from '../hud/HintCard.svelte';
+  import { HintCoach, type HintProgress } from '../tutorial/hintCoach.svelte.ts';
+  import { HintWatcher } from '../tutorial/hints.ts';
+  import { HintSource } from '../tutorial/hintSource.ts';
   import { cardKicker } from './tutorial/texts.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
@@ -68,6 +72,11 @@
     onreplay?: () => void;
     /** A chapter's goal was reached (its progress is kept). */
     onchapterdone?: (chapter: ChapterId) => void;
+    /**
+     * The first match the chapter select started (#806, section 5): its hints, kept in the
+     * tutorial progress; null in any other match.
+     */
+    hints?: HintProgress | null;
   }
 
   let {
@@ -85,12 +94,15 @@
     onchapters = () => undefined,
     onreplay = () => undefined,
     onchapterdone = () => undefined,
+    hints = null,
   }: Props = $props();
 
   // The chapter file of a tutorial chapter (#806), bundled at build time.
   const chapterFile = $derived(chapter === null ? null : chapterOf(chapter));
   // The coach exists once `welcome` gave the side and the HUD (its locks read the own groups).
   let coach = $state.raw<TutorialCoach | null>(null);
+  // The hints of the first match (#806, section 5); null in any other match.
+  let hintCoach = $state.raw<HintCoach | null>(null);
 
   // `welcome` brings the ruleset and the side, so the HUD exists only after it.
   let hud = $state.raw<HudState | null>(null);
@@ -124,6 +136,7 @@
 
   function handle(msg: ServerMsg): void {
     pauseState.onMessage(msg, me);
+    hintCoach?.onMessage(msg);
     if (msg.type === 'tutorial') {
       coach?.onMessage(msg);
       return;
@@ -204,6 +217,13 @@
             },
           });
         }
+        const progress = file === null ? hints : null;
+        if (progress !== null && hintCoach === null) {
+          hintCoach = new HintCoach(
+            new HintWatcher(map, welcome.player, welcome.ruleset_public.tick_hz),
+            progress,
+          );
+        }
         me = welcome.player;
         colours = welcome.colours;
         rules = welcome.ruleset_public;
@@ -230,6 +250,8 @@
       current.stop();
       session = null;
       coach = null;
+      hintCoach?.destroy();
+      hintCoach = null;
       drawn = false;
       hud?.destroy();
       hud = null;
@@ -314,6 +336,10 @@
   const source = $derived.by<RenderSource | null>(() => {
     const live = session;
     const tutor = coach;
+    const hinter = hintCoach;
+    if (live !== null && hinter !== null) {
+      return new HintSource(live, () => ({ hint: hinter.current, seq: hinter.seq }));
+    }
     if (live === null || tutor === null) return live;
     const ordersNow = orders;
     return new TutorialSource(live, tutor, map, () => {
@@ -445,6 +471,17 @@
     {:else if coach.sealed}
       <ChapterSeal chapter={chapterFile} {onchapters} {onreplay} />
     {/if}
+  {/if}
+
+  {#if hintCoach !== null && !chrome.exitOpen && !chrome.settingsOpen}
+    <HintCard
+      coach={hintCoach}
+      {map}
+      anchors={{
+        node: (id: number) => canvas?.nodeAnchor(id) ?? null,
+        group: (id: string) => canvas?.groupAnchor(id) ?? null,
+      }}
+    />
   {/if}
 
   {#if loadingStage !== null}

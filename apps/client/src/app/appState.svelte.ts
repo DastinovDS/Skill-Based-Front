@@ -35,8 +35,8 @@ export type Screen =
    * `start`: Play a bot starts at once at this level on a new map (the bot offer of the queue).
    */
   | { readonly name: 'menu'; readonly way?: Way; readonly start?: BotLevel }
-  /** The "How to play" page (CLI-13, #72), from the "?" of the bar. */
-  | { readonly name: 'howto'; readonly back?: Screen }
+  /** The rules reference (#806, `docs/design/tutorial.md` section 6), from the chapter select. */
+  | { readonly name: 'rules'; readonly back?: Screen }
   /** Set or change the password of the account (#374). */
   | { readonly name: 'password'; readonly back?: Screen }
   /**
@@ -123,8 +123,6 @@ export class AppState {
    */
   offer = $state.raw(false);
   #offerAsked = false;
-  /** The match the chapter select started as the first match: its end marks the tutorial finished. */
-  #firstMatchId: string | null = null;
 
   readonly api: Api;
   /** The pool maps: the thumbnails and tiles of the lobby, invite and bot screens (#473). */
@@ -306,20 +304,20 @@ export class AppState {
     this.closePage();
   }
 
-  /** How to play (the "?" of the bar) or the password page, over the screen they open from. */
-  openPage(name: 'howto' | 'password'): void {
+  /** The rules reference or the password page, over the screen they open from. */
+  openPage(name: 'rules' | 'password'): void {
     const here = this.screen;
     if (here.name === name) return;
     this.go({ name, back: here });
   }
 
-  /** "Back" of a page (profile, settings, how to play, password): where it was opened, else the menu. */
+  /** "Back" of a page (profile, settings, rules, password): where it was opened, else the menu. */
   closePage(): void {
     const here = this.screen;
     if (
       (here.name === 'profile' ||
         here.name === 'settings' ||
-        here.name === 'howto' ||
+        here.name === 'rules' ||
         here.name === 'password') &&
       here.back !== undefined
     ) {
@@ -449,7 +447,7 @@ export class AppState {
   async playFirstMatch(): Promise<MessageKey | null> {
     const failed = await this.playBot(FIRST_MATCH.level, FIRST_MATCH.map);
     const screen = this.screen;
-    if (failed === null && screen.name === 'match') this.#firstMatchId = screen.matchId;
+    if (failed === null && screen.name === 'match') this.tutorial.startedFirstMatch(screen.matchId);
     return failed;
   }
 
@@ -518,10 +516,7 @@ export class AppState {
     summary: MatchSummary | null = null,
   ): void {
     this.activeMatch = null;
-    if (matchId === this.#firstMatchId) {
-      this.#firstMatchId = null;
-      this.tutorial.playedFirstMatch();
-    }
+    if (this.tutorial.isFirstMatch(matchId)) this.tutorial.playedFirstMatch();
     this.go({ name: 'result', matchId, mapId, me, end, summary });
   }
 

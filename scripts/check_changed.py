@@ -33,7 +33,7 @@ PY_TESTS: dict[str, str] = {
 PY_ALL = ("pyproject.toml", "uv.lock", ".python-version", "conftest.py")
 GOLDEN = ("packages/sim/", "rulesets/")
 # The inputs of `regen`: the protocol schema takes enums and limits from gow_sim, the API types
-# come from the server, the How to play examples are played through gow_sim.
+# come from the server.
 REGEN = ("packages/protocol/src/", "packages/sim/src/", "apps/server/src/", "scripts/export_")
 CLIENT = "apps/client/"
 LOOK = ("apps/client/src/", "apps/client/public/")

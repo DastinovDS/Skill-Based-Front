@@ -382,55 +382,6 @@ export const en = {
   'exit.confirm': 'Forfeit and leave',
   'exit.stay': 'Keep playing',
   'help.howTo': 'How to play',
-  // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
-  'howto.eyebrow': 'The rules in two minutes',
-  'howto.copyright': '© 2026 Daniil Stepanov',
-  'howto.outdated':
-    'This page describes an older ruleset. Supply and economy work differently in the current game. A new tutorial is coming.',
-  'howto.charges.title': 'Charges',
-  'howto.charges.text':
-    'Every unit is a battery, charged or empty. Your capital turns command points into charges. Your stance sets how many: {economy}% in Economy, {balance}% in Balance, {war}% in War. The rest stays command points for orders.',
-  'howto.roads.title': 'Roads',
-  'howto.roads.text':
-    'Roads carry charges from the capital to the warehouses of your cities, and units there recharge. Cut a road and the cities behind it stop refilling.',
-  'howto.pic.supply':
-    'The capital sends charges along a road to a city, where the unit is charged. Behind a cut road the unit in the other city is empty.',
-  'howto.fight.title': 'Fights',
-  'howto.fight.text':
-    'A fight runs in rounds of {seconds} s. Each round both sides fire one shot and spend one charge. A shot cancels an enemy charge. If the enemy has none, it kills one unit.',
-  'howto.fight.bounce':
-    'An attack that does not win the place turns back, discharged. Equal charges mean a bounce.',
-  'howto.fight.legend':
-    'The attacker is on the left, the defender on the right. Filled: charged. Empty: no charge. Dashed: fallen. A green chevron is a bonus shot.',
-  'howto.col.attack': 'You attack',
-  'howto.col.defense': 'They defend',
-  'howto.ex.equal.title': 'Equal charges',
-  'howto.ex.equal.why': 'Every shot meets a charge, so nothing dies.',
-  'howto.ex.surplus.title': 'More charges',
-  'howto.ex.surplus.why': 'Once the enemy charges are gone, each shot kills a unit.',
-  'howto.ex.defenseless.title': 'No charge, no defense',
-  'howto.ex.defenseless.why': 'A unit without a charge cannot answer a shot.',
-  'howto.ex.planned.title': 'Planned order',
-  'howto.ex.planned.why': 'Bonus shots go first, so the attack keeps its own charges longer.',
-  'howto.ex.start': 'Start',
-  'howto.ex.time': '{seconds} s',
-  'howto.ex.attackLine': 'Attack: {units} units, {charged} charged',
-  'howto.ex.defenseLine': 'Defense: {units} units, {charged} charged',
-  'howto.ex.frameAria': '{when}. {attack}. {defense}.',
-  'howto.ex.taken': 'The attack takes the place. Defenders lost: {lost}.',
-  'howto.ex.bounced': 'The attack turns back, discharged. Defenders lost: {lost}.',
-  'howto.orders.title': 'Orders',
-  'howto.orders.text':
-    'A move costs {move} CP. A planned order ({plannedKey} + click) costs {planned} CP and the enemy sees it coming, but the group sets out after {delay} s with bonus shots for the first fight ({bonus} per road on its way).',
-  'howto.orders.defense':
-    'Defense ({cost} CP) stores one bonus shot every {seconds} s while the group stays put.',
-  'howto.pic.orders':
-    'A planned order: a wide ribbon from one city to another with bonus shots in front of it.',
-  'howto.victory.title': 'Victory',
-  'howto.victory.text':
-    'Hold cities to score. Every {seconds} s each city of yours gives its points, your capital {multiplier} times more. Take the enemy capital and you win at once. After {minutes} min the higher score wins.',
-  'howto.pic.victory':
-    'Three cities with point numbers, and a capital with a star that is worth more.',
   'help.key.select': 'pick a group or a city, give an order',
   'help.key.planned': 'planned order: it gathers its bonus in the node, then sets off',
   'help.key.cancel':
@@ -576,6 +527,7 @@ export const en = {
   'settings.learn': 'Learn the game',
   'settings.about': 'About',
   'settings.about.licences': 'Fonts, icons and libraries: see Licences.',
+  'settings.about.copyright': '© 2026 Daniil Stepanov',
   'legal.licenses': 'Licences',
   'legal.licenses.intro':
     'The interface icons come from the Lucide set and are changed only in colour. The city menu icons were generated with SpriteCook for this game.',
@@ -666,6 +618,82 @@ export const en = {
   'tutorial.mouse': 'click',
   'tutorial.shift': 'Shift',
   'tutorial.sealAdv': 'ADV',
+  // The hints of the first match (#806, docs/design/tutorial.md section 5; the owner's texts).
+  'hint.kicker': 'Hint · {title}',
+  'hint.close': 'Close the hint',
+  'hint.off': 'Turn off hints',
+  'hint.H1.title': 'A bigger map',
+  'hint.H1': 'Bigger maps run faster: here charges and CP come quicker than in the tutorial.',
+  'hint.H2.title': 'Over its capacity',
+  'hint.H2': '**{node}** is over its capacity and is losing units. Move some out.',
+  'hint.H3.title': 'Full warehouses',
+  'hint.H3': 'Your warehouses are full, so new charges are lost. Spend them, or switch to **War**.',
+  'hint.H3cp.title': 'CP at the cap',
+  'hint.H3cp':
+    'Your CP are at the cap, so new ones are lost. Spend them, or switch to **Economy**.',
+  'hint.H4.title': 'Strike together',
+  'hint.H4':
+    'Your groups arrived one by one. A **group order** brings them in together (Advanced I).',
+  'hint.H4.act': '{shift}-click to select several',
+  'hint.H5.title': 'Rally point',
+  'hint.H5': 'A **rally point** sends recruits to the front by themselves (Advanced II).',
+  'hint.H5.act': 'Rally point {rally_key}',
+  // The rules reference (#806, docs/design/tutorial.md section 6): the numbers of the main ruleset.
+  'rules.eyebrow': 'How to play',
+  'rules.title': 'Rules',
+  'rules.back': 'Back to chapters',
+  'rules.loading': 'Reading the rules…',
+  'rules.failed': 'The rules could not be loaded.',
+  'rules.retry': 'Try again',
+  'rules.seconds': '{n} s',
+  'rules.minutes': '{n} minutes',
+  'rules.charges.one': '{n} charge',
+  'rules.charges.other': '{n} charges',
+  'rules.units.one': '{n} unit',
+  'rules.units.other': '{n} units',
+  'rules.units.title': 'Units and charges',
+  'rules.units.text':
+    'The number on a helmet is its units; its fill is their charges. Every order costs CP. Cancelling one is free, and a marching group turns back.',
+  'rules.capture.title': 'Capture and capacity',
+  'rules.capture.text':
+    'Taking a place costs a charge; without one, the group turns back. A place holds only so many units, one segment of its ring each; a bigger group splits off what fits.',
+  'rules.vision.title': 'Vision and speed',
+  'rules.vision.text':
+    'You see only the places next to your groups. Open ground is seen exactly, a forest as a range, mountains least. Units are faster on plains, slower in mountains.',
+  'rules.supply.title': 'CP and supply',
+  'rules.supply.text':
+    'In Balance, CP come {cp} every {cpEvery}, up to {cap}, and your capital makes a charge every {chargeEvery}. Your roads carry charges to the front on their own. A place cut off from your capital gets none and soon starts losing them.',
+  'rules.flow.title': 'Supply in detail',
+  'rules.flow.text':
+    'The front is your places that touch an enemy (before contact, the farthest from your capital). Places with room call the nearest spare charges, the front first; an army short of charges, an unpaid building and a gathering plan call before the others. Charges move one road at a time between your own places; a lost road loses its charge. A full factory sends its new charge to the nearest room; a factory cut off from your capital stops.',
+  'rules.build.title': 'Buildings and stances',
+  'rules.build.text':
+    'A factory makes charges like your capital; a barracks lets a city recruit. The warehouse pays for a building first, then the units standing there. Economy: more charges, fewer CP. War: the other way. Balance: between. Switching is free.',
+  'rules.fights.title': 'Fights and planned orders',
+  'rules.fights.text':
+    'Each charge is one shot. A fight runs in rounds, one every {round}: the sides fire, bonus shots first, and two shots cancel out. A shot that meets none kills a unit, empty ones first.',
+  'rules.fights.noRetreat': 'No retreat.',
+  'rules.fights.plan':
+    'A planned order waits and gathers a bonus shot every {bonus} from the warehouse, then sets off; the enemy sees where, not how strong.',
+  'rules.win.title': 'Winning',
+  'rules.win.text':
+    'Take the enemy capital and you win at once. Otherwise every {vp} your cities score VP, and the most VP after {length} wins.',
+  'rules.terrain.title': 'Terrain and forts',
+  'rules.terrain.text':
+    'For a defender with a charge, mountains give a bonus shot, plains take a charge as the fight starts, forest neither. A road fort takes {charges} for every {units}, rounded up, from an enemy crossing it; a capture destroys it.',
+  'rules.group.title': 'Group orders and rally points',
+  'rules.group.text':
+    'One order for several groups: to an enemy place they arrive together; to your own place they rally for less.',
+  'rules.group.rally':
+    'A rally point sends a city’s recruits to one of your places, {cost} CP a walk.',
+  'rules.capacity.title': 'Capacity and attrition',
+  'rules.capacity.text': 'A place above its capacity keeps losing units.',
+  'rules.tempo.title': 'Bigger maps are faster',
+  'rules.tempo.text':
+    'The economy runs faster on bigger maps and slower on small ones; the times above are for a middle-sized map.',
+  'rules.also.title': 'Also',
+  'rules.also.text':
+    'A defender that just left a place is caught in the fight there. Your capital counts toward the factory limit.',
   // Chapter I: Units and movement (tut-move).
   'tutorial.units.name': 'Units and movement',
   'tutorial.units.why': 'March, take places, change your mind, and see what your army sees.',
