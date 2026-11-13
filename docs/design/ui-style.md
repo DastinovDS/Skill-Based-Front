@@ -2852,3 +2852,25 @@ lock at its corner); the **"Paused" plate** (a small stone plate at the bottom c
 
 The marks are ivory ink on a dark casing, never a player or alert colour; motion stops by itself and "Less motion"
 holds it still. Dropped round 1 variants: Tablet, Banner, Lantern, Burin, Plinth, Page, Cards, Toast.
+
+### 77.1 The chapter select, round 1 of its own (#806) **[awaiting the owner's decision]**
+
+The owner (2026-11-13): the Road is a fine skeleton, its quality must rise, and he wants to see different variants.
+Mockup [`mockups/tutorial-roadmap.html`](mockups/tutorial-roadmap.html): four finished directions and the Road as it
+is today ("Current"), each in the four progress states (first visit, mid-way, main done, all done), at desktop and
+phone width, with hover and focus, "Less motion" and grey; the table of variants is behind "Compare" and in #806.
+
+- **Campaign** (recommended): the chapters are places on Narrows, the map of the first match; done chapters are own
+  territory with the walked road in the own colour, closed ones lie in the fog, the enemy capital is the first match.
+  The phone turns the map a quarter, so the march goes down.
+- **Road**: the accepted skeleton finished in the out-of-game material: a road cut into the stone, the walked part
+  inlaid with lapis, each chapter a medallion set into it.
+- **March**: a column of rows down a road beside a large picture of the chosen chapter's own map; on a phone the
+  chosen row opens in place.
+- **Charter**: a stone sheet of seals with the client's menu icons as emblems; a seat is empty until its chapter
+  opens, and the seal is pressed in ivory when it is done.
+
+Common to all: the place is a radio of the group "Chapters" (arrow keys move and choose), the chosen one carries the
+plinth's way marker, the next one the Compass, a closed one the dashed ring and the lock and reads "After II", a done
+one the check lozenge; the detail is the eyebrow, the name and one line, then Start (Replay, Play, Play again;
+"Locked" with "Opens after ..." for a closed one) and Rules; the brand in the bar is the way back to the main menu.

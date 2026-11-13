@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial chapter select, round 1 (#806)</title>
+<!--
+  The chapter select of the tutorial (#806, docs/design/tutorial.md, section 3 "Chapter select"), round 1: broad,
+  clearly different directions, each finished, plus the accepted Road as it is today ("Current"). The explanations,
+  the table of variants and the recommendation are in issue #806 and behind "Compare" on this page.
+  Self-contained, no network. The fonts are the client's own (SIL OFL, assets/out-of-game-style/fonts/). The pictures
+  (assets/tutorial-roadmap/) are the client's own: narrows.webp is the baked background of the pool map Narrows
+  (maps/narrows.bg.webp, the map of the first match); ch-*.webp are crops of the client's frames of each chapter map at
+  its start (assets/tutorial/, assets/tutorial-walk/H1.webp for the first match); menu.webp is the main screen.
+  The artboard is the real window: 1280 x 800 on a desktop, 390 x 844 on a phone, scaled to fit.
+  State in the address: #v=<campaign|road|march|charter|current>&s=<first|mid|main|all>&w=<d|p>&sel=<I..V|M|A1|A2>
+  &rm=<0|1>&g=<0|1>&d=<0|1>&c=<0|1>
+-->
+<style>
+@font-face{font-family:Cinzel;src:url(assets/out-of-game-style/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-display:block}
+@font-face{font-family:'EB Garamond';src:url(assets/out-of-game-style/fonts/ebgaramond-italic.woff2) format('woff2');font-weight:400 800;font-style:italic;font-display:block}
+
+:root{
+  --stone-bg:#16130f;--stone-panel:#1d1a15;--stone-raised:#221e18;--stone-tex:url(assets/tutorial-roadmap/stone.webp);
+  --ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--rule-faint:rgb(125 115 99/60%);
+  --line:#3d372d;--cut:#050403;--lit:rgb(214 200 172/30%);--lit-faint:rgb(214 200 172/15%);--frame-lozenge:#8f8573;
+  --plate:#0e0c09;--casing:#060504;--own:#86a6ea;--own-deep:#5d7fd0;--enemy:#e5785e;--neutral:#b3a88f;
+  --font-display:'Cinzel','Times New Roman',serif;--font-text:'EB Garamond',Georgia,'Times New Roman',serif;
+  --ease-engrave:cubic-bezier(.37,0,.63,1);--ease-settle:cubic-bezier(.33,1,.68,1);--ease-travel:cubic-bezier(.65,0,.35,1);
+  --halo:0 0 2px #060504,0 0 5px #060504,0 0 9px rgb(6 5 4/85%);
+  color-scheme:dark
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0c0b09;color:var(--ink);font-family:var(--font-text);-webkit-font-smoothing:antialiased;font-variant-numeric:lining-nums tabular-nums}
+body{display:flex;flex-direction:column;overflow:hidden}
+body:not(.ready) .stage{visibility:hidden}
+button{font:inherit;color:inherit}
+html.gray .art{filter:grayscale(1)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ===== The page chrome: switches only ===================================================== */
+.bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:9px 16px 8px;background:#0a0908;border-bottom:1px solid #2a251e;box-shadow:0 1px 0 #050403}
+.bar .grp{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.bar .lab{font:500 10px/1 var(--font-display);letter-spacing:.24em;text-transform:uppercase;color:#8d836f;margin-right:4px}
+.bar .ch{height:28px;padding:0 10px;border:0;background:transparent;color:var(--ink-dim);font:500 11px/1 var(--font-display);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap;
+  box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 3px #0a0908,inset 0 0 0 4px var(--rule-faint)}
+.bar .ch:hover{color:var(--ink)}
+.bar .ch[aria-pressed=true]{color:var(--ink);background:rgb(236 228 209/7%);box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px #13110d,inset 0 0 0 4px rgb(236 228 209/35%)}
+.bar .ch:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.bar .ch .n{margin-right:6px;color:#8d836f}
+.bar .sep{width:1px;height:22px;background:#2a251e}
+.bar .more{display:none;gap:4px}
+.bar.open .more{display:flex}
+.view{flex:1;min-height:0;position:relative;overflow:hidden}
+.stage{position:absolute;left:0;top:0;transform-origin:0 0;box-shadow:0 0 0 1px #2a251e,0 18px 50px rgb(0 0 0/55%)}
+.art{position:absolute;inset:0;overflow:hidden;background:var(--stone-tex) var(--stone-bg);container-type:inline-size}
+
+/* ===== Shared primitives of the client (theme/primitives.css) ============================= */
+.rule-frame{position:relative}
+.rule-frame::before{content:'';position:absolute;inset:-4px;pointer-events:none;background:
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/svg%3E") left top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(-1 0 0 1 26 0)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right top/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(-1 0 0 -1 26 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") right bottom/26px 26px no-repeat,
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' fill='none'%3E%3Cg transform='matrix(1 0 0 -1 0 26)'%3E%3Cpath d='M26 4.5H16.5V10.5H10.5V16.5H4.5V26' stroke='%23050403'/%3E%3Cpath d='M26 5.5H17.5V11.5H11.5V17.5H5.5V26' stroke='%23d6c8ac' stroke-opacity='.3'/%3E%3Cpath d='M26 9.5H21.5V15.5H15.5V21.5H9.5V26' stroke='%23d6c8ac' stroke-opacity='.15'/%3E%3Cpath d='M6.5 3.2 9.8 6.5 6.5 9.8 3.2 6.5Z' fill='%238f8573' stroke='%23050403' stroke-width='.9'/%3E%3C/g%3E%3C/svg%3E") left bottom/26px 26px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 26px 4px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--cut),var(--cut)) 26px calc(100% - 4px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--cut),var(--cut)) 4px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--cut),var(--cut)) calc(100% - 4px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 26px 5px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--lit),var(--lit)) 26px calc(100% - 5px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit),var(--lit)) 5px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--lit),var(--lit)) calc(100% - 5px) 26px/1px calc(100% - 52px) no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 26px 9px/calc(100% - 52px) 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 26px calc(100% - 9px)/calc(100% - 52px) 1px no-repeat,
+  linear-gradient(var(--lit-faint),var(--lit-faint)) 9px 26px/1px calc(100% - 52px) no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) calc(100% - 9px) 26px/1px calc(100% - 52px) no-repeat}
+.stone{background:var(--stone-tex) var(--stone-panel);color:var(--ink)}
+.lab{margin:0;font:500 11.5px/1.3 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:12px;height:46px;padding:0 22px;border:0;background:none;color:var(--ink);font:500 13px/1 var(--font-display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.btn.primary{height:50px;padding:0 28px;background:var(--ink);color:var(--stone-bg);font-size:14px;letter-spacing:.22em;box-shadow:inset 0 0 0 4px var(--ink),inset 0 0 0 5px var(--stone-bg);transition:background .2s var(--ease-settle)}
+.btn.primary:hover{background:#fff8e9;box-shadow:inset 0 0 0 4px #fff8e9,inset 0 0 0 5px var(--stone-bg)}
+.btn.primary[aria-disabled=true]{background:transparent;color:var(--ink-dim);cursor:default;box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 4px var(--rule-faint)}
+.btn.primary[aria-disabled=true] svg{margin-right:-2px}
+.btn.tab{height:58px;min-width:230px;font-size:18px;letter-spacing:.24em}
+.quiet{border:0;background:none;padding:2px 0;color:var(--ink-soft);font:italic 500 18px/1.2 var(--font-text);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;text-decoration-color:var(--rule);cursor:pointer}
+.quiet:hover{color:var(--ink);text-decoration-color:var(--ink-soft)}
+.quiet:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+/* ===== The client's top bar on a page (FrontTop: the brand is the way home, ui-style 71) ====== */
+.top{position:absolute;inset:0 0 auto;z-index:30;height:64px;display:flex;align-items:center;gap:18px;padding:0 36px;border-bottom:1px solid var(--cut);box-shadow:0 1px 0 var(--line);background:rgb(22 19 15/86%)}
+.top::after{content:'';position:absolute;left:0;right:0;bottom:-5px;height:1px;background:var(--lit-faint)}
+.brand{position:relative;display:inline-flex;align-items:center;gap:12px;border:0;background:none;padding:8px 0;color:var(--ink);font:500 15px/1 var(--font-display);letter-spacing:.34em;text-transform:uppercase;cursor:pointer}
+.brand .back{width:9px;height:9px;border-left:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:rotate(45deg);margin-right:-2px}
+.brand::after{content:'';position:absolute;left:21px;right:.34em;bottom:2px;height:1px;background:var(--ink);transform:scaleX(0);transform-origin:left;transition:transform .32s var(--ease-settle)}
+.brand:hover::after,.brand.is-hover::after{transform:scaleX(1)}
+.brand:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.top h1{position:absolute;left:50%;transform:translateX(-50%);margin:0;font:500 12px/1 var(--font-display);letter-spacing:.36em;text-transform:uppercase;color:var(--ink-dim)}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:18px}
+.qm{width:36px;height:36px;display:grid;place-items:center;border:0;padding:0;background:rgb(236 228 209/7%);color:var(--ink);font:500 16px/1 var(--font-display);cursor:pointer;box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px #13110d,inset 0 0 0 4px rgb(236 228 209/35%)}
+.qm:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.who{display:flex;align-items:baseline;gap:10px;border:0;background:none;padding:6px 0;color:var(--ink);cursor:pointer}
+.who b{font:500 13px/1 var(--font-display);letter-spacing:.2em;color:var(--ink)}
+.who i{font:italic 500 16px/1 var(--font-text);color:var(--ink-dim)}
+.phone .top{height:52px;padding:0 14px;gap:10px}
+.phone .brand{font-size:12px;letter-spacing:.26em;gap:9px}
+.phone .brand .back{width:8px;height:8px}
+.phone .top h1{display:none}
+.phone .who i{display:none}
+.phone .qm{width:32px;height:32px}
+
+/* ===== Places: one control per chapter, the same in every variant ========================== */
+/* A place is a radio of the group "Chapters": the piece, the name and the state line; arrow keys move along. */
+.place{position:absolute;z-index:5;width:var(--hit);height:var(--hit);margin:calc(var(--hit) / -2) 0 0 calc(var(--hit) / -2);padding:0;border:0;border-radius:50%;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.place:focus-visible{outline:none}
+.place>svg{position:absolute;left:50%;top:50%;width:var(--box);height:var(--box);margin:calc(var(--box) / -2) 0 0 calc(var(--box) / -2);overflow:visible;pointer-events:none}
+.place .lbl{position:absolute;width:max-content;max-width:var(--lw,170px);pointer-events:none}
+.place .lbl.b{left:50%;top:calc(100% + 2px);transform:translateX(-50%);text-align:center}
+.place.lo .lbl.b{top:calc(100% + 10px)}
+.place.next .lbl.b{top:calc(100% + 12px)}.place.next .lbl.t{bottom:calc(100% + 12px)}.place.next .lbl.l{right:calc(100% + 12px)}.place.next .lbl.r{left:calc(100% + 12px)}.place.next .lbl.br,.place.next .lbl.bl{top:calc(100% + 2px)}
+.place .lbl.t{left:50%;bottom:calc(100% + 2px);transform:translateX(-50%);text-align:center}
+.place .lbl.r{left:calc(100% + 2px);top:50%;transform:translateY(-50%);text-align:left}
+.place .lbl.l{right:calc(100% + 2px);top:50%;transform:translateY(-50%);text-align:right}
+.place .lbl.br{left:calc(100% - 10px);top:calc(100% - 10px);text-align:left}
+.place .lbl.bl{right:calc(100% - 10px);top:calc(100% - 10px);text-align:right}
+.place .lbl.tr{left:calc(100% - 10px);bottom:calc(100% - 10px);text-align:left}
+.place .lbl.tl{right:calc(100% - 10px);bottom:calc(100% - 8px);text-align:right}
+.pl-name{display:block;font:500 12.5px/1.3 var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ink);text-wrap:balance;transition:color .2s}
+.pl-sub{display:block;margin-top:1px;font:italic 500 15.5px/1.2 var(--font-text);color:var(--ink-soft)}
+.place.locked .pl-name{color:var(--ink-dim)}
+.place.locked .pl-sub{color:var(--ink-dim)}
+.place:hover .pl-name,.place.is-hover .pl-name{color:#fff8e9}
+/* Focus: an ivory ring on a dark casing around the piece (never a player colour). */
+.fr{opacity:0;transition:opacity .12s}
+.place:focus-visible .fr,.place.is-focus .fr{opacity:1}
+/* Hover: the ring inks up and a hollow lozenge sits over the piece (the plinth's hover marker, ui-style 69). */
+.ring{transition:stroke .2s,stroke-opacity .2s}
+.place:hover .ring,.place.is-hover .ring{stroke:#fff8e9;stroke-opacity:1}
+.hov{opacity:0;transform:translateY(4px);transition:opacity .25s var(--ease-settle),transform .25s var(--ease-settle);transform-box:fill-box}
+.place:hover .hov,.place.is-hover .hov{opacity:1;transform:none}
+.place.sel .hov{opacity:0!important}
+.pin{opacity:0}
+.place.sel .pin{opacity:1;animation:pin-in .45s var(--ease-settle) both}
+@keyframes pin-in{from{opacity:0;transform:translateY(-8px)}}
+.halo .pl-name,.halo .pl-sub{text-shadow:var(--halo)}
+
+/* ===== Marks ===================================================================================== */
+.spin{transform-box:fill-box;transform-origin:center;animation:spin 9s var(--ease-travel) 1 both}
+@keyframes spin{to{transform:rotate(360deg)}}
+.breathe{animation:breathe 2.4s var(--ease-engrave) 4 alternate both}
+@keyframes breathe{from{opacity:.25}to{opacity:.85}}
+.ink-in{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:ink-in 1.3s var(--ease-engrave) .25s forwards}
+@keyframes ink-in{to{stroke-dashoffset:0}}
+.fade-in{animation:fade-in .6s var(--ease-settle) both}
+@keyframes fade-in{from{opacity:0}}
+
+/* ===== The detail plinth (Campaign, Road): the main screen's plinth (ui-style 69) ============== */
+.plinth{position:absolute;z-index:12;left:48px;right:48px;bottom:26px;min-height:150px;padding:24px 46px;display:grid;grid-template-columns:1fr auto;column-gap:40px;align-items:center;box-shadow:0 26px 60px rgb(0 0 0/55%);animation:rise .9s var(--ease-settle) both}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}}
+.plinth h2,.dt h2{margin:6px 0 4px;font:500 32px/1.05 var(--font-display);letter-spacing:.04em}
+.plinth .why,.dt .why{margin:0;font:italic 500 19px/1.35 var(--font-text);color:var(--ink-soft);max-width:640px}
+.dt-acts{display:flex;flex-direction:column;align-items:center;gap:12px}
+.dt-swap{animation:swap .42s var(--ease-settle) both}
+@keyframes swap{from{opacity:0;transform:translateY(6px)}}
+.phone .plinth{left:10px;right:10px;bottom:10px;min-height:0;padding:16px 18px 18px;grid-template-columns:1fr;row-gap:12px}
+.phone .plinth h2{margin:4px 0 2px}
+.phone .plinth h2,.phone .dt h2{font-size:23px}
+.phone .plinth .why,.phone .dt .why{font-size:16.5px}
+.phone .dt-acts{flex-direction:row;justify-content:space-between;gap:16px}
+.phone .btn.tab{flex:1;min-width:0;height:50px;font-size:15px}
+.phone .quiet{font-size:17px;min-height:44px;padding:0 4px}
+
+/* ===== Variant: Campaign ======================================================================== */
+.cmap{position:absolute;inset:0}
+.cmap>svg{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+.cshade{position:absolute;inset:0;pointer-events:none;z-index:2;background:linear-gradient(180deg,rgb(22 19 15/75%) 0,rgb(22 19 15/10%) 15%,rgb(22 19 15/0%) 50%,rgb(22 19 15/55%) 72%,rgb(22 19 15/96%) 100%)}
+.phone .cshade{background:linear-gradient(180deg,rgb(22 19 15/70%) 0,rgb(22 19 15/0%) 12%,rgb(22 19 15/0%) 62%,rgb(22 19 15/92%) 84%,var(--stone-bg) 100%)}
+.ctag{position:absolute;z-index:4;font:500 10.5px/1 var(--font-display);letter-spacing:.26em;text-transform:uppercase;color:var(--ink-soft);text-shadow:var(--halo);pointer-events:none}
+
+/* ===== Variant: Road (engraved, inlaid) ========================================================== */
+.slab{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 38%,rgb(40 35 28/0%) 0,rgb(10 9 7/55%) 100%)}
+.road-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rtag{position:absolute;z-index:4;font:500 10.5px/1 var(--font-display);letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim);pointer-events:none}
+
+/* ===== Variant: March (a column of rows and the chosen chapter's own map) ====================== */
+.mcol{position:absolute;left:44px;top:116px;width:440px;bottom:30px}
+.mcol>svg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.row{position:absolute;left:0;right:0;height:60px;display:flex;align-items:center;gap:0;padding:0 18px 0 0;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer;
+  background:linear-gradient(90deg,rgb(236 228 209/0%),rgb(236 228 209/0%));transition:background .25s}
+.row .pc{flex:none;width:var(--pcw);height:60px;position:relative}
+.row .pc svg{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;overflow:visible}
+.row .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.row .pl-name{font-size:14px;letter-spacing:.14em}
+.row .pl-sub{font-size:15.5px}
+.row.locked .pl-name,.row.locked .pl-sub{color:var(--ink-dim)}
+.row:hover,.row.is-hover{background:linear-gradient(90deg,rgb(236 228 209/0%) 0,rgb(236 228 209/6%) 30%,rgb(236 228 209/6%) 100%)}
+.row:hover .pl-name,.row.is-hover .pl-name{color:#fff8e9}
+.row::after{content:'';position:absolute;left:var(--pcw);right:0;top:4px;bottom:4px;pointer-events:none;opacity:0;transition:opacity .25s;
+  box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px #13110d,inset 0 0 0 4px rgb(236 228 209/30%)}
+.row.sel::after{opacity:1}
+.row.sel{background:linear-gradient(90deg,rgb(236 228 209/0%) 0,rgb(236 228 209/7%) 22%)}
+.row .tx{padding-left:16px}
+.row:focus-visible{outline:none}
+.row:focus-visible .fr,.row.is-focus .fr{opacity:1}
+.row:focus-visible::before,.row.is-focus::before{content:'';position:absolute;left:calc(var(--pcw) - 6px);right:-6px;top:-2px;bottom:-2px;outline:2px solid var(--ink);outline-offset:0;pointer-events:none}
+.row .chev{margin-left:auto;width:9px;height:9px;border-right:1.5px solid var(--ink-soft);border-top:1.5px solid var(--ink-soft);transform:rotate(45deg);opacity:0;transition:opacity .2s}
+.row.sel .chev{opacity:1}
+.mview{position:absolute;left:532px;right:52px;top:126px;bottom:30px}
+.mpic{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;background:#100e0b}
+.mpic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.mpic::after{content:'';position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px var(--line),inset 0 0 0 5px rgb(16 14 11/75%),inset 0 0 0 6px rgb(214 200 172/16%),inset 0 0 60px rgb(0 0 0/45%)}
+.mpic.locked img{filter:grayscale(.92) brightness(.42) contrast(1.05)}
+.mpic.locked .veil{position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgb(236 228 209/5%) 0 1px,transparent 1px 4px)}
+.mpic .lockplate{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:12px;padding:14px 22px;background:rgb(14 12 9/94%);
+  box-shadow:inset 0 0 0 1px rgb(236 228 209/55%),inset 0 0 0 3px rgb(14 12 9/95%),inset 0 0 0 4px rgb(236 228 209/22%),0 14px 34px rgb(0 0 0/55%);font:500 13px/1 var(--font-display);letter-spacing:.22em;text-transform:uppercase;color:var(--ink)}
+.mpic .seal{position:absolute;right:18px;top:16px;width:74px;height:74px;filter:drop-shadow(0 8px 14px rgb(0 0 0/55%))}
+.mpic img.swap{animation:pic-in .5s var(--ease-settle) both}
+@keyframes pic-in{from{opacity:0;transform:scale(1.02)}}
+.dt{margin-top:22px;display:grid;grid-template-columns:1fr auto;column-gap:30px;align-items:end}
+.dt .dt-acts{flex-direction:column;align-items:center}
+.mlead{position:absolute;pointer-events:none;z-index:1}
+.phone .mcol{left:10px;right:10px;top:64px;bottom:10px;width:auto}
+.phone .row{height:54px;padding-right:12px}
+.phone .row .pc{height:54px}
+.phone .row .pl-name{font-size:12.5px;letter-spacing:.12em}
+.phone .row .pl-sub{font-size:14.5px}
+.phone .row .tx{padding-left:12px}
+.mexp{position:absolute;left:0;right:0}
+.mexp .mpic{aspect-ratio:16/9}
+.mexp .dt{margin-top:10px;display:block}
+.mexp .dt h2{display:none}
+.mexp .dt .why{margin:0 0 12px}
+.mexp .dt .lab{display:none}
+.mexp .dt .dt-acts{flex-direction:row;align-items:center}
+.mtag{position:absolute;font:500 10.5px/1 var(--font-display);letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim);pointer-events:none}
+
+/* ===== Variant: Charter (a sheet of seals) ======================================================== */
+.sheet{position:absolute;left:56px;right:56px;top:90px;bottom:30px;box-shadow:0 30px 60px rgb(0 0 0/50%);animation:sheet-in .7s var(--ease-settle) both}
+@keyframes sheet-in{from{opacity:0;transform:translateY(16px)}}
+.sheet>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.sheet .dt{position:absolute;left:58px;width:620px;top:478px;margin:0;padding-top:22px;display:block}
+.sheet .dt .dt-acts{margin-top:18px;justify-content:flex-start}
+.sheet .dt::before{content:'';position:absolute;left:0;right:0;top:0;height:5px;background:linear-gradient(var(--cut),var(--cut)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 1px/100% 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 0 4px/100% 1px no-repeat}
+.sheet .dt .dt-acts{flex-direction:row;gap:30px}
+.sheet .dt .btn.tab{min-width:210px}
+.seal-face{transition:transform .25s var(--ease-settle);transform-box:fill-box;transform-origin:center}
+.place:hover .seal-face,.place.is-hover .seal-face{transform:translateY(-3px)}
+.stamp{animation:stamp .55s var(--ease-settle) both;transform-box:fill-box;transform-origin:center}
+@keyframes stamp{0%{opacity:0;transform:scale(1.28)}60%{opacity:1;transform:scale(.97)}100%{transform:scale(1)}}
+.phone .sheet{left:10px;right:10px;top:64px;bottom:10px}
+.phone .sheet .dt{left:20px;right:20px;width:auto;top:auto;bottom:20px;display:block;padding-top:16px}
+.phone .sheet .dt .dt-acts{margin-top:14px;justify-content:space-between;gap:16px}
+
+/* ===== Current: the accepted Road as the walkthrough draws it (R.1..R.3) ========================== */
+.cur .blurstone{position:absolute;inset:0;background:var(--stone-tex) rgb(22 19 15/80%);backdrop-filter:blur(9px) saturate(.55)}
+.cur img.bg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cur .selpage{position:absolute;left:96px;right:96px;top:84px}
+.cur .selpage h1{margin:10px 0 6px;font:500 46px/1.05 var(--font-display);letter-spacing:.05em}
+.cur .selpage .why{margin:0;font:italic 500 20px/1.35 var(--font-text);color:var(--ink-soft)}
+.cur .road{position:absolute;left:0;right:0;top:150px;height:430px}
+.cur .road svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.cur .rnode{cursor:pointer}
+.cur .rnode:focus-visible{outline:none}
+.cur .rnode:focus-visible .focusring{opacity:1}
+.cur .focusring{opacity:0}
+.cur .rlock{opacity:.7}
+.cur .rtitle{font:500 14px var(--font-display);letter-spacing:.13em;text-transform:uppercase;fill:var(--ink)}
+.cur .rsub{font:italic 500 16px var(--font-text);fill:var(--ink-soft)}
+.cur .rfork{font:500 10.5px var(--font-display);letter-spacing:.24em;text-transform:uppercase;fill:var(--ink-dim)}
+.cur .pulse{animation:pulse 2.2s var(--ease-engrave) 4;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{opacity:.75;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}
+.cur .foot{position:absolute;left:50px;right:50px;bottom:34px;height:168px;padding:26px 46px;display:grid;grid-template-columns:1fr auto;column-gap:40px;align-items:center;box-shadow:0 26px 60px rgb(0 0 0/55%);animation:rise .9s var(--ease-settle) both}
+.cur .foot h2{margin:6px 0 4px;font:500 34px/1.05 var(--font-display);letter-spacing:.04em}
+.cur .foot .why{margin:0;font:italic 500 19px/1.35 var(--font-text);color:var(--ink-soft);max-width:600px}
+.cur .foot .right{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cur .foot .quiets{display:flex;gap:22px}
+.cur .foot .quiet{font-size:17px}
+.shrunk{position:absolute;left:0;top:0;width:1280px;height:800px;transform-origin:0 0}
+
+/* ===== Compare: the table of variants (behind a switch, so the page stays a picture) ============= */
+.cmp{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:24px;background:rgb(8 7 6/72%)}
+.cmp.open{display:grid}
+.cmp .box{position:relative;width:min(1180px,100%);max-height:100%;overflow:auto;padding:34px 40px 30px;box-shadow:0 30px 70px rgb(0 0 0/60%)}
+.cmp h2{margin:4px 0 16px;font:500 26px/1.1 var(--font-display);letter-spacing:.06em}
+.cmp table{width:100%;border-collapse:collapse;font:500 15.5px/1.32 var(--font-text)}
+.cmp th{text-align:left;font:500 10.5px/1.2 var(--font-display);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);padding:0 12px 8px 0;border-bottom:1px solid var(--line);vertical-align:bottom}
+.cmp td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink)}
+.cmp td:first-child{font:500 13px/1.3 var(--font-display);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.cmp .rec{margin:18px 0 0;font:500 17px/1.42 var(--font-text);color:var(--ink);max-width:960px}
+.cmp .rec b{color:#fff8e9}
+.cmp .x{position:absolute;right:16px;top:14px}
+
+html.rm *,html.rm *::before,html.rm *::after{animation-duration:1ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}
+html.rm .breathe{opacity:.6}
+html.rm .cur .pulse{opacity:0}
+</style>
+</head>
+<body>
+<nav class="bar" id="bar" aria-label="Mockup switches">
+  <div class="grp" role="group" aria-label="Variant"><span class="lab">Variant</span><span id="vs"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="grp" role="group" aria-label="Progress"><span class="lab">Progress</span><span id="ss"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <div class="grp" role="group" aria-label="Width"><span id="ws"></span></div>
+  <span class="sep" aria-hidden="true"></span>
+  <button class="ch" id="cmpBtn" aria-haspopup="dialog">Compare</button>
+  <button class="ch" id="moreBtn" aria-expanded="false">More</button>
+  <div class="grp more" id="more"><button class="ch" id="dBtn" aria-pressed="false">Hover and focus</button><button class="ch" id="rmBtn" aria-pressed="false">Less motion</button><button class="ch" id="gBtn" aria-pressed="false">Grey</button><button class="ch" id="replay">Replay motion</button></div>
+</nav>
+<div class="view" id="view"><div class="stage" id="stage"><div class="art" id="art"></div></div></div>
+<div class="cmp" id="cmp" role="dialog" aria-modal="true" aria-labelledby="cmpTtl"><section class="box stone rule-frame" id="cmpBox"></section></div>
+
+<!-- Shared paints of the pieces. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="gOwn" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#b4c8f5"/><stop offset=".55" stop-color="#86a6ea"/><stop offset="1" stop-color="#5873bd"/></radialGradient>
+    <radialGradient id="gEnemy" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#f4a58f"/><stop offset=".55" stop-color="#e5785e"/><stop offset="1" stop-color="#b8513b"/></radialGradient>
+    <radialGradient id="gDark" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="#2d271f"/><stop offset="1" stop-color="#110f0b"/></radialGradient>
+    <radialGradient id="gHole" cx=".6" cy=".66" r=".8"><stop offset="0" stop-color="#1c1813"/><stop offset=".8" stop-color="#0d0b09"/><stop offset="1" stop-color="#060504"/></radialGradient>
+    <linearGradient id="gRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050403"/><stop offset=".55" stop-color="#050403" stop-opacity=".2"/><stop offset="1" stop-color="#d6c8ac" stop-opacity=".42"/></linearGradient>
+    <linearGradient id="gBevel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d6c8ac" stop-opacity=".45"/><stop offset=".5" stop-color="#d6c8ac" stop-opacity=".06"/><stop offset="1" stop-color="#050403"/></linearGradient>
+    <radialGradient id="gLapis" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#bfd0f7"/><stop offset=".35" stop-color="#8aa8ea"/><stop offset=".8" stop-color="#5675c4"/><stop offset="1" stop-color="#3f5698"/></radialGradient>
+    <radialGradient id="gMinium" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#f6b29d"/><stop offset=".35" stop-color="#e98468"/><stop offset=".8" stop-color="#c55a41"/><stop offset="1" stop-color="#963f2c"/></radialGradient>
+    <radialGradient id="gSeal" cx=".38" cy=".3" r=".85"><stop offset="0" stop-color="#2f2920"/><stop offset="1" stop-color="#13110d"/></radialGradient>
+    <linearGradient id="gIvory" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff8e9"/><stop offset=".55" stop-color="#ece4d1"/><stop offset="1" stop-color="#c9bea6"/></linearGradient>
+    <pattern id="pHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#16130f"/><path d="M0 0V5" stroke="#cfc4ab" stroke-opacity=".28" stroke-width="1.1"/></pattern>
+    <pattern id="pFogLines" width="6" height="3" patternUnits="userSpaceOnUse"><path d="M0 .5H6" stroke="#d6c8ac" stroke-opacity=".09" stroke-width="1"/></pattern>
+    <pattern id="pEngrave" width="8" height="3" patternUnits="userSpaceOnUse"><path d="M0 .5H8" stroke="#060504" stroke-opacity=".16" stroke-width="1"/></pattern>
+    <filter id="fSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="fGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="fShadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".6"/></filter>
+  </defs>
+</svg>
+
+<script>
+// =============================================================================================
+// The tutorial's places (docs/design/tutorial.md, sections 1 and 3): five main chapters on the main road, the first
+// match at its end (the enemy capital, open from the start), the Advanced side road off it after V.
+// One short line each: what the chapter is about. A locked place says what opens it.
+// =============================================================================================
+const P = {
+  I: {n: 'I', name: 'Units and movement', line: 'Move, capture, and see what your army sees.', kind: 'main', icon: 'helmet'},
+  II: {n: 'II', name: 'Map and economy', line: 'Your capital makes charges, and the roads carry them.', kind: 'main', icon: 'economy'},
+  III: {n: 'III', name: 'Building', line: 'Factories, barracks, and the pace of your economy.', kind: 'main', icon: 'factory'},
+  IV: {n: 'IV', name: 'Attack and fight', line: 'Plan a strike, win the fight, take a capital.', kind: 'main', icon: 'war'},
+  V: {n: 'V', name: 'Defence', line: 'Hold with terrain and road forts.', kind: 'main', icon: 'fort'},
+  M: {n: '', name: 'First match', line: 'Play it whenever you like.', kind: 'match', icon: 'star'},
+  A1: {n: 'I', name: 'Group orders', line: 'Several groups, one order, one arrival.', kind: 'adv', icon: 'merge'},
+  A2: {n: 'II', name: 'Rally points', line: 'New recruits walk to the front by themselves.', kind: 'adv', icon: 'rally'},
+};
+const MAIN = ['I', 'II', 'III', 'IV', 'V'], ADV = ['A1', 'A2'], ORDER = ['I', 'II', 'III', 'IV', 'V', 'M', 'A1', 'A2'];
+// tutorial.md, section 3 and Q8: a main chapter opens when the one before it is done; the first match is open from
+// the start; the Advanced chapters open when V is done. `next` is the suggested one.
+const STATES = {
+  first: {I: 'next', II: 'locked', III: 'locked', IV: 'locked', V: 'locked', M: 'open', A1: 'locked', A2: 'locked'},
+  mid: {I: 'done', II: 'done', III: 'next', IV: 'locked', V: 'locked', M: 'open', A1: 'locked', A2: 'locked'},
+  main: {I: 'done', II: 'done', III: 'done', IV: 'done', V: 'done', M: 'next', A1: 'open', A2: 'open'},
+  all: {I: 'done', II: 'done', III: 'done', IV: 'done', V: 'done', M: 'done', A1: 'done', A2: 'done'},
+};
+const SEL = {first: 'I', mid: 'III', main: 'M', all: 'M'};
+const VARIANTS = [
+  {id: 'campaign', name: 'Campaign'}, {id: 'road', name: 'Road'}, {id: 'march', name: 'March'}, {id: 'charter', name: 'Charter'}, {id: 'current', name: 'Current'},
+];
+const STAGES = [{id: 'first', name: 'First visit'}, {id: 'mid', name: 'Mid-way'}, {id: 'main', name: 'Main done'}, {id: 'all', name: 'All done'}];
+const state = {v: 'campaign', s: 'first', w: 'd', sel: null, rm: false, g: false, d: false, c: false};
+
+const S = (k) => STATES[state.s][k];
+const sel = () => state.sel && ORDER.includes(state.sel) ? state.sel : SEL[state.s];
+const prevOf = (k) => k[0] === 'A' ? 'V' : MAIN[MAIN.indexOf(k) - 1];
+function sub(k) {
+  const x = S(k);
+  if (x === 'done') return k === 'M' ? 'Played' : 'Done';
+  if (x === 'next') return 'Next';
+  if (x === 'open') return k === 'M' ? 'Any time' : 'Optional';
+  return 'After ' + prevOf(k);
+}
+function eyebrow(k) { return P[k].kind === 'main' ? 'Chapter ' + P[k].n : P[k].kind === 'adv' ? 'Advanced ' + P[k].n : 'Easy bot · Narrows'; }
+function action(k) { const x = S(k); return x === 'done' ? (k === 'M' ? 'Play again' : 'Replay') : k === 'M' ? 'Play' : 'Start'; }
+function ariaOf(k) { return `${k === 'M' ? '' : eyebrow(k) + ': '}${P[k].name}, ${sub(k)}`; }
+// The hover and focus demo ("More" > "Hover and focus"): the first place after the chosen one shows hover, the chosen one focus.
+function demoHover() { const s = sel(), i = ORDER.indexOf(s); return ORDER[(i + 1) % ORDER.length]; }
+// The pictures of this page (assets/tutorial-roadmap/).
+const ASSET = (p) => 'assets/tutorial-roadmap/' + p;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const f1 = (v) => (Math.round(v * 10) / 10).toString();
+
+// =============================================================================================
+// Drawing helpers.
+// =============================================================================================
+function loz(x, y, r) { return `M${f1(x)} ${f1(y - r)}L${f1(x + r)} ${f1(y)}L${f1(x)} ${f1(y + r)}L${f1(x - r)} ${f1(y)}Z`; }
+function starPath(x, y, R, r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R;
+    d += (i ? 'L' : 'M') + f1(x + rr * Math.cos(a)) + ' ' + f1(y + rr * Math.sin(a));
+  }
+  return d + 'Z';
+}
+// The done mark of the accepted Road: an ivory lozenge with a check.
+function doneMark(x, y, r = 7) {
+  return `<path d="${loz(x, y, r)}" fill="url(#gIvory)" stroke="#060504" stroke-width="1.4"/><path d="M${f1(x - r * .5)} ${f1(y)}l${f1(r * .34)} ${f1(r * .37)} ${f1(r * .66)}-${f1(r * .72)}" fill="none" stroke="#060504" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+// The lock of the accepted Road (a dashed ring with a small lock).
+function lockMark(x, y, c = '#ada38f', k = 1) {
+  return `<g transform="translate(${f1(x)} ${f1(y)}) scale(${k})"><path d="M-6.5 -1.5h13v10.5h-13z" fill="#0b0a08" stroke="#060504" stroke-width="2.6" stroke-linejoin="round"/><path d="M-6.5 -1.5h13v10.5h-13z" fill="${c}"/>` +
+    `<path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="#060504" stroke-width="4.2"/><path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="${c}" stroke-width="2"/><circle cy="3.6" r="1.4" fill="#0b0a08"/></g>`;
+}
+function lockGlyph() { return '<svg width="14" height="16" viewBox="-8 -9 16 19" aria-hidden="true"><path d="M-6.5 -1.5h13v10.5h-13z" fill="currentColor"/><path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'; }
+// The goal mark Compass (ui-style 77): a double ring, four compass points that turn once and stop, a breathing glow.
+function compass(x, y, r) {
+  const R1 = r + 8, R2 = r + 14;
+  let s = `<g><circle cx="${x}" cy="${y}" r="${R2 + 2}" fill="none" stroke="rgb(236 228 209/.5)" stroke-width="7" filter="url(#fSoft)" class="breathe"/>`;
+  s += `<circle cx="${x}" cy="${y}" r="${R1}" fill="none" stroke="#060504" stroke-width="4"/><circle cx="${x}" cy="${y}" r="${R1}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>`;
+  s += `<circle cx="${x}" cy="${y}" r="${R2}" fill="none" stroke="#060504" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${R2}" fill="none" stroke="rgb(236 228 209/.55)" stroke-width="1" stroke-dasharray="3 5"/>`;
+  s += '<g class="spin">' + [0, 90, 180, 270].map((a) => {
+    const rad = a * Math.PI / 180, ux = Math.cos(rad), uy = Math.sin(rad), px = x + R2 * ux, py = y + R2 * uy, L = 7.5, Wd = 3.6;
+    const p = [[px - ux * L, py - uy * L], [px - uy * Wd, py + ux * Wd], [px + ux * L, py + uy * L], [px + uy * Wd, py - ux * Wd]];
+    return `<path d="M${p.map((q) => q.map(f1).join(' ')).join('L')}Z" fill="#ece4d1" stroke="#060504" stroke-width="1.2" stroke-linejoin="round"/>`;
+  }).join('') + `<circle cx="${x}" cy="${y}" r="${R2 + 8}" fill="none" stroke="none"/></g></g>`;
+  return s;
+}
+// The chosen place: a lozenge on a short rule over the piece (the plinth's way marker, ui-style 69); hover: a hollow one.
+// `dir` is where the marker stands: 'up' (default), 'down', 'left', 'right' of a piece of radius `r`, `off` beyond it.
+function pinAt(r, off, dir = 'up') {
+  const [ux, uy] = {up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0]}[dir];
+  const x = ux * (r + off), y = uy * (r + off), sx = -ux, sy = -uy;
+  const stem = `M${f1(x + sx * 4)} ${f1(y + sy * 4)}L${f1(x + sx * 15)} ${f1(y + sy * 15)}`;
+  return `<g class="pin"><path d="${stem}" stroke="#060504" stroke-width="3.4"/><path d="${stem}" stroke="#ece4d1" stroke-width="1.3"/>` +
+    `<path d="${loz(x, y, 6.5)}" fill="url(#gIvory)" stroke="#060504" stroke-width="1.5"/></g>` +
+    `<g class="hov"><path d="${loz(x + sx * 6, y + sy * 6, 5.5)}" fill="#16130f" stroke="#ece4d1" stroke-width="1.4"/></g>`;
+}
+function focusRing(x, y, r) {
+  return `<g class="fr"><circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#060504" stroke-width="5"/><circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#ece4d1" stroke-width="2"/></g>`;
+}
+function numeral(k, x, y, size, fill) {
+  return `<text x="${x}" y="${f1(y + size * .36)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${size}" letter-spacing=".5" fill="${fill}">${P[k].n}</text>`;
+}
+// The menu icons of the client (hud/icons.ts, MENU_ICONS: drawn for this project, 24 x 24, 2 px stroke).
+const ICON = {
+  helmet: '<path d="M3.6 15.6C3 9.4 6.6 5.2 11.8 5.2c4.4 0 7.2 2.9 7.8 6.2.2.9.8 1.5 1.9 2-3.4.3-5.6.9-6.8 1.9-1.1 1-1.9 2.3-3.7 2.3z"/><path d="M3.3 18.4c3.4.5 6.4.6 8.8.4 2.4-.3 3.6-2 4.8-3"/><path d="M11.8 18.9l1.6 3.3"/>',
+  economy: '<rect x="4" y="15" width="16" height="5" rx="1.5"/><rect x="6" y="9.5" width="12" height="4.5" rx="1.5"/><rect x="8" y="4.5" width="8" height="4" rx="1.5"/>',
+  factory: '<path d="M3.5 20.5V11l5 3.2V11l5 3.2V4.5h4.5v16z"/><path d="M7 17.5h2.5"/><path d="M12 17.5h2.5"/>',
+  war: '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5"/><path d="M12 16.5v5"/><path d="M2.5 12h5"/><path d="M16.5 12h5"/><circle cx="12" cy="12" r="1.2"/>',
+  fort: '<path d="M12 2.8 19.5 5.4v6c0 4.6-3 7.9-7.5 9.8C7.5 19.3 4.5 16 4.5 11.4v-6z"/><path d="M12 7.6v7.6"/><path d="M8.8 10.6h6.4"/>',
+  merge: '<path d="M6 4l6 7 6-7"/><path d="M12 11v9"/><path d="M8.5 17 12 20.5 15.5 17"/>',
+  rally: '<path d="M8 20.5V3.5"/><path d="M8 4.5l10 3.8L8 12.1z"/><path d="M4 20.5h8"/>',
+};
+function icon(name, x, y, size, color, sw = 1.7) {
+  if (name === 'star') return `<path d="${starPath(x, y, size * .44, size * .19)}" fill="${color}"/>`;
+  const k = size / 24;
+  return `<g transform="translate(${f1(x - 12 * k)} ${f1(y - 12 * k)}) scale(${f1(k * 100) / 100})" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</g>`;
+}
+// A place: a radio of the group "Chapters". `piece` is SVG centred on 0,0; `lbl` the label's side.
+function placeBtn(k, x, y, opt) {
+  const {hit, box, piece, lbl, lw, cls = '', label = true} = opt;
+  const s = sel(), x0 = S(k), demo = state.d;
+  const c = ['place', x0, k === s ? 'sel' : '', demo && k === demoHover() ? 'is-hover' : '', demo && k === s ? 'is-focus' : '', cls].join(' ');
+  const name = P[k].kind === 'adv' || k === 'M' || !opt.num ? esc(P[k].name) : esc(P[k].name);
+  return `<button class="${c}" data-k="${k}" role="radio" aria-checked="${k === s}" tabindex="${k === s ? 0 : -1}" aria-label="${esc(ariaOf(k))}"` +
+    ` style="left:${f1(x)}px;top:${f1(y)}px;--hit:${hit}px;--box:${box}px;${lw ? `--lw:${lw}px` : ''}">` +
+    `<svg viewBox="${-box / 2} ${-box / 2} ${box} ${box}" aria-hidden="true">${piece}</svg>` +
+    (label ? `<span class="lbl ${lbl}" aria-hidden="true"><span class="pl-name">${name}</span><span class="pl-sub">${esc(sub(k))}</span></span>` : '') + '</button>';
+}
+// The detail of the chosen place: the eyebrow, the name, one line; Start (or Replay, Play) and Rules.
+function detailInner(k) {
+  const locked = S(k) === 'locked';
+  const line = locked ? `Opens after ${P[prevOf(k)].name}.` : P[k].line;
+  return `<div class="dt-text dt-swap"><p class="lab">${esc(eyebrow(k))}</p><h2>${esc(P[k].name)}</h2><p class="why">${esc(line)}</p></div>` +
+    `<div class="dt-acts"><button class="btn primary tab" ${locked ? 'aria-disabled="true"' : ''}>${locked ? lockGlyph() + 'Locked' : esc(action(k))}</button><button class="quiet">Rules</button></div>`;
+}
+function topBar() {
+  const demo = state.d ? ' is-hover' : '';
+  return `<header class="top"><button class="brand${state.v === 'campaign' && demo ? '' : ''}" aria-label="Fines Imperii, back to the main menu"><span class="back" aria-hidden="true"></span>Fines Imperii</button>` +
+    `<h1>Tutorial</h1><div class="right"><button class="qm" aria-current="page" aria-label="How to play">?</button><button class="who"><b>EMBER</b><i>Guest</i></button></div></header>`;
+}
+// A smooth road through points (horizontal or vertical easing between them).
+function curveThrough(pts, vertical = false) {
+  let d = `M${f1(pts[0][0])} ${f1(pts[0][1])}`;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    if (vertical) { const my = (ay + by) / 2; d += ` C${f1(ax)} ${f1(my)} ${f1(bx)} ${f1(my)} ${f1(bx)} ${f1(by)}`; }
+    else { const mx = (ax + bx) / 2; d += ` C${f1(mx)} ${f1(ay)} ${f1(mx)} ${f1(by)} ${f1(bx)} ${f1(by)}`; }
+  }
+  return d;
+}
+function pathLen(d) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  return p.getTotalLength();
+}
+// Packets on a walked road: own lozenges that drift along it a few times and stop (less motion: they stand still).
+function packets(d, n, dur, size = 3.6) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const at = (i + .5) / n;
+    if (state.rm) {
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d);
+      const q = p.getPointAtLength(p.getTotalLength() * at);
+      s += `<path d="${loz(q.x, q.y, size)}" fill="#d3e0fb" stroke="#0b1430" stroke-width="1.2"/>`;
+    } else {
+      s += `<path d="${loz(0, 0, size)}" fill="#d3e0fb" stroke="#0b1430" stroke-width="1.2" opacity="0"><animateMotion dur="${dur}s" begin="${f1(.6 + i * dur / n)}s" repeatCount="3" fill="remove" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".37 0 .63 1"/>` +
+        `<set attributeName="opacity" to="1" begin="${f1(.6 + i * dur / n)}s" dur="${f1(dur * 3)}s" fill="remove"/></path>`;
+    }
+  }
+  return s;
+}
+
+// =============================================================================================
+// Variant 1: Campaign. The chapters are places on Narrows, the map of the first match. The own territory grows as
+// chapters are done, the fog hides what is not open yet, the enemy capital (the first match) is the end of the road.
+// The map is the baked background of the pool map with the client's own pieces; the cells are its areas (Voronoi of
+// the nodes, as the client splits a map without a geography file).
+// =============================================================================================
+const NN = [[100,465,'C'],[300,470,'L'],[190,300,'P'],[300,160,'M'],[200,660,'S'],[520,110,'M'],[420,310,'P'],[420,640,'P'],[420,800,'M'],[620,230,'L'],[620,700,'L'],[500,470,'P'],[640,850,'S'],[750,130,'P'],[750,465,'L'],[762,784,'P'],[843,68,'S'],[1007,458,'P'],[865,219,'L'],[898,689,'L'],[1062,135,'M'],[1069,295,'P'],[1097,625,'P'],[991,816,'M'],[1288,289,'S'],[1215,784,'M'],[1328,649,'P'],[1207,474,'L'],[1407,485,'C']];
+const NE = [[0,2],[0,1],[0,4],[2,3],[2,1],[4,1],[3,5],[2,6],[1,6],[1,7],[4,7],[4,8],[5,6],[5,9],[6,9],[6,11],[7,11],[7,10],[8,10],[8,12],[10,12],[11,14],[5,13],[9,13],[28,26],[28,27],[28,24],[26,25],[26,27],[24,27],[25,23],[26,22],[27,22],[27,21],[24,21],[24,20],[23,22],[23,19],[22,19],[22,17],[21,17],[21,18],[20,18],[20,16],[18,16],[17,14],[23,15],[19,15],[9,18],[10,19]];
+// Places: Cairn, Mid Fork, The Narrows, Far Fork, Barrow, Iron Hold (the enemy capital); Advanced: Flintcross, Beaconford.
+const CN = {I: 1, II: 11, III: 14, IV: 17, V: 27, M: 28, A1: 21, A2: 18};
+// The road from Granite Hold, the own capital: each chapter with the places the road passes on the way to it.
+const CROUTE = {I: [0, 1], II: [1, 6, 11], III: [11, 14], IV: [14, 17], V: [17, 22, 27], M: [27, 28], A1: [27, 21], A2: [21, 18]};
+const OWN0 = [0, 2, 3, 4], ENEMY0 = [24, 25, 26, 28];
+let CELLS = null;
+function clipHalf(poly, a, b, c) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const dp = a * p[0] + b * p[1] - c, dq = a * q[0] + b * q[1] - c;
+    if (dp <= 0) out.push(p);
+    if ((dp < 0 && dq > 0) || (dp > 0 && dq < 0)) { const t = dp / (dp - dq); out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]); }
+  }
+  return out;
+}
+function cells() {
+  if (CELLS) return CELLS;
+  const R = [[-40, -40], [1540, -40], [1540, 972], [-40, 972]];
+  CELLS = NN.map((p, i) => {
+    let poly = R;
+    NN.forEach((q, j) => { if (i !== j) { const a = q[0] - p[0], b = q[1] - p[1]; poly = clipHalf(poly, a, b, a * (p[0] + q[0]) / 2 + b * (p[1] + q[1]) / 2); } });
+    return poly;
+  });
+  return CELLS;
+}
+function nearest(x, y) { let best = 0, bd = 1e18; NN.forEach((p, i) => { const d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < bd) { bd = d; best = i; } }); return best; }
+function campaignModel() {
+  const own = new Set(OWN0), enemy = new Set(ENEMY0), walked = [];
+  for (const k of ORDER) if (S(k) === 'done') {
+    CROUTE[k].forEach((n) => { own.add(n); enemy.delete(n); });
+    for (let i = 1; i < CROUTE[k].length; i++) walked.push([CROUTE[k][i - 1], CROUTE[k][i]]);
+  }
+  const vis = new Set(own);
+  NE.forEach(([a, b]) => { if (own.has(a)) vis.add(b); if (own.has(b)) vis.add(a); });
+  for (const k of ORDER) if (S(k) !== 'locked') { vis.add(CN[k]); }
+  vis.add(28);
+  return {own, enemy, vis, walked};
+}
+function campaignGeo() {
+  // world -> screen: the desktop shows the map upright; the phone turns it a quarter clockwise (the march goes down).
+  if (state.w === 'd') { const s = 1280 / 1500; return {m: [s, 0, 0, s, 0, 430 - 465 * s], s, W: 1280, H: 800}; }
+  const s = .43; return {m: [0, s, -s, 0, 396, 31], s, W: 390, H: 844};
+}
+function campaign() {
+  const g = campaignGeo(), [a, b, c, d, e, f] = g.m, phone = state.w === 'p';
+  const pr = (i) => { const [x, y] = NN[i]; return [a * x + c * y + e, b * x + d * y + f]; };
+  const prw = (x, y) => [a * x + c * y + e, b * x + d * y + f];
+  const {own, enemy, vis, walked} = campaignModel(), C = cells();
+  const poly = (pts) => 'M' + pts.map((p) => prw(p[0], p[1]).map(f1).join(' ')).join('L') + 'Z';
+  let s = `<div class="cmap"><svg viewBox="0 0 ${g.W} ${g.H}" aria-hidden="true"><defs>` +
+    `<filter id="fFog" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values=".12"/><feComponentTransfer><feFuncR type="linear" slope=".5" intercept=".035"/><feFuncG type="linear" slope=".5" intercept=".035"/><feFuncB type="linear" slope=".52" intercept=".04"/></feComponentTransfer></filter>` +
+    `<filter id="fBase" color-interpolation-filters="sRGB"><feComponentTransfer><feFuncR type="linear" slope=".86"/><feFuncG type="linear" slope=".86"/><feFuncB type="linear" slope=".86"/></feComponentTransfer></filter>` +
+    `<filter id="fFogEdge" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="${phone ? 5 : 7}"/></filter>` +
+    `<mask id="mFog" maskUnits="userSpaceOnUse" x="0" y="0" width="${g.W}" height="${g.H}"><rect width="${g.W}" height="${g.H}" fill="#000"/><g filter="url(#fFogEdge)">` +
+    NN.map((_, i) => vis.has(i) ? '' : `<path d="${poly(C[i])}" fill="#fff" stroke="#fff" stroke-width="2"/>`).join('') + '</g></mask></defs>';
+  const img = `<image href="${ASSET('narrows.webp')}" width="1500" height="932" preserveAspectRatio="none" transform="matrix(${g.m.map((v) => f1(v * 10000) / 10000).join(' ')})"`;
+  s += `${img} filter="url(#fBase)"/>`;
+  s += `<rect width="${g.W}" height="${g.H}" fill="url(#pEngrave)"/>`;
+  // Roads: own (both ends own) the client's light own road; the rest the neutral dashed road.
+  const isRoute = (x, y) => Object.values(CROUTE).some((r) => r.some((n, i) => i && ((r[i - 1] === x && n === y) || (r[i - 1] === y && n === x))));
+  for (const [x, y] of NE) {
+    const [x1, y1] = pr(x), [x2, y2] = pr(y), dd = `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`;
+    if (own.has(x) && own.has(y)) s += `<path d="${dd}" stroke="#060504" stroke-opacity=".7" stroke-width="5"/><path d="${dd}" stroke="#9fb6ec" stroke-width="2.2"/>`;
+    else if (!isRoute(x, y)) s += `<path d="${dd}" stroke="#060504" stroke-opacity=".55" stroke-width="3.4"/><path d="${dd}" stroke="#cfc4ab" stroke-opacity=".55" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+  }
+  // Pieces of the other places (no names: the map is the setting, the chapters are the subject).
+  const route = new Set(Object.values(CN).concat([0, 6, 22]));
+  NN.forEach(([, , kind], i) => {
+    if (route.has(i)) return;
+    const [x, y] = pr(i), big = kind !== 'P', r = (big ? 7.5 : 5) * (phone ? .9 : 1);
+    const fill = own.has(i) ? 'url(#gOwn)' : enemy.has(i) ? 'url(#gEnemy)' : '#1a1712';
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + 3)}" fill="#060504" fill-opacity=".85"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r + .8)}" fill="none" stroke="#cfc4ab" stroke-opacity=".65" stroke-width="1"/>` +
+      `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r - 1.2)}" fill="${fill}"/>`;
+    if (!own.has(i) && !enemy.has(i) && big) s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="1.8" fill="#cfc4ab" fill-opacity=".7"/>`;
+  });
+  // The fog: the map washed grey and ruled, with a soft edge (the client's haze, ui-style 9.8).
+  s += `<g mask="url(#mFog)">${img} filter="url(#fFog)"/><rect width="${g.W}" height="${g.H}" fill="url(#pFogLines)"/></g>`;
+  // The borders of the own and the enemy territory.
+  const border = (set, col) => {
+    let out = '';
+    for (const i of set) {
+      const pts = C[i];
+      for (let j = 0; j < pts.length; j++) {
+        const p = pts[j], q = pts[(j + 1) % pts.length], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+        const nx = q[1] - p[1], ny = p[0] - q[0], L = Math.hypot(nx, ny) || 1;
+        const tx = mx + nx / L * 3, ty = my + ny / L * 3, tx2 = mx - nx / L * 3, ty2 = my - ny / L * 3;
+        const o1 = nearest(tx, ty), o2 = nearest(tx2, ty2), other = o1 === i ? o2 : o1;
+        if (mx < 0 || my < 0 || mx > 1500 || my > 932 || set.has(other)) continue;
+        const [x1, y1] = prw(p[0], p[1]), [x2, y2] = prw(q[0], q[1]);
+        out += `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`;
+      }
+    }
+    return `<path d="${out}" stroke="${col}" stroke-opacity=".28" stroke-width="9" filter="url(#fGlow)" stroke-linecap="round"/><path d="${out}" stroke="#060504" stroke-opacity=".8" stroke-width="4.6" stroke-linecap="round"/><path d="${out}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`;
+  };
+  s += `<g fill="none">${border(own, '#86a6ea')}${enemy.size ? border(enemy, '#e5785e') : ''}</g>`;
+  // The road of the tutorial: ahead (not walked) a firm ivory dashed road over the fog, walked the own road.
+  const walkedSet = new Set(walked.map(([x, y]) => x + '-' + y));
+  let ahead = '', done = '';
+  for (const k of ORDER) for (let i = 1; i < CROUTE[k].length; i++) {
+    const x = CROUTE[k][i - 1], y = CROUTE[k][i], [x1, y1] = pr(x), [x2, y2] = pr(y);
+    const seg = `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`;
+    if (walkedSet.has(x + '-' + y)) done += seg; else ahead += `<path d="${seg}" stroke="#060504" stroke-opacity=".8" stroke-width="${k[0] === 'A' ? 5.5 : 7}" stroke-linecap="round"/><path d="${seg}" stroke="#ece4d1" stroke-opacity="${S(k) === 'locked' ? .55 : .9}" stroke-width="${k[0] === 'A' ? 1.6 : 2.2}" stroke-dasharray="${k[0] === 'A' ? '5 5' : '8 6'}" stroke-linecap="round"/>`;
+  }
+  s += `<g fill="none">${ahead}</g>`;
+  if (done) {
+    const len = pathLen(done);
+    s += `<g fill="none"><path d="${done}" stroke="#060504" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<path d="${done}" stroke="#8fabeb" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" class="ink-in" style="--len:${f1(len)}"/>` +
+      `<path d="${done}" stroke="#dbe5fb" stroke-opacity=".7" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="ink-in" style="--len:${f1(len)}"/></g>`;
+    for (const [x, y] of walked) { const [x1, y1] = pr(x), [x2, y2] = pr(y); s += packets(`M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`, 1, 2.6, phone ? 3 : 3.6); }
+  }
+  // The places the road passes, and the own capital where it starts.
+  for (const i of [6, 22]) {
+    const [x, y] = pr(i), o = own.has(i);
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="8.5" fill="#060504"/><circle cx="${f1(x)}" cy="${f1(y)}" r="6.4" fill="none" stroke="#ece4d1" stroke-opacity=".75" stroke-width="1.1"/><circle cx="${f1(x)}" cy="${f1(y)}" r="4.2" fill="${o ? 'url(#gOwn)' : '#1a1712'}"/>`;
+  }
+  {
+    const [x, y] = pr(0), r = phone ? 16 : 19;
+    s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r + 5}" fill="#060504"/><circle cx="${f1(x)}" cy="${f1(y)}" r="${r + 1.5}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>` +
+      `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r - 2}" fill="url(#gOwn)"/><path d="${starPath(x, y, r * .55, r * .23)}" fill="#0b1430"/>`;
+  }
+  s += '</svg></div><div class="cshade"></div>';
+  // The chapter places.
+  const LBL = phone
+    ? {I: 'l', II: 'l', III: 'l', IV: 'tl', V: 'bl', M: 'l', A1: 'r', A2: 'r'}
+    : {I: 'b', II: 'b', III: 'b', IV: 't', V: 'br', M: 'b', A1: 't', A2: 'bl'};
+  s += '<div role="radiogroup" aria-label="Chapters">';
+  for (const k of ORDER) {
+    const [x, y] = pr(CN[k]), adv = k[0] === 'A', r = (adv ? 15 : k === 'M' ? 21 : 19) * (phone ? .82 : 1);
+    s += placeBtn(k, x, y, {hit: Math.round(2 * r + 22), box: Math.round(2 * r + 70), piece: mapPiece(k, r, phone ? (k[0] === 'A' ? 'left' : 'right') : (LBL[k] === 't' ? 'down' : 'up')), lbl: LBL[k], cls: 'halo', lw: phone ? (adv ? 92 : 150) : 160});
+  }
+  s += '</div>';
+  if (!phone) {
+    const [x1, y1] = pr(27), [x2, y2] = pr(21);
+    s += `<span class="ctag" style="left:${f1((x1 + x2) / 2 + 30)}px;top:${f1((y1 + y2) / 2 + 2)}px">Advanced</span>`;
+  } else {
+    const [x2, y2] = pr(21);
+    s += `<span class="ctag" style="left:${f1(x2 + 2)}px;top:${f1(y2 + 38)}px">Advanced</span>`;
+  }
+  s += `<section class="plinth stone rule-frame" aria-label="Chosen chapter">${detailInner(sel())}</section>`;
+  return s;
+}
+// A chapter place on the map: the client's city piece (a casing, an ivory ring, a disc in the owner's colour).
+function mapPiece(k, r, pin = 'up') {
+  const x = S(k), done = x === 'done', locked = x === 'locked', m = k === 'M';
+  let s = '';
+  if (x === 'next') s += compass(0, 0, r + 1);
+  s += `<circle r="${r + 5.5}" fill="#060504" fill-opacity="${locked ? .8 : .95}"/>`;
+  s += `<circle class="ring" r="${r + 1.8}" fill="none" stroke="${locked ? '#ada38f' : '#ece4d1'}" stroke-opacity="${locked ? .8 : .95}" stroke-width="${locked ? 1.4 : 1.8}" ${locked ? 'stroke-dasharray="4 4"' : ''}/>`;
+  const fill = m ? (done ? 'url(#gOwn)' : 'url(#gEnemy)') : done ? 'url(#gOwn)' : locked ? '#121009' : 'url(#pHatch)';
+  s += `<circle r="${r - 1.5}" fill="${fill}"/>`;
+  if (!done && !m) s += `<circle r="${r - 1.5}" fill="none" stroke="#060504" stroke-width="1.2"/>`;
+  if (m) s += `<path d="${starPath(0, 0, r * .58, r * .24)}" fill="#0b0a08"/>`;
+  else {
+    const size = (P[k].n.length > 2 ? 15 : 17) * r / 19;
+    if (!done) s += `<text x="0" y="${f1(size * .36)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(size)}" fill="none" stroke="#060504" stroke-width="3.2" stroke-linejoin="round">${P[k].n}</text>`;
+    s += numeral(k, 0, 0, f1(size), done ? '#0b1430' : locked ? '#a39985' : '#ece4d1');
+  }
+  if (done && !m) s += doneMark(r * .78, -r * .78, 6.5);
+  if (locked) s += lockMark(r * .8, -r * .85, '#cfc4ab', .82);
+  s += focusRing(0, 0, r + 10) + pinAt(r, 26, pin);
+  return s;
+}
+
+// =============================================================================================
+// Variant 2: Road. The accepted skeleton, finished in the material of the out-of-game screens: a road cut into the
+// stone, the walked part inlaid with lapis (the own colour), each chapter a medallion set into the road.
+// =============================================================================================
+const RD = {
+  d: {I: [168, 360], II: [352, 294], III: [536, 362], IV: [720, 294], V: [904, 360], M: [1118, 312], A1: [1012, 488], A2: [1176, 472], F: [978, 344]},
+  p: {I: [62, 104], II: [76, 168], III: [62, 232], IV: [76, 296], V: [62, 360], M: [68, 590], A1: [176, 436], A2: [196, 506], F: [64, 384]},
+};
+function groove(dd, w) {
+  return `<path d="${dd}" stroke="#d6c8ac" stroke-opacity=".2" stroke-width="${w + 2}" stroke-linecap="round" transform="translate(0 1.6)"/>` +
+    `<path d="${dd}" stroke="#050403" stroke-width="${w + 2}" stroke-linecap="round"/>` +
+    `<path d="${dd}" stroke="#0f0d0a" stroke-width="${w - 3}" stroke-linecap="round"/>` +
+    `<path d="${dd}" stroke="#050403" stroke-opacity=".9" stroke-width="${f1((w - 3) / 2)}" stroke-linecap="round" transform="translate(0 -${f1((w - 3) / 4)})" filter="url(#fGlow)" opacity=".5"/>` +
+    `<path d="${dd}" stroke="#6d6456" stroke-opacity=".75" stroke-width="1.2" stroke-dasharray="9 8"/>`;
+}
+function inlay(dd, w, len) {
+  return `<path d="${dd}" stroke="#0b1430" stroke-width="${w - 2}" stroke-linecap="round" class="ink-in" style="--len:${f1(len)}"/>` +
+    `<path d="${dd}" stroke="#7f9de0" stroke-width="${w - 4.5}" stroke-linecap="round" class="ink-in" style="--len:${f1(len)}"/>` +
+    `<path d="${dd}" stroke="#c4d4f8" stroke-opacity=".75" stroke-width="1.4" stroke-linecap="round" transform="translate(0 -${f1((w - 6) / 4)})" class="ink-in" style="--len:${f1(len)}"/>`;
+}
+function road() {
+  const phone = state.w === 'p', G = RD[phone ? 'p' : 'd'], W = phone ? 390 : 1280, H = phone ? 844 : 800;
+  const mainKeys = ['I', 'II', 'III', 'IV', 'V', 'M'], vert = phone;
+  const lead = phone ? [[G.I[0], 64], G.I] : [[0, G.I[1] + 26], G.I];
+  const dMain = curveThrough([lead[0], ...mainKeys.map((k) => G[k])].map((p, i) => i === 0 ? p : p), vert);
+  const dSide = curveThrough([G.F, G.A1, G.A2], vert);
+  // the walked part: from the start up to the last done place in a row
+  let lastMain = -1; mainKeys.forEach((k, i) => { if (S(k) === 'done' && lastMain === i - 1) lastMain = i; });
+  const walkedMain = lastMain >= 0 ? curveThrough([lead[0], ...mainKeys.slice(0, lastMain + 1).map((k) => G[k])], vert) : '';
+  const walkedSide = S('A1') === 'done' ? curveThrough([G.F, G.A1].concat(S('A2') === 'done' ? [G.A2] : []), vert) : '';
+  const wm = phone ? 15 : 19, ws = phone ? 11 : 13;
+  let s = `<div class="slab"></div><svg class="road-svg" viewBox="0 0 ${W} ${H}" aria-hidden="true"><g fill="none">`;
+  if (!phone) for (const fy of [176, 596]) {
+    s += `<path d="M48 ${fy}H1232" stroke="#050403"/><path d="M48 ${fy + 1}H1232" stroke="#3d372d"/><path d="M48 ${fy + 4}H1232" stroke="rgb(214 200 172/.15)"/>` +
+      `<path d="${loz(48, fy + 2, 4)}" fill="#8f8573" stroke="#050403"/><path d="${loz(1232, fy + 2, 4)}" fill="#8f8573" stroke="#050403"/>`;
+  }
+  s += groove(dSide, ws) + groove(dMain, wm);
+  if (walkedMain) s += inlay(walkedMain, wm, pathLen(walkedMain)) + packets(walkedMain, phone ? 3 : 5, phone ? 3.4 : 5.2, phone ? 3.4 : 4);
+  if (walkedSide) s += inlay(walkedSide, ws, pathLen(walkedSide));
+  // The fork: a cut lozenge where the side road leaves.
+  s += `<path d="${loz(G.F[0], G.F[1], 7)}" fill="#cfc4ab" stroke="#050403" stroke-width="1.6"/>`;
+  s += '</g></svg>';
+  s += phone ? `<span class="rtag" style="left:${G.A1[0] - 30}px;top:${G.A1[1] - 50}px">Advanced</span>`
+    : `<span class="rtag" style="left:${G.F[0] + 30}px;top:${G.F[1] + 64}px">Advanced</span>`;
+  const LBL = phone ? {I: 'r', II: 'r', III: 'r', IV: 'r', V: 'r', M: 'r', A1: 'r', A2: 'r'} : {I: 'b', II: 't', III: 'b', IV: 't', V: 'b', M: 't', A1: 'b', A2: 'b'};
+  s += '<div role="radiogroup" aria-label="Chapters">';
+  for (const k of ORDER) {
+    const [x, y] = G[k], adv = k[0] === 'A', r = (adv ? 21 : k === 'M' ? 29 : 27) * (phone ? .78 : 1);
+    s += placeBtn(k, x, y, {hit: Math.round(2 * r + 24), box: Math.round(2 * r + 80), piece: medallion(k, r, phone ? 'left' : LBL[k] === 't' ? 'down' : 'up'), lbl: LBL[k], lw: phone ? 230 : 230});
+  }
+  s += '</div>';
+  s += `<section class="plinth stone rule-frame" aria-label="Chosen chapter">${detailInner(sel())}</section>`;
+  return s;
+}
+// A medallion set into the stone: a cut seat, a bevelled rim, a face; lapis when done, minium for the enemy capital.
+function medallion(k, r, pin = 'up') {
+  const x = S(k), done = x === 'done', locked = x === 'locked', m = k === 'M';
+  let s = '';
+  if (x === 'next') s += compass(0, 0, r + 4);
+  s += `<circle r="${r + 7}" fill="#d6c8ac" fill-opacity=".16" transform="translate(0 1.4)"/><circle r="${r + 7}" fill="url(#gHole)"/><circle r="${r + 7}" fill="none" stroke="url(#gRim)" stroke-width="1.6"/>`;
+  if (locked) {
+    s += `<circle class="ring" r="${r}" fill="none" stroke="#8f8573" stroke-opacity=".9" stroke-width="1.4" stroke-dasharray="4 4.5"/>`;
+    if (m) s += `<path d="${starPath(0, 0, r * .55, r * .23)}" fill="#3b352c"/>`;
+    else s += `<text x="0" y="${f1(r * .3 + 1)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(r * .78)}" fill="#050403" transform="translate(0 -1)">${P[k].n}</text>` +
+      `<text x="0" y="${f1(r * .3 + 1)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(r * .78)}" fill="#8f8573">${P[k].n}</text>`;
+    s += lockMark(r * .82, -r * .82, '#cfc4ab', .9);
+  } else {
+    s += `<circle r="${r + 1}" fill="#050403"/><circle r="${r}" fill="url(#gSeal)"/><circle r="${r}" fill="none" stroke="url(#gBevel)" stroke-width="2.4"/>`;
+    s += `<circle class="ring" r="${r - 3.2}" fill="none" stroke="#ece4d1" stroke-opacity="${x === 'next' ? 1 : .72}" stroke-width="1.3"/>`;
+    if (done || m) {
+      s += `<circle r="${r - 6}" fill="${done ? 'url(#gLapis)' : 'url(#gMinium)'}"/><circle r="${r - 6}" fill="none" stroke="#050403" stroke-opacity=".7" stroke-width="1.2"/>` +
+        `<ellipse cx="${f1(-r * .22)}" cy="${f1(-r * .3)}" rx="${f1(r * .38)}" ry="${f1(r * .2)}" fill="#fff" fill-opacity=".16" transform="rotate(-28)"/>`;
+    }
+    if (m) s += `<path d="${starPath(0, 1, r * .52, r * .22)}" fill="#0b0a08"/>`;
+    else {
+      const size = r * (P[k].n.length > 2 ? .66 : .78);
+      if (done) s += `<text x="0" y="${f1(size * .36 + .8)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(size)}" fill="#d9e4fb" fill-opacity=".55">${P[k].n}</text>`;
+      s += numeral(k, 0, 0, f1(size), done ? '#0b1430' : '#ece4d1');
+    }
+    if (done && !m) s += doneMark(r * .76, -r * .76, 7);
+  }
+  s += focusRing(0, 0, r + 12) + pinAt(r, 30, pin);
+  return s;
+}
+
+// =============================================================================================
+// Variant 3: March. The road runs down a column of rows (a plain list of the chapters); beside it the chosen chapter's
+// own map, as the client draws it at the start of the chapter, with Start under it.
+// =============================================================================================
+function march() {
+  const phone = state.w === 'p', k0 = sel();
+  const pcw = phone ? 56 : 72, rh = phone ? 54 : 60;
+  const xs = (k) => k[0] === 'A' ? pcw + (phone ? 26 : 34) : 0;
+  // rows: the main road, the side road after V, the first match at the end of the main road
+  const order = ['I', 'II', 'III', 'IV', 'V', 'A1', 'A2', 'M'];
+  const gap = phone ? 0 : 6, exp = phone ? 300 : 0;
+  const ys = {}; let y = phone ? 4 : 10;
+  for (const k of order) { ys[k] = y; y += rh + gap + (phone && k === k0 ? exp : 0); }
+  const cx = (k) => xs(k) + pcw / 2, cy = (k) => ys[k] + rh / 2;
+  // the rail: the main road through I..V to M, the side road from V
+  const main = ['I', 'II', 'III', 'IV', 'V', 'M'];
+  const ptsMain = main.map((k) => [cx(k), cy(k)]);
+  const dMain = `M${cx('I')} ${cy('I') - (phone ? 18 : 24)}` + ptsMain.map((p) => `L${p[0]} ${p[1]}`).join('');
+  const fy = cy('V') + (phone ? 18 : 22);
+  const dSide = `M${cx('V')} ${fy}C${cx('V')} ${fy + 14} ${cx('A1')} ${cy('A1') - 22} ${cx('A1')} ${cy('A1')}L${cx('A2')} ${cy('A2')}`;
+  let lastMain = -1; main.forEach((k, i) => { if (S(k) === 'done' && lastMain === i - 1) lastMain = i; });
+  const walked = lastMain >= 0 ? `M${cx('I')} ${cy('I') - (phone ? 18 : 24)}` + ptsMain.slice(0, lastMain + 1).map((p) => `L${p[0]} ${p[1]}`).join('') : '';
+  const walkedSide = S('A1') === 'done' ? `M${cx('V')} ${fy}C${cx('V')} ${fy + 14} ${cx('A1')} ${cy('A1') - 22} ${cx('A1')} ${cy('A1')}` + (S('A2') === 'done' ? `L${cx('A2')} ${cy('A2')}` : '') : '';
+  const H = y + 40;
+  let rail = `<svg width="${pcw + 80}" height="${H}" viewBox="0 0 ${pcw + 80} ${H}" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round">`;
+  const roadPath = (dd, w, own) => own
+    ? `<path d="${dd}" stroke="#060504" stroke-width="${w + 5}"/><path d="${dd}" stroke="#8fabeb" stroke-width="${w}" class="ink-in" style="--len:${f1(pathLen(dd))}"/><path d="${dd}" stroke="#dbe5fb" stroke-opacity=".7" stroke-width="1.1" class="ink-in" style="--len:${f1(pathLen(dd))}"/>`
+    : `<path d="${dd}" stroke="#060504" stroke-opacity=".9" stroke-width="${w + 4}"/><path d="${dd}" stroke="#cfc4ab" stroke-opacity=".75" stroke-width="${w * .55}" stroke-dasharray="7 6"/>`;
+  rail += roadPath(dSide, 2.6, false) + roadPath(dMain, 3.6, false);
+  if (walked) rail += roadPath(walked, 3.6, true) + packets(walked, 3, 3.6, 3.2);
+  if (walkedSide) rail += roadPath(walkedSide, 2.6, true);
+  rail += `<path d="${loz(cx('V'), fy, 5.5)}" fill="#cfc4ab" stroke="#060504" stroke-width="1.4"/></g></svg>`;
+  let s = `<div class="mcol" style="--pcw:${pcw}px">${rail}`, panel = '';
+  s += `<span class="mtag" style="left:${cx('A1') + (phone ? 20 : 26)}px;top:${fy + (phone ? 4 : 6)}px">Advanced</span>`;
+  s += '<div role="radiogroup" aria-label="Chapters">';
+  for (const k of order) {
+    const x0 = S(k), r = (k[0] === 'A' ? 13 : k === 'M' ? 17 : 16) * (phone ? .9 : 1), demo = state.d;
+    const c = ['row', x0, k === k0 ? 'sel' : '', demo && k === demoHover() ? 'is-hover' : '', demo && k === k0 ? 'is-focus' : ''].join(' ');
+    const piece = mapPiece(k, r).replace(/<g class="pin">[\s\S]*$/, '');
+    s += `<button class="${c}" data-k="${k}" role="radio" aria-checked="${k === k0}" tabindex="${k === k0 ? 0 : -1}" aria-label="${esc(ariaOf(k))}" style="top:${ys[k]}px;left:${xs(k)}px;height:${rh}px">` +
+      `<span class="pc"><svg viewBox="-42 -42 84 84" aria-hidden="true">${piece}</svg></span><span class="tx" aria-hidden="true"><span class="pl-name">${esc(P[k].name)}</span><span class="pl-sub">${esc(sub(k))}</span></span><span class="chev" aria-hidden="true"></span></button>`;
+    if (phone && k === k0) panel = `<div class="mexp" style="top:${ys[k] + rh + 2}px;left:${xs(k) + pcw - 6}px">${marchPic(k)}<div class="dt">${detailInner(k)}</div></div>`;
+  }
+  s += '</div>' + panel + '</div>';
+  if (!phone) s += `<div class="mview">${marchPic(k0)}<div class="dt">${detailInner(k0)}</div></div>`;
+  return s;
+}
+function marchPic(k) {
+  const x = S(k);
+  let s = `<div class="mpic ${x}"><img class="swap" alt="The map of ${esc(P[k].name)}" src="${ASSET(`ch-${k}.webp`)}">`;
+  if (x === 'locked') s += `<div class="veil"></div><div class="lockplate">${lockGlyph()}After ${prevOf(k)}</div>`;
+  if (x === 'done') s += sealSvg(k, 'seal');
+  return s + '</div>';
+}
+// The Seal of the result screen (ui-style 77): a lozenge with the chapter numeral; the Advanced ones read "ADV".
+function sealSvg(k, cls) {
+  const adv = k[0] === 'A', m = k === 'M';
+  const text = m ? `<path d="${starPath(46, 47, 16, 6.8)}" fill="#ece4d1"/>` : !adv
+    ? `<text x="46" y="${P[k].n.length > 2 ? 53.5 : 54}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${P[k].n.length > 2 ? 20 : 23}" letter-spacing="1" fill="#ece4d1">${P[k].n}</text>`
+    : `<text x="46" y="40" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="8.5" letter-spacing="2.2" fill="#cfc4ab">ADV</text><path d="M37 44.5H55" stroke="rgb(236 228 209/.45)" stroke-width="1"/><text x="46" y="61" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="19" letter-spacing="1" fill="#ece4d1">${P[k].n}</text>`;
+  return `<svg class="${cls}" viewBox="0 0 92 92" aria-hidden="true"><path d="${loz(46, 46, 44)}" fill="url(#gSeal)" stroke="#050403" stroke-width="2"/>` +
+    `<path d="${loz(46, 46, 41)}" fill="none" stroke="rgb(214 200 172/.38)" stroke-width="1"/><path d="${loz(46, 46, 34)}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>` +
+    `<path d="${loz(46, 46, 30)}" fill="none" stroke="rgb(236 228 209/.25)" stroke-width="1"/>${text}</svg>`;
+}
+
+// =============================================================================================
+// Variant 4: Charter. A stone sheet of seals: each chapter's seal (the Seal of the result screen) with its emblem from
+// the client's menu icons; an empty seat until the chapter opens, pressed in ivory once it is done.
+// =============================================================================================
+const CH4 = {
+  d: {I: [150, 172], II: [322, 172], III: [494, 172], IV: [666, 172], V: [838, 172], M: [1020, 172], A1: [929, 394], A2: [1084, 394], F: [929, 172]},
+  p: {I: [70, 88], II: [185, 88], III: [300, 88], IV: [300, 272], V: [185, 272], M: [70, 272], A1: [185, 448], A2: [300, 448], F: [128, 272]},
+};
+function charter() {
+  const phone = state.w === 'p', G = CH4[phone ? 'p' : 'd'];
+  const sw = phone ? 370 : 1168, sh = phone ? 770 : 680;
+  let s = `<section class="sheet stone rule-frame"><svg viewBox="0 0 ${sw} ${sh}" aria-hidden="true"><g fill="none">`;
+  // The ruled line the seals hang on: the main road through I..V to the first match, the side road from it after V.
+  const mp = ['I', 'II', 'III', 'IV', 'V', 'M'].map((k) => G[k]);
+  const dMain = phone
+    ? `M${mp[0][0] - 44} ${mp[0][1]}L${mp[2][0]} ${mp[2][1]}C${mp[2][0] + 70} ${mp[2][1]} ${mp[3][0] + 70} ${mp[3][1]} ${mp[3][0]} ${mp[3][1]}L${mp[5][0]} ${mp[5][1]}`
+    : `M${mp[0][0] - 92} ${mp[0][1]}L${mp[5][0]} ${mp[5][1]}`;
+  const dSide = phone ? `M${G.F[0]} ${G.F[1]}L${G.F[0]} ${G.A1[1]}L${G.A2[0]} ${G.A2[1]}` : `M${G.F[0]} ${G.F[1]}L${G.A1[0]} ${G.A1[1]}L${G.A2[0]} ${G.A2[1]}`;
+  const rule = (dd, faint) => `<path d="${dd}" stroke="#050403" stroke-width="3"/><path d="${dd}" stroke="${faint ? 'rgb(214 200 172/.2)' : 'rgb(214 200 172/.42)'}" stroke-width="1" ${faint ? 'stroke-dasharray="4 5"' : ''} transform="translate(0 1.6)"/>`;
+  s += rule(dSide, S('A1') === 'locked') + rule(dMain, false);
+  s += `<path d="${loz(G.F[0], G.F[1], 6)}" fill="#8f8573" stroke="#050403" stroke-width="1.3"/>`;
+  if (!phone) s += `<path d="${loz(mp[0][0] - 92, mp[0][1], 4.5)}" fill="#8f8573" stroke="#050403" stroke-width="1.2"/>`;
+  s += '</g></svg>';
+  s += '<div role="radiogroup" aria-label="Chapters">';
+  for (const k of ORDER) {
+    const [x, y] = G[k], adv = k[0] === 'A', R = phone ? (adv ? 31 : k === 'M' ? 44 : 41) : (adv ? 46 : k === 'M' ? 66 : 62);
+    s += placeBtn(k, x, y, {hit: Math.round(2 * R + 6), box: Math.round(2 * R + 80), piece: seatSeal(k, R), lbl: 'b', lw: phone ? 108 : 150, cls: 'lo'});
+  }
+  s += '</div>';
+  s += phone ? `<span class="rtag" style="left:22px;top:${G.A1[1] - 5}px">Advanced</span>`
+    : `<span class="rtag" style="left:${G.A1[0] - 170}px;top:${G.A1[1] - 5}px">Advanced</span>`;
+  s += `<div class="dt">${detailInner(sel())}</div></section>`;
+  return s;
+}
+function sealNum(k, R, c) {
+  if (k === 'M') return '';
+  const n = (k[0] === 'A' ? 'A·' : '') + P[k].n;
+  return `<text x="0" y="${f1(R * .5)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(Math.max(9, R * .2))}" letter-spacing="1" fill="${c}">${n}</text>`;
+}
+function seatSeal(k, R) {
+  const x = S(k), done = x === 'done', locked = x === 'locked', m = k === 'M';
+  let s = '';
+  if (x === 'next') s += `<g transform="scale(1)">${compass(0, 0, R * .78)}</g>`;
+  // the seat: a lozenge cut into the sheet
+  s += `<path d="${loz(0, 1.5, R)}" fill="#d6c8ac" fill-opacity=".14"/><path d="${loz(0, 0, R)}" fill="url(#gHole)"/><path d="${loz(0, 0, R)}" fill="none" stroke="url(#gRim)" stroke-width="1.6"/>`;
+  if (locked) {
+    s += `<path class="ring" d="${loz(0, 0, R * .78)}" fill="none" stroke="#8f8573" stroke-opacity=".85" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+    s += icon(P[k].icon, 0, -R * .1, R * .56, '#736a5a') + sealNum(k, R, '#7d7363');
+    s += lockMark(R * .5, -R * .5, '#cfc4ab', .9);
+  } else {
+    const inset = R - 4;
+    s += `<g class="seal-face ${done && !state.rm ? 'stamp' : ''}" style="${done ? `animation-delay:${f1(.15 + ORDER.indexOf(k) * .12)}s` : ''}">`;
+    s += `<path d="${loz(0, 3, inset)}" fill="#000" fill-opacity=".45" filter="url(#fGlow)"/>`;
+    if (done) {
+      s += `<path d="${loz(0, 0, inset)}" fill="url(#gIvory)" stroke="#050403" stroke-width="2"/><path d="${loz(0, 0, inset - 4)}" fill="none" stroke="#7d7363" stroke-width="1"/>` +
+        `<path class="ring" d="${loz(0, 0, inset * .78)}" fill="none" stroke="#16130f" stroke-width="1.6"/><path d="${loz(0, 0, inset * .7)}" fill="none" stroke="#16130f" stroke-opacity=".35" stroke-width="1"/>`;
+      s += icon(P[k].icon, 0, -R * .1, R * .56, '#16130f', 1.9) + sealNum(k, R, '#3d372d');
+    } else {
+      const rim = m ? '#e5785e' : '#ece4d1';
+      s += `<path d="${loz(0, 0, inset)}" fill="url(#gSeal)" stroke="#050403" stroke-width="2"/><path d="${loz(0, 0, inset - 3)}" fill="none" stroke="rgb(214 200 172/.38)" stroke-width="1"/>` +
+        `<path class="ring" d="${loz(0, 0, inset * .78)}" fill="none" stroke="${rim}" stroke-opacity="${x === 'next' ? 1 : .8}" stroke-width="1.6"/><path d="${loz(0, 0, inset * .7)}" fill="none" stroke="rgb(236 228 209/.22)" stroke-width="1"/>`;
+      s += icon(P[k].icon, 0, -R * .1, R * .56, m ? '#e5785e' : '#ece4d1', 1.7) + sealNum(k, R, '#ada38f');
+    }
+    s += '</g>';
+  }
+  // the numeral under the seal's lower point, on the sheet
+  if (done) s += doneMark(R * .52, -R * .52, 7.5);
+  s += `<g class="fr"><path d="${loz(0, 0, R + 9)}" fill="none" stroke="#060504" stroke-width="5"/><path d="${loz(0, 0, R + 9)}" fill="none" stroke="#ece4d1" stroke-width="2"/></g>` + pinAt(R, 22, 'up');
+  return s;
+}
+
+// =============================================================================================
+// Current: the accepted Road as the walkthrough draws it today (tutorial-walkthrough.html, R.1 to R.3), for comparison.
+// =============================================================================================
+const ROAD0 = {I: [150, 150], II: [330, 108], III: [510, 158], IV: [690, 112], V: [870, 156], M: [1130, 118], A1: [1010, 312], A2: [1180, 300]};
+const FORK0 = [959, 148];
+function current() {
+  const st = STATES[state.s], c = sel();
+  const curve = (pts, from) => { let d = from; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], mx = (ax + bx) / 2; d += ` C${mx} ${ay} ${mx} ${by} ${bx} ${by}`; } return d; };
+  const mainPts = ['I', 'II', 'III', 'IV', 'V', 'M'].map((kk) => ROAD0[kk]);
+  const start = `M${ROAD0.I[0] - 150} ${ROAD0.I[1] + 40} C${ROAD0.I[0] - 80} ${ROAD0.I[1] + 30} ${ROAD0.I[0] - 50} ${ROAD0.I[1]} ${ROAD0.I[0]} ${ROAD0.I[1]}`;
+  const dMain = curve(mainPts, start), dSide = curve([FORK0, ROAD0.A1, ROAD0.A2], `M${FORK0[0]} ${FORK0[1]}`);
+  const walkedMain = ['I', 'II', 'III', 'IV', 'V', 'M'].filter((kk, i, a) => st[kk] === 'done' && (i === 0 || st[a[i - 1]] === 'done'));
+  const walkedSide = st.A1 === 'done' ? [FORK0, ROAD0.A1].concat(st.A2 === 'done' ? [ROAD0.A2] : []) : [];
+  let s = `<img class="bg" alt="" src="${ASSET('menu.webp')}"><div class="blurstone"></div>`;
+  s += `<section class="selpage"><p class="lab">How to play</p><p style="margin:10px 0 6px;font:500 46px/1.05 var(--font-display);letter-spacing:.05em">Tutorial</p><p class="why">Five short chapters, then your first match against an easy bot. You can start the match at any time.</p></section>`;
+  s += '<div class="road"><svg viewBox="0 0 1280 430" role="radiogroup" aria-label="Chapters">';
+  s += `<path d="${dMain}" fill="none" stroke="#060504" stroke-width="13" stroke-linecap="round"/><path d="${dMain}" fill="none" stroke="#7d7363" stroke-width="4" stroke-dasharray="12 10" stroke-linecap="round"/>`;
+  s += `<path d="${dSide}" fill="none" stroke="#060504" stroke-width="9" stroke-linecap="round"/><path d="${dSide}" fill="none" stroke="#7d7363" stroke-width="2.6" stroke-dasharray="7 8" stroke-linecap="round"/>`;
+  if (walkedMain.length) s += `<path d="${curve(walkedMain.map((kk) => ROAD0[kk]), start)}" fill="none" stroke="#86a6ea" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>`;
+  if (walkedSide.length > 1) s += `<path d="${curve(walkedSide, `M${FORK0[0]} ${FORK0[1]}`)}" fill="none" stroke="#86a6ea" stroke-opacity=".9" stroke-width="2.6" stroke-linecap="round"/>`;
+  s += `<path d="${loz(FORK0[0], FORK0[1], 6)}" fill="#cfc4ab" stroke="#060504" stroke-width="1.4"/><text class="rfork" x="1006" y="238">Advanced · optional</text>`;
+  const info = {I: 'I · Units and movement', II: 'II · Map and economy', III: 'III · Building', IV: 'IV · Attack and fight', V: 'V · Defence', M: 'First match', A1: 'Group orders', A2: 'Rally points'};
+  const subOf = (kk) => { const x = st[kk]; if (kk === 'M') return x === 'done' ? 'Played' : 'Easy bot · Narrows'; if (x === 'done') return 'Done'; if (x === 'next') return 'Next'; if (x === 'locked') return kk[0] === 'A' ? 'After V' : 'After ' + MAIN[MAIN.indexOf(kk) - 1]; return kk[0] === 'A' ? 'Optional' : 'About a minute'; };
+  for (const kk of ORDER) {
+    const [x, y] = ROAD0[kk], status = st[kk], capital = kk === 'M', small = kk[0] === 'A', locked = status === 'locked';
+    const R = small ? .82 : 1, sb = subOf(kk);
+    s += `<g class="rnode ${locked ? 'rlock' : ''}" data-k="${kk}" tabindex="${kk === c ? 0 : -1}" role="radio" aria-checked="${kk === c}" aria-label="${info[kk]}, ${sb}">`;
+    if (status === 'next') s += `<circle cx="${x}" cy="${y}" r="${40 * R}" fill="none" stroke="#ece4d1" stroke-width="2" class="pulse"/>`;
+    s += `<circle class="focusring" cx="${x}" cy="${y}" r="${48 * R}" fill="none" stroke="#ece4d1" stroke-width="2" ${state.d && kk === c ? 'style="opacity:1"' : ''}/>`;
+    s += `<circle cx="${x}" cy="${y}" r="${36 * R}" fill="#060504"/>`;
+    const hot = status === 'next' || kk === c;
+    s += `<circle cx="${x}" cy="${y}" r="${32 * R}" fill="none" stroke="${hot ? '#ece4d1' : '#cfc4ab'}" stroke-opacity="${hot ? 1 : .7}" stroke-width="${hot ? 2.4 : 2}" ${locked ? 'stroke-dasharray="4 5"' : ''}/>`;
+    s += `<circle cx="${x}" cy="${y}" r="${29 * R}" fill="none" stroke="rgb(214 200 172/.2)" stroke-width="1"/>`;
+    const fill = status === 'done' ? '#86a6ea' : capital ? '#e5785e' : '#221e18';
+    s += `<circle cx="${x}" cy="${y}" r="${25 * R}" fill="${fill}" ${status === 'next' ? 'stroke="#7d7363" stroke-width="1.5"' : ''}/>`;
+    if (capital) s += `<path d="${starPath(x, y, 13, 5.4)}" fill="#060504"/>`;
+    else { const label = small ? P[kk].n : kk; s += `<text x="${x}" y="${y + (small ? 6 : 7)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${small ? 15 : label.length > 2 ? 17 : 19}" fill="${status === 'done' ? '#0b0d14' : locked ? '#ada38f' : '#ece4d1'}">${label}</text>`; }
+    if (status === 'done') s += `<path d="${loz(x + 25 * R, y - 25 * R, 7)}" fill="#ece4d1" stroke="#060504" stroke-width="1.4"/><path d="M${x + 25 * R - 3.5} ${y - 25 * R}l2.4 2.6 4.6-5" fill="none" stroke="#060504" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if (locked) s += `<path d="M${x + 25 - 6} ${y - 26 - 1}h12v10h-12z" fill="#7d7363" stroke="#060504" stroke-width="1.2"/><path d="M${x + 25 - 3.5} ${y - 26 - 1}v-3.5a3.5 3.5 0 0 1 7 0v3.5" fill="none" stroke="#7d7363" stroke-width="2"/>`;
+    const below = small ? 58 : 70;
+    s += `<text class="rtitle" x="${x}" y="${y + below}" text-anchor="middle">${info[kk]}</text><text class="rsub" x="${x}" y="${y + below + 23}" text-anchor="middle">${sb}</text></g>`;
+  }
+  s += '</svg></div>';
+  const kc = P[c].kind === 'main' ? `Chapter ${P[c].n} of V` : P[c].kind === 'adv' ? `Advanced ${P[c].n} of II · optional` : 'Easy bot · Narrows';
+  s += `<section class="foot stone rule-frame"><div><p class="lab">${kc}</p><h2>${esc(P[c].name)}</h2><p class="why">${esc(P[c].line)}</p></div>` +
+    `<div class="right"><button class="btn primary tab">Start</button><div class="quiets"><button class="quiet">Play your first match</button><button class="quiet">Rules</button></div></div></section>`;
+  return s;
+}
+
+// =============================================================================================
+// The table of variants (also in issue #806).
+// =============================================================================================
+const CMP = `<p class="lab">Tutorial chapter select · round 1</p><h2 id="cmpTtl">The variants</h2>
+<button class="quiet x" id="cmpX">Close</button>
+<table><thead><tr><th>Variant</th><th>The idea</th><th>Does well</th><th>Risk</th><th>Client cost</th><th>New art</th></tr></thead><tbody>
+<tr><td>Campaign</td><td>The chapters are places on Narrows, the map of the first match. Done chapters are your territory, closed ones lie in the fog, the enemy capital is the first match.</td><td>Speaks the game's own language before the first match; locked reads as fog, progress as territory; the goal is the real enemy capital.</td><td>The busiest screen; names must keep clear of real roads; the phone turns the map a quarter.</td><td>M, about 3 days: a still map view with the menu map's renderer (ownership and fog from the progress), the label places per width, the plinth.</td><td>None: the baked Narrows background and the client's pieces.</td></tr>
+<tr><td>Road</td><td>The accepted Road, finished: a road cut into the stone, the walked part inlaid with lapis, each chapter a medallion set into it.</td><td>Closest to what was accepted; the clearest order; calm; the same plinth as the main screen.</td><td>The least new; an abstract road says little about the game itself.</td><td>S, about 1.5 days: one SVG and the plinth; a column on a phone.</td><td>None.</td></tr>
+<tr><td>March</td><td>A column of rows down a road, beside a large view of the chosen chapter's own map.</td><td>Shows what you will play; a plain list (keyboard, screen readers); the phone is the same list, the chosen row opens.</td><td>Less of a journey; one picture per chapter to keep in step with the chapter maps.</td><td>S to M, about 2 days: a list and a picture; the pictures from the chapter maps' bake (map card) or from <code>shots</code>.</td><td>8 pictures, made by the existing bake, nothing drawn.</td></tr>
+<tr><td>Charter</td><td>A sheet of seals: a chapter's seat is empty until it opens, and its seal is pressed in when it is done.</td><td>Ties to the Seal of the result screen; a collection that fills up; strong emblems.</td><td>The way to the first match reads weaker; the emblems must be learned.</td><td>S, about 1 day: the Seal piece and the client's menu icons.</td><td>None: the menu icons of the client.</td></tr>
+<tr><td>Current</td><td>The Road as accepted on 2026-11-13 (walkthrough R.1 to R.3).</td><td>Already specified.</td><td>Flat rings on a blurred screen; no phone layout.</td><td>S.</td><td>None.</td></tr>
+</tbody></table>
+<p class="rec"><b>Recommendation: Campaign.</b> It keeps the Road's skeleton (a road from your capital to theirs, a side road after V) and puts it on the map the player is about to play, so the select screen already teaches the map: your territory, the fog, the enemy capital. Every state is told by the game's own marks, never by colour alone (the check, the lock, the Compass, the dashed ring). The price is one still map view; the risk is legibility, which the plinth and the halo of the names handle at both widths. If a lighter build is wanted first, <b>March</b> is the safe second: the cheapest, the best on a phone and for assistive technology, and it can later take Campaign's map as its picture.</p>`;
+
+// =============================================================================================
+// The shell.
+// =============================================================================================
+function render() {
+  const art = document.getElementById('art'), phone = state.w === 'p';
+  art.classList.toggle('phone', phone);
+  const focusIn = art.contains(document.activeElement) && document.activeElement.dataset.k;
+  let html = '';
+  if (state.v === 'current') {
+    const inner = current();
+    html = phone ? `<div class="cur shrunk" style="transform:scale(${390 / 1280});top:${(844 - 800 * 390 / 1280) / 2}px">${inner}</div>` : `<div class="cur" style="position:absolute;inset:0">${inner}</div>`;
+  } else {
+    const body = state.v === 'campaign' ? campaign() : state.v === 'road' ? road() : state.v === 'march' ? march() : charter();
+    html = topBar() + body;
+  }
+  art.innerHTML = html;
+  if (focusIn) { const el = art.querySelector(`[data-k="${sel()}"]`); if (el) el.focus(); }
+}
+function button(label, pressed, on) {
+  const b = document.createElement('button');
+  b.className = 'ch'; b.setAttribute('aria-pressed', String(pressed)); b.innerHTML = label; b.onclick = on;
+  return b;
+}
+function buildBar() {
+  const vs = document.getElementById('vs'); vs.innerHTML = '';
+  VARIANTS.forEach((v, i) => vs.append(button(`<span class="n">${i < 4 ? i + 1 : '·'}</span>${esc(v.name)}`, v.id === state.v, () => { state.v = v.id; update(); })));
+  const ss = document.getElementById('ss'); ss.innerHTML = '';
+  STAGES.forEach((t) => ss.append(button(esc(t.name), t.id === state.s, () => { state.s = t.id; state.sel = null; update(); })));
+  const ws = document.getElementById('ws'); ws.innerHTML = '';
+  [['d', 'Desktop'], ['p', 'Phone']].forEach(([id, n]) => ws.append(button(n, state.w === id, () => { state.w = id; update(); })));
+  document.getElementById('dBtn').setAttribute('aria-pressed', String(state.d));
+  document.getElementById('rmBtn').setAttribute('aria-pressed', String(state.rm));
+  document.getElementById('gBtn').setAttribute('aria-pressed', String(state.g));
+}
+function fit() {
+  const view = document.getElementById('view'), stage = document.getElementById('stage');
+  const W = state.w === 'p' ? 390 : 1280, H = state.w === 'p' ? 844 : 800;
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  const k = Math.min((view.clientWidth - 24) / W, (view.clientHeight - 24) / H, state.w === 'p' ? 1.1 : 1.25);
+  stage.style.left = ((view.clientWidth - W * k) / 2) + 'px'; stage.style.top = ((view.clientHeight - H * k) / 2) + 'px';
+  stage.style.transform = `scale(${k})`;
+}
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (VARIANTS.some((v) => v.id === p.get('v'))) state.v = p.get('v');
+  if (STAGES.some((t) => t.id === p.get('s'))) state.s = p.get('s');
+  state.w = p.get('w') === 'p' ? 'p' : 'd';
+  state.sel = ORDER.includes(p.get('sel')) ? p.get('sel') : null;
+  state.rm = p.get('rm') === '1' || (!p.has('rm') && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  state.g = p.get('g') === '1';
+  state.d = p.get('d') === '1';
+  state.c = p.get('c') === '1';
+}
+function writeHash() {
+  const p = new URLSearchParams({v: state.v, s: state.s, w: state.w});
+  if (state.sel) p.set('sel', state.sel);
+  if (state.rm) p.set('rm', '1');
+  if (state.g) p.set('g', '1');
+  if (state.d) p.set('d', '1');
+  if (state.c) p.set('c', '1');
+  history.replaceState(null, '', '#' + p.toString());
+}
+function showCmp() {
+  const cmp = document.getElementById('cmp');
+  cmp.classList.toggle('open', state.c);
+  if (state.c) { document.getElementById('cmpBox').innerHTML = CMP; document.getElementById('cmpX').onclick = () => { state.c = false; update(); document.getElementById('cmpBtn').focus(); }; document.getElementById('cmpX').focus(); }
+}
+function update() {
+  document.documentElement.classList.toggle('rm', state.rm);
+  document.documentElement.classList.toggle('gray', state.g);
+  writeHash(); buildBar(); fit(); render(); showCmp();
+}
+// Choosing a place: a click, or the arrow keys inside the group (a radio group: arrows move and choose).
+document.getElementById('art').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-k]');
+  if (!el) return;
+  state.sel = el.dataset.k; writeHash(); render();
+  const again = document.querySelector(`#art [data-k="${state.sel}"]`); if (again) again.focus();
+});
+document.getElementById('art').addEventListener('keydown', (e) => {
+  const el = e.target.closest('[data-k]');
+  if (!el) return;
+  const step = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
+  if (!step && e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  const nav = state.v === 'march' ? ['I', 'II', 'III', 'IV', 'V', 'A1', 'A2', 'M'] : ORDER, i = nav.indexOf(el.dataset.k);
+  state.sel = step ? nav[(i + step + nav.length) % nav.length] : el.dataset.k;
+  writeHash(); render();
+  const again = document.querySelector(`#art [data-k="${state.sel}"]`); if (again) again.focus();
+});
+document.getElementById('cmpBtn').onclick = () => { state.c = true; update(); };
+document.getElementById('cmp').addEventListener('click', (e) => { if (e.target.id === 'cmp') { state.c = false; update(); } });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.c) { state.c = false; update(); document.getElementById('cmpBtn').focus(); } });
+document.getElementById('moreBtn').onclick = () => {
+  const bar = document.getElementById('bar'), open = !bar.classList.contains('open');
+  bar.classList.toggle('open', open); document.getElementById('moreBtn').setAttribute('aria-expanded', String(open));
+};
+document.getElementById('dBtn').onclick = () => { state.d = !state.d; update(); };
+document.getElementById('rmBtn').onclick = () => { state.rm = !state.rm; update(); };
+document.getElementById('gBtn').onclick = () => { state.g = !state.g; update(); };
+document.getElementById('replay').onclick = () => render();
+addEventListener('resize', fit);
+addEventListener('hashchange', () => { readHash(); update(); });
+readHash();
+Promise.all([document.fonts.load('500 13px Cinzel'), document.fonts.load("500 16px 'EB Garamond'"), document.fonts.load("italic 500 16px 'EB Garamond'")])
+  .catch(() => null).then(() => { update(); document.body.classList.add('ready'); });
+</script>
+</body>
+</html>
