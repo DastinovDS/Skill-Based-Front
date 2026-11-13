@@ -185,6 +185,15 @@ jobs:
       - run: mise run test:perf
         env:
           HYPOTHESIS_PROFILE: ci
+      - name: diag 1029
+        if: always()
+        run: |
+          grep -m1 "model name" /proc/cpuinfo
+          mise exec -- uv run python scripts/diag_1029.py
+          mise exec -- uv run pytest apps/bots/tests/test_benchmarks_pool.py -m perf -q --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name || true
+          mise exec -- uv run pytest apps/bots/tests/test_benchmarks_pool.py -m perf -q --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name --benchmark-disable-gc || true
+          mise exec -- uv run pytest packages/sim/tests/test_benchmarks.py -m perf -q --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name || true
+          mise exec -- uv run python scripts/diag_1029.py
       - run: mise exec -- uv cache prune --ci
 
   # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
