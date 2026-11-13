@@ -96,7 +96,7 @@ def test_usage_keys_are_the_commands_of_the_rules() -> None:
 
 
 def test_server_levels_are_the_levels_of_the_server() -> None:
-    from gow_server.botmatch import LEVEL_BOTS  # the harness may not import it (AGENTS.md 2)
+    from gow_server.levelbots import LEVEL_BOTS  # the harness may not import it (AGENTS.md 2)
 
     assert tuple(LEVEL_BOTS.items()) == validity.SERVER_LEVELS
 

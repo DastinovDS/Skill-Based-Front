@@ -147,6 +147,14 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
   can run out of memory: the kernel then kills the map worker, not the server, and the match plays a pool map (checked
   with a 450 MB limit). If `gow_maps_fallback_total` grows, raise `APP_MEM_LIMIT` (the VPS has 2 GB) or set
   `GOW_MAPGEN_ENABLED=false`.
+- **Another bot at a difficulty level, for a playtest** (#1037). `GOW_LEVEL_BOTS` is a comma-separated list of `level=bot`
+  pairs that replace the bot of those levels in bot matches (levels `easy`, `normal`, `hard`, `expert`; the bot names of
+  `gow_bots.bots.BOTS`, a smart bot with `@easy`, `@normal` or `@hard`). Play the `owner_style` benchmark as the Expert
+  level: `GOW_LEVEL_BOTS='expert=owner_style' mise run stack`; back to the default bots: `mise run stack` without the
+  variable (it recreates the `app` container, the volume stays). The client and the protocol are unchanged: the bot
+  screen still says what the level normally is, and a replay of such a match shows a plain `Bot`. An unknown level or bot
+  stops the start with a message naming the pair; the override is logged at start (`bot levels overridden`). It is
+  allowed in `GOW_ENV=prod`: it only chooses which bot answers, and every bot plays from the same fair `PlayerView`.
 - **Statistics archive for development and playtests** (#525). To collect the matches of a playtest for analysis, switch
   the archive on: before a replay expires, its command log (`*.jsonl.gz`, a few KB; not the frames file) is copied into
   `GOW_REPLAY_STATS_ARCHIVE_DIR` as `<dir>/<YYYY-MM-DD>/<match id>-<creation time>.jsonl.gz` (the date and time are those

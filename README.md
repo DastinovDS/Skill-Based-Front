@@ -217,6 +217,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_MAPGEN_WORKERS` | `1` | #884: worker processes that make maps (each about 5 s and up to 0.65 GB per map) |
 | `GOW_MAPGEN_MAX_PENDING` | `4` | #884: maps made or waiting at once; past it a match plays a pool map |
 | `GOW_MAPGEN_WAIT_S` | `60` | #884: the longest a match waits for its map before it plays a pool map |
+| `GOW_LEVEL_BOTS` | empty | #1037, playtest: `level=bot` pairs that replace the bot of a difficulty level, e.g. `expert=owner_style`; names checked at start (an unknown one stops it); allowed in `prod` |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | the wait for `hello`; a send longer than this: the client is not reading, disconnect |
 | `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |

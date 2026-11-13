@@ -14,7 +14,7 @@ Definitions (``docs/balance/README.md``, section "Data validity", has the same t
   the file, every pair of levels head to head: the share of the higher level among their decided
   matches (both sides, all maps) with its Wilson interval; *separated* when the interval excludes
   0.5, *inverted* when it lies below. The server levels (``SERVER_LEVELS``, a copy of
-  ``gow_server.botmatch.LEVEL_BOTS``: the import is forbidden here, a test keeps the two equal)
+  ``gow_server.levelbots.LEVEL_BOTS``: the import is forbidden here, a test keeps the two equal)
   are a ladder of their own, adjacent steps.
 - **Split-half reliability**: the win rate of every bot against the others on the even seeds and
   on the odd seeds, Pearson's r between the two lists; the same for the pairs (the share of the
@@ -79,7 +79,7 @@ SERVER_LEVELS: Final[tuple[tuple[str, str], ...]] = (
     ("hard", "smart_strangler@hard"),
     ("expert", "smart_expander@hard"),
 )
-"""The levels of the bot screen, easiest first: ``gow_server.botmatch.LEVEL_BOTS``."""
+"""The levels of the bot screen, easiest first: ``gow_server.levelbots.LEVEL_BOTS``."""
 FLOOR_BOTS: Final[tuple[str, ...]] = ("random_legal", "idle")
 """The bots of the skill floor (V1)."""
 EXPLOITER: Final = "smart_exploiter"

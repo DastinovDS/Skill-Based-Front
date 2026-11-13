@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_bots.bots import BOTS
 from gow_protocol import commands as wire
 from gow_server.app import create_app
-from gow_server.botmatch import LEVEL_BOTS
 from gow_server.clock import ManualClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.frames import FORMAT, FramesError, build_frames, frame_of
+from gow_server.levelbots import LEVEL_BOTS
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.models import Match, MatchPlayer, Player
 from gow_server.replays import ReplayService, ReplayState, bot_nick

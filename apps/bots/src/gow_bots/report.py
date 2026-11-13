@@ -1183,7 +1183,7 @@ def _section_ladder(tally: validity.Tally, steps: Sequence[validity.Step]) -> st
     return (
         "Head to head of the levels of every personality (`@easy` < `@normal` < `@hard`; a name "
         "without a level is `hard`) and of the adjacent server levels (easy < normal < hard < "
-        "expert, `gow_server.botmatch.LEVEL_BOTS`): the share of the higher level among the "
+        "expert, `gow_server.levelbots.LEVEL_BOTS`): the share of the higher level among the "
         "decided matches of the pair, both sides, all maps, with the 95% Wilson interval. "
         "*separated*: the interval excludes 0.5; *not separated*: it contains 0.5; *INVERTED*: "
         "the lower level is significantly stronger.\n\n"
@@ -1226,7 +1226,7 @@ def _section_exploiter(ps: Sequence[Persp], bots: Sequence[str]) -> str:
             ]
         )
     return (
-        f"Every server level (`gow_server.botmatch.LEVEL_BOTS`) head to head against "
+        f"Every server level (`gow_server.levelbots.LEVEL_BOTS`) head to head against "
         f"`{', '.join(rivals)}`, both sides, all maps: the level's share of the decided matches "
         "with the 95% Wilson interval, the least share the check V6 asks (a proposal, not an "
         "owner decision), and the share of all matches the level lost and won by the capital.\n\n"

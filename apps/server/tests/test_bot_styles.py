@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Final
 
-from gow_server.botmatch import LEVEL_BOTS
+from gow_server.levelbots import LEVEL_BOTS
 
 STYLES: Final = Path(__file__).parents[2] / "client" / "src" / "app" / "botStyles.ts"
 

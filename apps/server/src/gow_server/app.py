@@ -32,6 +32,7 @@ from gow_server.bodylimit import BodySizeLimitMiddleware
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.ladder import LadderRules
+from gow_server.levelbots import level_bots
 from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
@@ -58,6 +59,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         app.state.maps = maps.MapCatalog.load(settings.maps_dir)
+        app.state.level_bots = level_bots(settings.level_bots)
+        if settings.level_bots:
+            log.warning("bot levels overridden (GOW_LEVEL_BOTS): %s", app.state.level_bots)
         client_file = clientlog.open_file_log(settings)
         engine = create_db_engine(settings.database_url)
         await asyncio.to_thread(upgrade_to_head, engine)

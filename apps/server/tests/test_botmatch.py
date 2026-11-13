@@ -381,7 +381,7 @@ def test_bot_that_raises_does_not_end_the_match() -> None:
 def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
     """#574: ``LEVEL_BOTS`` names resolve through ``bot_factory`` to smart bots at a level."""
     from gow_bots.bots import SmartBot, bot_factory
-    from gow_server.botmatch import LEVEL_BOTS
+    from gow_server.levelbots import LEVEL_BOTS
     from gow_sim.maps import load_map
     from gow_sim.ruleset import load_ruleset
 
@@ -393,3 +393,23 @@ def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
         assert "@" in name
         bot = bot_factory(name)(mapdef, rules, seed=0, player=0)
         assert isinstance(bot, SmartBot) and name == f"{bot.name}@{bot.difficulty}"
+
+
+@pytest.mark.parametrize(("level", "overridden"), [("expert", True), ("easy", False)])
+def test_level_bots_override_replaces_the_bot_of_that_level_only(
+    bot_settings: Settings, level: str, overridden: bool
+) -> None:
+    """#1037: ``GOW_LEVEL_BOTS=expert=owner_style`` plays the benchmark at ``expert`` only."""
+    from gow_bots.bots import OwnerStyleBot
+
+    settings = bot_settings.model_copy(update={"level_bots": "expert=owner_style"})
+
+    async def scenario() -> None:
+        async with live_server(settings) as live:
+            reply = await live.start(level=level)
+            assert reply.status_code == 201
+            runner = live.manager.get(reply.json()["match_id"])
+            assert runner is not None and runner.bot is not None
+            assert (runner.bot.factory is OwnerStyleBot) is overridden
+
+    asyncio.run(scenario())
