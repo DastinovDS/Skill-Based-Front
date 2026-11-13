@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 
 from gow_server.clock import Clock
 from gow_server.lifecycle import STATUS_SAVED
-from gow_server.models import Match, MatchPlayer
+from gow_server.models import KIND_MATCH, Match, MatchPlayer
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
@@ -63,7 +63,11 @@ def recent_match_ids(session: Session, per_player: int) -> set[int]:
     ranked = (
         select(Match.id.label("match_id"), rank)
         .join(MatchPlayer, MatchPlayer.match_id == Match.id)
-        .where(MatchPlayer.player_id.is_not(None), Match.status == STATUS_SAVED)
+        .where(
+            MatchPlayer.player_id.is_not(None),
+            Match.status == STATUS_SAVED,
+            Match.kind == KIND_MATCH,
+        )
         .subquery()
     )
     recent = select(ranked.c.match_id).where(ranked.c.rank <= per_player)

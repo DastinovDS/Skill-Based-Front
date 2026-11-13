@@ -4765,6 +4765,10 @@ The rules of this section: settings of the server and of the meta-game, not of t
 
 60 seconds to reconnect, the match keeps going meanwhile; then a technical defeat (recorded in the replay log as the command `Forfeit`). In rated matches there are no pauses; in private ones (by an invite link) one pause of up to 60 seconds per player. A match from the public lobby (LOB-01, #76) is played with a stranger, so there are no pauses in it, as in a rated one: a pause in it would be a way to drag the game out. Server settings, not the ruleset.
 
+A tutorial chapter (#806, `docs/design/tutorial.md`, section 7.6) pauses at its cards, with no limit: a card that explains
+waits for Continue, a card that asks for a command waits for it; the player has no pause of their own there. The reconnect
+window runs as in any match (a player who leaves the tab loses the chapter and replays it).
+
 The values are set in the server settings (SRV-04, #50), they are not in `rulesets/*.toml`.
 
 Alternatives (not chosen):
@@ -4791,7 +4795,8 @@ public and rate limited per client IP (`GOW_PUBLIC_READ_RATE_LIMIT`).
 - **Profile:** nick, rating and rank (`null` for a guest and while calibrating, then `calibration` says "k/5"), the record of
   the matches that changed the rating, the record of all finished matches, and the last 20 finished matches of any kind
   with the opponent, the kind (rated, calibration, unrated queue match with its reason, invite or lobby, bot) and a link to
-  the replay. A blocked account has no profile (404).
+  the replay. A blocked account has no profile (404). A tutorial chapter (#806, `matches.kind = tutorial`) is not a
+  match: never listed, never counted.
 - **Rating in the history** follows `match_end`: the change of a calibration match is hidden, it is shown from the match that
   completes the calibration on.
 - **Replay link:** `ready`, `preparing`, `expired` (the retention of SRV-08, #515), `unavailable` (no frames were made) or

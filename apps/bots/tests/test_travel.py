@@ -30,7 +30,7 @@ from gow_sim.systems.movement import leg, reachable_paths
 ROOT: Final = Path(__file__).resolve().parents[3]
 MAP_FILES: Final = sorted(
     p
-    for folder in ("maps", "maps/fixtures", "maps/menu", "maps/gen")
+    for folder in ("maps", "maps/fixtures", "maps/menu", "maps/gen", "maps/tutorial")
     for p in (ROOT / folder).glob("*.json")
 )
 RULESET_FILES: Final = sorted((ROOT / "rulesets").glob("*.toml"))

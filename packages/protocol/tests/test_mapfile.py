@@ -18,6 +18,7 @@ MAPS = (
     + sorted((ROOT / "maps" / "fixtures").glob("*.json"))
     + sorted((ROOT / "maps" / "menu").glob("*.json"))
     + sorted((ROOT / "maps" / "gen").glob("*.json"))
+    + sorted((ROOT / "maps" / "tutorial").glob("*.json"))
     + sorted((ROOT / "packages" / "sim" / "tests" / "maps").glob("*.json"))
 )
 

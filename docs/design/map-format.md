@@ -499,6 +499,11 @@ an unmatched pattern as is). The thresholds: `tools/maps/src/gow_maps/validate.t
 | `travel_ticks` | the drawn length agrees with the time (DEC-27, item 4): `|travel_ticks − e| × 100 ≤ 15 × e`, `e = length × 30 / 100` (100 world units = 3 seconds), the tolerance is at least 1 tick; mirrored edges with the same `travel_ticks` therefore differ in length by no more than the tolerance |
 | `geography` | only for a map with an authored geography `maps/src/<id>.geo.json` (DEC-36): land contact of two areas only along a road, one piece per area around its node, roads cross water only at a bridge, nodes at least `water_clearance` (60) from a sea or a lake, the vector file `maps/geo/<id>.json` up to date; details in the section "Format changes under DEC-36" |
 
+`--checks <list>` runs only the named checks (`format`, the loader, always runs); `--checks tutorial` is the profile of
+the tutorial maps (`maps/tutorial/`, #806): `format`, `names`, `connectivity`, `planarity`, `travel_ticks`, `degree`,
+`symmetry` (for them only the identity table) and, with `--ruleset`, `warehouse`. Each is built for one lesson and fails
+`fairness`, `neutral_space` and `disjoint_paths` by design (`docs/design/tutorial.md`, section 7.2).
+
 The path and distance checks run only on a connected graph. The "bad" fixtures for each
 check: `tools/maps/tests/fixtures/`; for `geography`, the worked examples of DEC-36 in `tools/maps/tests/test_geo.py`
 (hand-made label grids for the failing rows: the baker itself never produces them).

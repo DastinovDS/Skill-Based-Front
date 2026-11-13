@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from gow_maps.cli import main
-from gow_maps.validate import ValidatorConfig, check_size, load_config, validate_file
+from gow_maps.validate import (
+    TUTORIAL_CHECKS,
+    ValidatorConfig,
+    check_size,
+    load_config,
+    validate_file,
+)
 from gow_sim.maps import load_map
 from gow_sim.ruleset import load_ruleset
 
@@ -302,3 +308,37 @@ def test_dec27_size_examples(config: ValidatorConfig, count: int, issues: list[s
     nodes = (mapdef.nodes * 2)[:count]
     on = dataclasses.replace(config, size_check=True)
     assert [i.check for i in check_size(dataclasses.replace(mapdef, nodes=nodes), on)] == issues
+
+
+# The tutorial maps (#806): the structural checks only ---------------------------------------
+
+TUTORIAL_MAPS = sorted((REPO / "maps" / "tutorial").glob("*.json"))
+
+
+def test_tutorial_maps_pass_the_structural_checks(capsys: pytest.CaptureFixture[str]) -> None:
+    files = [str(p) for p in TUTORIAL_MAPS]
+    assert len(files) == 8
+    ruleset = str(ROOT_RULESETS / "mvp-7.toml")
+    assert main(["validate", "--checks", "tutorial", "--ruleset", ruleset, *files]) == 0
+    # built for one lesson each, they fail the design checks of a played map by design
+    assert main(["validate", "--ruleset", ruleset, *files]) == 1
+    out = capsys.readouterr().out
+    assert "[fairness]" in out and "[neutral_space]" in out
+
+
+def test_checks_limit_the_run(capsys: pytest.CaptureFixture[str]) -> None:
+    bad = str(FIXTURES / "bad_degree.json")
+    assert main(["validate", "--checks", "names,planarity", bad]) == 0
+    assert main(["validate", "--checks", "degree", bad]) == 1
+    with pytest.raises(SystemExit, match="unknown checks"):
+        main(["validate", "--checks", "degre", bad])
+    capsys.readouterr()
+
+
+def test_tutorial_checks_keep_the_identity_mirror(tmp_path: Path) -> None:
+    data = json.loads(TUTORIAL_MAPS[0].read_text(encoding="utf-8"))
+    data["mirror"]["nodes"]["0"], data["mirror"]["nodes"]["1"] = 1, 0
+    path = tmp_path / "swapped.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    issues = validate_file(path, load_config(), None, TUTORIAL_CHECKS)
+    assert [i.check for i in issues] == ["symmetry"]

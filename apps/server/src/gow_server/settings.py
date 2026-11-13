@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     """Proxies trusted for X-Forwarded-* headers (uvicorn ``--forwarded-allow-ips``): Caddy."""
     maps_dir: Path = Path("maps")
     """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.webp``."""
+    tutorial_dir: Path = Path("tutorial/chapters")
+    """The chapter files of the tutorial (#806, ``<id>.json``); their maps are in
+    ``<maps_dir>/tutorial/``."""
     ruleset_path: Path = Path("rulesets/mvp-7.toml")
     """The ruleset of every match this server starts (loaded once at startup)."""
     database_url: str = "sqlite:///data/gow.db"

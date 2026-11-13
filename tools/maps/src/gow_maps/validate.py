@@ -12,15 +12,20 @@ a road, each area is one piece around its node, roads cross water only at a brid
 clear of water, the vector file is baked for the map version. A generated map without a mirror
 (``meta.symmetry = "none"``, #771) gets the check ``fairness`` in place of ``symmetry`` and
 ``border``.
+
+``checks`` limits a run to some of ``CHECKS`` (``gow-maps validate --checks``): the tutorial
+maps (``maps/tutorial/``, #806) are built for one lesson each and fail the design checks of a
+played map by design, so they get the structural ones only (``TUTORIAL_CHECKS``).
 """
 
 import json
 import math
 import tomllib
+from collections.abc import Collection
 from dataclasses import dataclass, fields
 from importlib import resources
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import networkx as nx
 import numpy as np
@@ -39,6 +44,39 @@ from gow_sim.maps import (
     load_map,
 )
 from gow_sim.ruleset import Ruleset
+
+CHECKS: Final = (
+    "format",
+    "size",
+    "names",
+    "planarity",
+    "symmetry",
+    "border",
+    "degree",
+    "travel_ticks",
+    "warehouse",
+    "connectivity",
+    "disjoint_paths",
+    "neutral_space",
+    "fairness",
+    "geography",
+)
+"""Every check of the validator; ``format`` (the loader) always runs."""
+
+TUTORIAL_CHECKS: Final = frozenset(
+    {
+        "format",
+        "names",
+        "planarity",
+        "symmetry",
+        "degree",
+        "travel_ticks",
+        "warehouse",
+        "connectivity",
+    }
+)
+"""The structural checks of the tutorial maps (#806): ``symmetry`` is there only as the identity
+mirror table of a map without a mirror; no size, fairness, neutral space or redundant paths."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,18 +132,24 @@ class Issue:
 
 
 def validate_file(
-    path: str | Path, config: ValidatorConfig, rules: Ruleset | None = None
+    path: str | Path,
+    config: ValidatorConfig,
+    rules: Ruleset | None = None,
+    checks: Collection[str] | None = None,
 ) -> list[Issue]:
     """Load and validate one map file. A loader error is reported as the ``format`` check.
 
     A map with an authored geography (``maps/src/<id>.geo.json``, DEC-36) also gets the check
     ``geography``; a map without one is land only (DEC-27, item 3) and is not checked for it.
+    ``checks``: only these of ``CHECKS`` (``None``: all).
     """
     try:
         mapdef = load_map(path)
     except MapFormatError as exc:
         return [Issue("format", str(exc))]
-    issues = validate(mapdef, config, rules)
+    issues = validate(mapdef, config, rules, checks)
+    if checks is not None and "geography" not in checks:
+        return issues
     try:
         spec = geo.find_spec(path)
     except geo.GeoFormatError as exc:
@@ -224,29 +268,50 @@ def check_vector_file(path: Path, mapdef: MapDef) -> list[Issue]:
     return []
 
 
-def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = None) -> list[Issue]:
-    """Every check; ``warehouse`` only with ``rules``.
+def validate(
+    mapdef: MapDef,
+    config: ValidatorConfig,
+    rules: Ruleset | None = None,
+    checks: Collection[str] | None = None,
+) -> list[Issue]:
+    """Every check (or only ``checks``); ``warehouse`` only with ``rules``.
 
     A map with ``meta.symmetry = "none"`` (#771) has no mirror to keep: instead of ``symmetry``
     and ``border`` it gets an identity ``mirror`` table and the check ``fairness``.
     """
+
+    def on(name: str) -> bool:
+        return checks is None or name in checks
+
     graph = to_graph(mapdef)
     free = mapdef.meta.symmetry == "none"
-    issues = [
-        *(check_size(mapdef, config) if config.size_check else []),
-        *check_names(mapdef),
-        *check_planarity(mapdef),
-        *(check_mirror_table(mapdef) if free else [*check_symmetry(mapdef), *check_border(mapdef)]),
-        *check_degree(mapdef, config),
-        *check_travel_ticks(mapdef, config),
-        *(check_warehouse(mapdef, rules) if rules is not None else []),
-    ]
+    issues: list[Issue] = []
+    if on("size") and config.size_check:
+        issues += check_size(mapdef, config)
+    if on("names"):
+        issues += check_names(mapdef)
+    if on("planarity"):
+        issues += check_planarity(mapdef)
+    if on("symmetry"):
+        issues += check_mirror_table(mapdef) if free else check_symmetry(mapdef)
+    if on("border") and not free:
+        issues += check_border(mapdef)
+    if on("degree"):
+        issues += check_degree(mapdef, config)
+    if on("travel_ticks"):
+        issues += check_travel_ticks(mapdef, config)
+    if on("warehouse") and rules is not None:
+        issues += check_warehouse(mapdef, rules)
     connectivity = check_connectivity(graph)
-    issues += connectivity
+    if on("connectivity"):
+        issues += connectivity
     if not connectivity:  # path and distance checks are meaningless on a disconnected graph
-        issues += check_disjoint_paths(mapdef, graph, config)
-        issues += check_neutral_space(mapdef, graph, config)
-        issues += check_fairness(mapdef, config) if free else []
+        if on("disjoint_paths"):
+            issues += check_disjoint_paths(mapdef, graph, config)
+        if on("neutral_space"):
+            issues += check_neutral_space(mapdef, graph, config)
+        if on("fairness") and free:
+            issues += check_fairness(mapdef, config)
     return issues
 
 

@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from gow_protocol.messages import Calibration, PlayerColour
+from gow_protocol.tutorial import ChapterId
 from gow_server.abuse import Limits, enforce
 from gow_server.colours import colour_of
 from gow_server.db import DbSession
@@ -106,6 +107,8 @@ class ActiveMatch(BaseModel):
 
     match_id: str
     map_id: str
+    chapter: ChapterId | None = None
+    """The tutorial chapter this match is (#806); ``None``: a match."""
 
 
 class ColourChange(BaseModel):
@@ -352,7 +355,8 @@ async def active_match(
     runner = lifecycle.manager.get(record.match_id)
     if runner is None or runner.finished:
         return None
-    return ActiveMatch(match_id=runner.match_id, map_id=runner.map_id)
+    chapter = None if runner.tutorial is None else runner.tutorial.chapter.id
+    return ActiveMatch(match_id=runner.match_id, map_id=runner.map_id, chapter=chapter)
 
 
 @router.put("/me/nick")

@@ -57,7 +57,8 @@ from gow_server.matches import (
     MatchRunner,
     ServerFullError,
 )
-from gow_server.models import Match, MatchPlayer, Player, utcnow
+from gow_server.models import KIND_MATCH, KIND_TUTORIAL, Match, MatchPlayer, Player, utcnow
+from gow_server.tutorial import TutorialDirector
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
 
@@ -252,6 +253,7 @@ class MatchLifecycle:
         bot: BotSeat | None = None,
         bot_name: str | None = None,
         keeper: int | None = None,
+        tutorial: TutorialDirector | None = None,
     ) -> MatchRunner:
         """``created`` or ``waiting`` ``-> running``: insert the row, then start the runner.
 
@@ -268,6 +270,9 @@ class MatchLifecycle:
         ``keeper``: the account that keeps its colour on a clash (DEC-49, item 2): the host of an
         invite, the earlier entry of the queue; ``None``: the human of a bot match, or side 0.
         The colours are resolved here, once, and stored with the sides of the match.
+
+        ``tutorial``: the director of a tutorial chapter (#806): the row is ``kind = tutorial``,
+        never rated, and the runner keeps no replay.
         """
         if record.dead:
             raise IllegalTransitionError(f"{record.state.value} -> running")
@@ -283,6 +288,7 @@ class MatchLifecycle:
             and bot is None
             and BOT_ACCOUNT not in players  # DEC-06: two humans only
             and mapdef.meta.symmetry != "none"  # DEC-27, item 8
+            and tutorial is None
         )
         try:
             pk, plan, colours = await asyncio.to_thread(
@@ -294,6 +300,7 @@ class MatchLifecycle:
                 bot_name,
                 rules.tick_hz,
                 keeper,
+                KIND_MATCH if tutorial is None else KIND_TUTORIAL,
             )
         except BaseException:
             record.deadline = deadline
@@ -310,6 +317,7 @@ class MatchLifecycle:
                 bot=bot,
                 rating_plan=plan,
                 colours=colours,
+                tutorial=tutorial,
             )
         except BaseException as exc:
             record.deadline = deadline
@@ -365,6 +373,7 @@ class MatchLifecycle:
         bot: str | None,
         tick_hz: int,
         keeper: int | None,
+        kind: str = KIND_MATCH,
     ) -> tuple[int, RatingPlan | None, tuple[PlayerColour, PlayerColour]]:
         """Insert the match; for a queue match also decide its rating rules (DEC-34); resolve the
         colours of the sides (DEC-49)."""
@@ -383,6 +392,7 @@ class MatchLifecycle:
                 and any(side.mode is not RatingMode.NONE for side in plan.sides),
                 started_at=now,
                 status=STATUS_RUNNING,
+                kind=kind,
             )
             session.add(match)
             session.flush()

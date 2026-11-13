@@ -214,7 +214,7 @@ def test_active_match_endpoint_returns_the_running_match(api: TestClient) -> Non
 
     post(api, alice, code, "ready")
     match_id = post(api, bob, code, "ready")["match_id"]
-    expected = {"match_id": match_id, "map_id": invite["map_id"]}
+    expected = {"match_id": match_id, "map_id": invite["map_id"], "chapter": None}
     for headers in (alice, bob):
         response = api.get("/api/me/active-match", headers=headers)
         assert response.json() == expected

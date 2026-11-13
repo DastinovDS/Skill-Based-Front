@@ -1,0 +1,32 @@
+{
+  "meta": {"name": "tut-move", "version": 1, "symmetry": "none", "width": 1200, "height": 700},
+  "nodes": [
+    {"id": 0, "name": "Highhold", "x": 190, "y": 350, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 0},
+    {"id": 1, "name": "Ashford", "x": 370, "y": 270, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 2, "name": "Elmstead", "x": 540, "y": 160, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 3, "name": "Fordham", "x": 560, "y": 410, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 4, "name": "Reedwick", "x": 360, "y": 520, "terrain": "forest", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 5, "name": "Kestrel", "x": 780, "y": 290, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 0},
+    {"id": 6, "name": "Thornby", "x": 760, "y": 540, "terrain": "forest", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 7, "name": "Brackenfold", "x": 760, "y": 90, "terrain": "mountains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 1, "start_charged": 1, "start_stock": 0},
+    {"id": 8, "name": "Stormcrown", "x": 1010, "y": 330, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 6}
+  ],
+  "edges": [
+    {"id": 0, "a": 0, "b": 1, "max_level": 2, "travel_ticks": 59, "border_permille": 500},
+    {"id": 1, "a": 0, "b": 4, "max_level": 2, "travel_ticks": 72, "border_permille": 500},
+    {"id": 2, "a": 1, "b": 2, "max_level": 2, "travel_ticks": 61, "border_permille": 500},
+    {"id": 3, "a": 1, "b": 3, "max_level": 2, "travel_ticks": 71, "border_permille": 500},
+    {"id": 4, "a": 4, "b": 3, "max_level": 2, "travel_ticks": 68, "border_permille": 500},
+    {"id": 5, "a": 2, "b": 5, "max_level": 2, "travel_ticks": 82, "border_permille": 500},
+    {"id": 6, "a": 3, "b": 5, "max_level": 2, "travel_ticks": 75, "border_permille": 500},
+    {"id": 7, "a": 3, "b": 6, "max_level": 2, "travel_ticks": 72, "border_permille": 500},
+    {"id": 8, "a": 2, "b": 7, "max_level": 2, "travel_ticks": 69, "border_permille": 500},
+    {"id": 9, "a": 5, "b": 8, "max_level": 2, "travel_ticks": 70, "border_permille": 500},
+    {"id": 10, "a": 6, "b": 8, "max_level": 2, "travel_ticks": 98, "border_permille": 500},
+    {"id": 11, "a": 7, "b": 8, "max_level": 2, "travel_ticks": 104, "border_permille": 500}
+  ],
+  "mirror": {
+    "nodes": {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8},
+    "edges": {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11}
+  }
+}

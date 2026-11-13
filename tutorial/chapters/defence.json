@@ -1,0 +1,38 @@
+{
+  "id": "defence",
+  "road": "main",
+  "number": 5,
+  "map": "tut-defence",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
+         "planned", "vp"],
+  "opponent": [
+    {"at": 10, "move": {"from": "Ridgeway", "to": "Highcrag"}},
+    {"at": 200, "move": {"from": "Stormcrown", "to": "Flatford", "planned": true, "bonus": 1}},
+    {"when": {"owns": "Flatford"}, "move": {"from": "Flatford", "to": "Stormcrown"}}
+  ],
+  "beats": [
+    {"id": "1", "on": {"view": {"enemy_road": "Highcrag"}}, "pause": "continue", "allow": [],
+     "mark": [{"node": "Highcrag"}]},
+    {"id": "2", "on": {"event": "fight_round", "node": "Highcrag", "min": {"virtual_0": 1}},
+     "pause": "continue", "allow": [], "ui": ["terrainMarks"],
+     "mark": [{"node": "Highcrag", "ring": true}]},
+    {"id": "3", "on": {"event": "fight_ended", "node": "Highcrag", "where": {"captured": false}},
+     "allow": [],
+     "mark": [{"node": "Highcrag"}]},
+    {"id": "4", "on": {"view": {"enemy_plan": "Flatford"}}, "pause": "action", "ui": ["alerts", "fort"],
+     "allow": [{"fortify_road": {"node": "Flatford", "toward": "Eastfield"}}],
+     "mark": [{"menu": "fortify", "at": "Flatford"}, {"hud": "alerts"}]},
+    {"id": "5", "on": {"accepted": {"fortify_road": {"node": "Flatford", "toward": "Eastfield"}}},
+     "pause": "action",
+     "allow": [{"move": {"from": "Millbrook", "to": "Flatford", "planned": false}}],
+     "mark": [{"node": "Millbrook"}]},
+    {"id": "6", "on": {"event": "toll_taken", "by": "you"}, "allow": [],
+     "mark": [{"node": "Flatford"}]}
+  ],
+  "fails": [],
+  "goal": {"all": [
+    {"event": "road_fort_built", "node": "Flatford", "edge": ["Flatford", "Eastfield"], "by": "you"},
+    {"event": "fight_ended", "node": "Flatford"},
+    {"view": {"own": "Flatford"}}
+  ]}
+}

@@ -15,6 +15,7 @@ from gow_protocol.messages import (
     PROTOCOL_VERSION,
 )
 from gow_protocol.schema import SCHEMA_PATH, WireJsonSchema, protocol_json_schema
+from gow_protocol.tutorial import TutorialModel
 
 REGENERATE = "uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
 
@@ -56,6 +57,7 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
         {"$ref": "#/$defs/ClientMsg"},
         {"$ref": "#/$defs/ServerMsg"},
         {"$ref": "#/$defs/MapFile"},
+        {"$ref": "#/$defs/Chapter"},
     ]
 
 
@@ -88,6 +90,7 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "pong",
                 "paused",
                 "reach",
+                "tutorial",
             },
         ),
         (
@@ -125,9 +128,24 @@ def test_union_members_carry_a_required_constant_tag(
         assert member["additionalProperties"] is False, member["title"]
 
 
+def _file_models() -> set[str]:
+    """The models of the tutorial chapter files (#806): a file may leave a default out."""
+    found: set[str] = set()
+    todo: list[type[TutorialModel]] = [TutorialModel]
+    while todo:
+        cls = todo.pop()
+        found.add(cls.__name__)
+        todo += cls.__subclasses__()
+    return found
+
+
 def test_every_field_is_required(schema: dict[str, Any]) -> None:
-    """The server writes every field (``None`` as ``null``), so none is optional in TypeScript."""
+    """The server writes every field (``None`` as ``null``), so none is optional in TypeScript.
+    The chapter files are written by hand: their defaults may be left out."""
+    files = _file_models()
     for name, definition in _defs(schema).items():
+        if name in files:
+            continue
         properties: dict[str, Any] = definition.get("properties", {})
         assert set(definition.get("required", [])) == set(properties), name
 

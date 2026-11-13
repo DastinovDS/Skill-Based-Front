@@ -6,6 +6,7 @@ Times are naive UTC (SQLite has no time zones): use ``utcnow()``.
 """
 
 from datetime import UTC, datetime
+from typing import Final
 
 from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, MetaData, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -18,6 +19,12 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
+
+KIND_MATCH: Final = "match"
+KIND_TUTORIAL: Final = "tutorial"
+"""``matches.kind``: a match, or a tutorial chapter (#806) that no profile, record or count
+shows."""
 
 
 def utcnow() -> datetime:
@@ -98,6 +105,9 @@ class Match(Base):
     replay_expired_at: Mapped[datetime | None]
     """When the retention removed the replay files (SRV-08, #515); ``replay_path`` is then null.
     The row stays: result, rating and sides do not expire with the replay."""
+    kind: Mapped[str] = mapped_column(String(16), default=KIND_MATCH, server_default=KIND_MATCH)
+    """``match`` or ``tutorial`` (#806): a tutorial chapter is kept for the one-active-match rule
+    and the logs only; the profile, the records and the replay retention skip it."""
 
 
 class MatchPlayer(Base):

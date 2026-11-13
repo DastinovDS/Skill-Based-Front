@@ -34,7 +34,7 @@ from gow_protocol.messages import Calibration, RatingChange, UnratedReason
 from gow_server.abuse import Limits, enforce
 from gow_server.db import DbSession
 from gow_server.identity import client_ip, hash_token
-from gow_server.models import Match, MatchPlayer, Player, Rating
+from gow_server.models import KIND_MATCH, Match, MatchPlayer, Player, Rating
 from gow_server.replays import ReplayService
 from gow_server.settings import Settings
 
@@ -182,7 +182,11 @@ def _records(session: Session, player_ids: Sequence[int]) -> dict[int, tuple[Rec
             func.coalesce(func.sum(changed), 0),
         )
         .join(Match, Match.id == MatchPlayer.match_id)
-        .where(MatchPlayer.player_id.in_(player_ids), Match.status == STATUS_SAVED)
+        .where(
+            MatchPlayer.player_id.in_(player_ids),
+            Match.status == STATUS_SAVED,
+            Match.kind == KIND_MATCH,
+        )
         .group_by(MatchPlayer.player_id, MatchPlayer.result)
     ).all()
     total: dict[int, dict[str, int]] = {pid: {} for pid in player_ids}
@@ -324,7 +328,11 @@ def _history(
     own_rows = session.execute(
         select(Match, MatchPlayer)
         .join(MatchPlayer, MatchPlayer.match_id == Match.id)
-        .where(MatchPlayer.player_id == player_id, Match.status == STATUS_SAVED)
+        .where(
+            MatchPlayer.player_id == player_id,
+            Match.status == STATUS_SAVED,
+            Match.kind == KIND_MATCH,
+        )
         .order_by(Match.ended_at.desc(), Match.id.desc())
         .limit(HISTORY_SIZE)
     ).all()

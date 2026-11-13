@@ -69,6 +69,7 @@ run = [
   "uv run pyright",
   "uv run lint-imports --no-logo",
   "uv run gow-maps validate --ruleset rulesets/mvp-7.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json",
+  "uv run gow-maps validate --checks tutorial --ruleset rulesets/mvp-7.toml maps/tutorial/*.json",
 ]
 
 [tasks."check:client"]
@@ -258,16 +259,19 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map maps/menu/*.json and the generated maps maps/gen/*.json, with the start-stock check against the warehouses of rulesets/mvp-7.toml (DEC-26, item 5) and the check geography of the maps with src/<name>.geo.json (DEC-36)"
-run = "uv run gow-maps validate --ruleset rulesets/mvp-7.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
+description = "gow-maps validate maps/*.json, maps/fixtures/*.json, the menu map maps/menu/*.json and the generated maps maps/gen/*.json, with the start-stock check against the warehouses of rulesets/mvp-7.toml (DEC-26, item 5) and the check geography of the maps with src/<name>.geo.json (DEC-36); the tutorial maps maps/tutorial/*.json with the structural checks only (--checks tutorial, #806)"
+run = [
+  "uv run gow-maps validate --ruleset rulesets/mvp-7.toml maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json",
+  "uv run gow-maps validate --checks tutorial --ruleset rulesets/mvp-7.toml maps/tutorial/*.json",
+]
 
 [tasks."maps:preview"]
-description = "Draw maps/<name>.preview.png over its baked background, so after maps:bake (the pool, the menu map maps/menu/ and the generated maps maps/gen/)"
-run = "uv run gow-maps preview maps/*.json maps/menu/*.json maps/gen/*.json"
+description = "Draw maps/<name>.preview.png over its baked background, so after maps:bake (the pool, the menu map maps/menu/, the generated maps maps/gen/ and the tutorial maps maps/tutorial/)"
+run = "uv run gow-maps preview maps/*.json maps/menu/*.json maps/gen/*.json maps/tutorial/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp and its thumbnail <name>.thumb.webp (the pool, the fixtures maps/fixtures/, the menu map maps/menu/ and the generated maps maps/gen/): numpy and Pillow, the Intaglio look (#842); a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
-run = "uv run gow-maps bake maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json"
+description = "Bake maps/<name>.bg.webp and its thumbnail <name>.thumb.webp (the pool, the fixtures maps/fixtures/, the menu map maps/menu/, the generated maps maps/gen/ and the tutorial maps maps/tutorial/): numpy and Pillow, the Intaglio look (#842); a map with src/<name>.geo.json also gets water and geo/<name>.json, DEC-36 (after any map edit)"
+run = "uv run gow-maps bake maps/*.json maps/fixtures/*.json maps/menu/*.json maps/gen/*.json maps/tutorial/*.json"
 
 [tasks."maps:mirror"]
 description = "Build maps/<name>.json from maps/src/<name>.half.json (arg: name)"

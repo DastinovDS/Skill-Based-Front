@@ -18,6 +18,7 @@ CONTAINER_PATHS: Final = {
     "host",
     "port",
     "maps_dir",
+    "tutorial_dir",
     "database_url",
     "replays_dir",
     "rulesets_dir",

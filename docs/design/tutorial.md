@@ -7,8 +7,9 @@ paused while a card explains, failures only where the failure is the lesson (sec
 (round 4, 2026-11-13: no number the interface shows or a newcomer does not need, no caption that repeats the card or the
 mark, short natural sentences, two buttons on the Seal); so is the owner's third review (round 5, 2026-11-13: the
 chapter select Charter, the Advanced chapter "Supply distribution", a popup instead of the forced start, no chapter row
-on the intro, and a note per screen). The defaults of section 9 are in force until the owner changes them. No game code
-exists yet; section 7 is the plan for it. The mockup is
+on the intro, and a note per screen). The defaults of section 9 are in force until the owner changes them. PR 1 of
+section 7.10 (server, bots, data) is in the code; section 7 records what it built, and where it had to differ from the plan
+(each such place says so). PR 2 and PR 3 (the client) are still the plan. The mockup is
 [`mockups/tutorial.html`](mockups/tutorial.html) (the chosen look); the whole tutorial, screen by screen with the final
 copy and the gating, is the walkthrough [`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html)
 (section 8). The texts of section 4 and section 5 are the final copy; the walkthrough shows them on the real frames.
@@ -333,10 +334,12 @@ tries it turns back to Ashford and sends the army again, and the card stays unti
 
 **Verified** (`mvp-7`, `cp.start` 500): the move at tick 1: Ashford taken at 65 (the group 3/2; beat I.4). Continue,
 then beat I.5 at 65; the move to Elmstead at 66: Elmstead at 119 (3/1). From Elmstead the view shows Kestrel at `range`
-and Brackenfold at `presence`. Fordham (ordered at 120) at 229 (3/0); from Fordham Kestrel is `exact`. CP: 5, 4, 3.5
-with the income, 3. **With the optional cancel:** X at 87 (the group a third of the way): back in Ashford at 107
-(`group_arrived`, `back`); sent again at 108: Elmstead at 161, Fordham (ordered at 162) at 271; CP down to 2, never
-lower. No packet moves during the chapter (the capital's first charge comes at 400).
+and Brackenfold at `presence`. Fordham (ordered at 120) at 229 (3/0); from Fordham Kestrel is `exact`. CP: 5, 4 (tick 1),
+3 (66), 3.5 (the income at 100), 2.5 (120). **With the optional cancel:** X at 87 (the group a third of the way): back in
+Ashford at 107 (`group_arrived`, `back`); sent again at 108: Elmstead at 161, Fordham (ordered at 162) at 271; CP down to
+1.5 (at 162), never short of an order. No packet moves during the chapter (the capital's first charge comes at 400).
+(PR 1: the CP figures were corrected on the simulation; the earlier "5, 4, 3.5, 3" and "down to 2" missed that the first
+0.5 CP comes at tick 100. The ticks of the orders and captures were right.)
 
 ### 4.2 Chapter II: Map and economy (about 1 minute)
 
@@ -495,7 +498,10 @@ real shot kills): Ashwood taken at 278, the group 3/1 (IV.8). It is full again a
 Stormcrown: contact at 601, rounds 621 (cancel) and 641 (a kill), the capital taken at 641 and `match_ended`
 (`winner = 0`, `reason = capital`). **Failure:** an ordinary order at 1: contact at 78, rounds 98, 118, 138,
 `fight_ended` at 138 lost (one defender dies, the group bounces home empty; IV.F); home and full at 218, the plan at
-219: +3 at 324, Ashwood taken at 442 (the group 3/2).
+219 (IV.4): +3 at 324, contact at 402 (IV.6), rounds at 422 and 442: Ashwood taken at 442 (the group 3/2; IV.7 and, after
+its Continue, IV.8 on the same tick); full at 502 (IV.9), the capital at 641 as on the main path. IV.5 does not show on
+this path: the enemy plan was over (Old Mill taken at 138) before the player's plan, so the beat is `optional` (7.3) and
+IV.6 passes it over (PR 1).
 
 ### 4.5 Chapter V: Defence (about 1 minute)
 
@@ -541,8 +547,9 @@ Stormcrown (never fires now).
 
 **Verified** (`mvp-7`): the attack leaves Ridgeway at 10 (V.1), reaches Highcrag at 99; rounds at 119 (the mountain
 bonus, `virtual_0 = 1`: V.2), 139, 159; `fight_ended` at 159 with no losses, the attacker bounces home (V.3). The
-strike is planned at 200 (V.4); the fort at 202 (V.5), works at 302; Millbrook's group sent at 203, in Flatford at 268
-(4/4). The strike gathers its bonus at 258, pays `toll_paid` 2 charges at the fort's point at 384 (4 units: 2 started
+strike is planned at 200 (V.4: the planned intent is in the view of tick 200); the fort at 201 (V.5), works at 301;
+Millbrook's group sent at 202, in Flatford at 267 (4/4). (PR 1: one tick earlier than the first draft, which had the
+player act a tick late after V.4; nothing else moves.) The strike gathers its bonus at 258, pays `toll_paid` 2 charges at the fort's point at 384 (4 units: 2 started
 threes; V.6), contact at Flatford at 415, the first round burns a defender's charge (`burned_0 = 1`), the fight ends at
 475 with no losses, `winner = 0`.
 
@@ -614,11 +621,12 @@ Fernhold-Ashwood 75, Ashwood-Stormcrown 70, Lowfield-Stormcrown 202.
 |---|---|---|---|---|---|---|
 | A2.1 | chapter start | "Give your capital a **rally point**, and its recruits walk to the front by themselves." | "Click on Highhold, choose Rally point, then click on Fernhold" | `action` | a rally point of Highhold on Fernhold | rally points |
 | A2.2 | your `SetRallyPoint` accepted | "Highhold's new units will now walk to Fernhold. Each walk costs a little CP." | "Recruit two: press {recruit_key} twice" | `action` | recruit in Highhold (twice) | |
-| A2.3 | the first own `rally_walk_paid` | "Your first recruit is walking to Fernhold. The second will follow." | none | none | none | |
+| A2.3 | the first own `rally_walk_paid` | "Your first recruit is walking to Fernhold. The second will follow." | none | none | as before (A2.2's two recruits, the same count) | |
 | done | two own groups of `rally_walk_paid` arrived at Fernhold (`group_arrived`, then `groups_merged` there) | Seal | | | | |
 
 No failure branch: two recruits at most (`allow` counts them), so the walks never lack CP (round 2's A2.F needed a
-third recruit).
+third recruit). A2.3 keeps A2.2's `allow` and its count (PR 1): a player who presses the second recruit more than 3 s
+after the first would otherwise meet A2.3 with nothing allowed and never reach the goal.
 
 **Opponent script:** none.
 
@@ -679,7 +687,7 @@ packets it talks about move while it shows.
 
 **Verified** (`mvp-7`): at tick 10 the capital sends one charge to Millbrook and one to Coldwell (Fernhold and
 Lowfield call it, the nearest stock), at 20 and 30 one more each to Millbrook (one per road per dispatch; beat A3.2 at
-31: four packets on the roads). Coldwell passes its charge to Lowfield at 70; the raid takes Lowfield at 83 and that
+30, three seconds after Continue at tick 0 like II.2: four packets on the roads; the draft said 31). Coldwell passes its charge to Lowfield at 70; the raid takes Lowfield at 83 and that
 packet is lost (`packet_lost`, beat A3.3); from 120 Coldwell is a leaf (`front_dist` 0). Millbrook passes three
 charges to Fernhold (sent at 70, 80, 140): Fernhold full at 188 (A3.4). The order at 189: contact at Ashwood at 258,
 rounds at 278 (one shot each, cancelled) and 298 (the defender dies), Ashwood taken at 298 with the group 3/0 (the
@@ -797,21 +805,23 @@ validator; no `SIM_VERSION`). Not needed now.
   `tut-rally`, `tut-flow`), outside the pool like `maps/menu/` and `maps/gen/`: never served to the queue, a lobby or a
   tournament.
 - **Validation:** they fail the design checks by design (`fairness` of `meta.symmetry = "none"`, `neutral_space`).
-  `gow-maps validate` gets `--checks <list>` (or a `tutorial` profile) and `maps:validate` runs the tutorial glob with
-  the structural checks only (`format`, `names`, `connectivity`, `planarity`, `travel_ticks`, `degree`); the
+  `gow-maps validate` gets `--checks <list>` and the profile `--checks tutorial`; `maps:validate` (and `check:py`) runs
+  the tutorial glob with the structural checks only (`format`, `names`, `connectivity`, `planarity`, `travel_ticks`,
+  `degree`, plus `symmetry`, which for a map without a mirror only checks the identity table the tie-breaks rely on); the
   `warehouse` check against `mvp-7` runs as for every map.
 - `maps:bake` and `maps:preview` take the glob too (backgrounds as for any map; no geography file, so no water). The
   walkthrough frames were drawn on such bakes (section 8).
 - `gow_server.maps.MapCatalog` loads them as a separate group, served by `GET /api/maps/{id}` (the client draws a
-  match map from the server).
+  match map from the server), never in `GET /api/maps`, a random pick or a `map_id` of another match (422).
 
 ### 7.3 The chapter definition: one data file per chapter
 
 `tutorial/chapters/<id>.json`, validated by a Pydantic model in `gow_protocol.tutorial` (the only source of truth,
-`AGENTS.md` 6), exported to the JSON schema and to TypeScript by `regen` like `MapFile`. The server reads it, the
+`AGENTS.md` 6), exported to the JSON schema and to TypeScript by `regen` like `MapFile` (the type `Chapter`; unlike a
+message, a field with a default may be left out of a file, so it is optional in TypeScript). The server reads it, the
 client imports it at build time (as `app/menuMap.ts` imports the menu map). Chapter ids: `units`, `economy`,
 `building`, `attack`, `defence` (main road), `group-orders`, `rally-points`, `supply-distribution` (Advanced). Chapter I
-as the example:
+as it is in the code:
 
 ```json
 {
@@ -821,55 +831,71 @@ as the example:
   "opponent": [],
   "beats": [
     {"id": "1", "on": {"start": true}, "pause": "action",
-     "allow": [{"move": {"from": "Highhold", "to": "Ashford"}}], "mark": [{"group": "Highhold"}]},
+     "allow": [{"move": {"from": "Highhold", "to": "Ashford", "planned": false}}], "mark": [{"group": "Highhold"}]},
     {"id": "2", "on": {"ui": "select", "group": "Highhold"}, "mark": [{"node": "Ashford"}]},
-    {"id": "3", "on": {"accepted": "move", "to": "Ashford"}, "pause": "continue", "allow": [],
+    {"id": "3", "on": {"accepted": {"move": {"to": "Ashford"}}}, "pause": "continue", "allow": [],
      "mark": [{"node": "Ashford", "ring": true}]},
     {"id": "4", "on": {"event": "node_captured", "node": "Ashford", "by": "you"}, "pause": "continue",
      "allow": [], "mark": [{"group": "Ashford"}]},
     {"id": "5", "on": {"continued": "4"}, "pause": "action",
-     "allow": [{"move": {"from": "Ashford", "to": "Elmstead"}, "max": 2}, {"cancel_order": {}, "max": 1}],
+     "allow": [{"move": {"from": "Ashford", "to": "Elmstead", "planned": false}, "max": 2},
+               {"cancel_order": {}, "max": 1}],
      "mark": [{"node": "Elmstead"}]},
     {"id": "6", "on": {"event": "node_captured", "node": "Elmstead", "by": "you"}, "pause": "continue",
      "allow": [], "mark": [{"node": "Kestrel"}]},
     {"id": "7", "on": {"continued": "6"}, "pause": "action", "ui": ["terrainMode"],
-     "allow": [{"move": {"from": "Elmstead", "to": "Fordham"}}],
+     "allow": [{"move": {"from": "Elmstead", "to": "Fordham", "planned": false}}],
      "turns": [{"word": "plains", "nodes": ["Ashford", "Fordham", "Kestrel"]},
                {"word": "forest", "nodes": ["Elmstead", "Reedwick", "Thornby"]},
                {"word": "mountains", "nodes": ["Highhold", "Brackenfold", "Stormcrown"]}],
      "mark": [{"node": "Fordham"}]}
   ],
   "fails": [],
-  "goal": {"all": [{"owner": "Ashford", "is": "you"}, {"owner": "Elmstead", "is": "you"},
-                   {"owner": "Fordham", "is": "you"}]}
+  "goal": {"all": [{"view": {"own": "Ashford"}}, {"view": {"own": "Elmstead"}}, {"view": {"own": "Fordham"}}]}
 }
 ```
 
 - **`cp_start`** (optional): the starting CP of the chapter, `"cap"` or hundredths in `0..cp.cap`. The server plays the
   chapter on the main ruleset with only `cp.start` replaced (a derived `Ruleset`, `dataclasses.replace`, as map tempo
   derives `Match.rules`); no rule number in code, no new rule.
-- **`ui`**: the pieces shown at the chapter start (section 4.9's flags; the loader checks it equals the union of the
-  chapters before it, so a chapter played alone still starts right); a beat's `ui` adds pieces, its `hide` removes
-  them (IV.9 hides the clock IV.8 showed).
+- **`ui`**: the pieces shown at the chapter start (section 4.9's flags; `check_chapters` checks it equals what the chapters
+  before it leave: a main chapter those of the main chapters before it, an Advanced one those of the whole main road, so
+  a chapter played alone still starts right); a beat's `ui` adds pieces, its `hide` removes them (IV.9 hides the clock
+  IV.8 showed).
 - **`allow`**: per beat, a list of command patterns: the command type of the wire (`move`, `cancel_order`,
   `build_factory`, `build_barracks`, `recruit`, `set_stance`, `fortify_road`, `group_move`, `set_rally_point`) and its
   places by name (`from` the group's node, `to`, `node`, `toward` the road's other end, `groups` by their nodes,
-  `stance`, `planned`: `true`, `false` or absent for either); `max` bounds how often the pattern is used in the beat.
-  `forfeit` (leaving) is always allowed. A beat without `allow` keeps the one before it (a UI beat must not have one;
-  the loader checks it).
+  `stance`, `planned`: `true`, `false` or absent for either; an absent field matches any); `max` bounds how often the
+  pattern is accepted while the beat lasts. Every `move` of the chapters is `"planned": false` except IV.2 (either),
+  IV.4's trigger and IV.F (planned). `forfeit` (leaving) is always allowed. A beat without `allow` keeps the one before it
+  with its counts (a UI beat must not have one; A2.3 keeps A2.2's); `[]` allows nothing. Split, merge, releasing a plan,
+  cancelling a recruit and the leaf shift have no pattern: never allowed in a chapter.
 - **`pause`**: `"continue"`, `"action"` or absent (section 4.0). A UI beat must not pause (the server does not see it).
 - **`turns`** (optional, client only): the marks in turn of section 4.0, groups of places with the word of the card each
   one lights. **`slides`** (optional, client only): the number of slides of the card (IV.2: 3); the texts are the keys
-  `tutorial.<chapter>.<beat>.<n>`.
-- **`on`** (triggers): `start`; `event` with its filters (`node`, `by`, data fields with `min`); `accepted` (an own
-  command the server accepted, by type and places); `view` (a field of an own node or group: `{"node": "Westmarch",
-  "field": "starve_in", "set": true}`, `{"node": "Fernhold", "field": "warehouse", "full": true}` (A3.4),
-  `{"group_at": "Ashwood", "full": true}`, an enemy group on a road toward a node, an enemy intent to a node); an
-  `event` may list several kinds, the first that comes fires (A3.3: `packet_lost`, or `node_captured` of Lowfield by
-  the enemy); `after` (another trigger plus `ticks`); `continued` (Continue on a beat); `ui` (client
-  only: `select` of a group or a place).
+  `tutorial.<chapter>.<beat>.<n>`. **`with_goal`** (client only): the beat fires with the goal (A1.5): the client keeps
+  its card with Continue before the Seal. **`optional`**: the beat after it may begin first, and this one is then passed
+  over (IV.5, see the failure path of section 4.4).
+- **`mark`**: the Compass marks of the beat, each one of: `{"node": X}` (with `"ring": true` the wide ring of capacity
+  and fights), `{"group": X}` (the own group standing in X), `{"road": [A, B]}`, `{"hud": "cp" | "stance" | "vp" |
+  "clock" | "alerts" | "factories"}`, `{"menu": "factory" | "barracks" | "recruit" | "fortify" | "rally", "at": X}` (the
+  item of X's menu), `{"vp_badge": X}`.
+- **`on`** (triggers), exactly one kind: `start`; `event` with its filters (`node`, `to` the `to_node`, `edge` by its two
+  ends, `by` and `winner` as `you` or `enemy`, `where` exact fields, `min` integer fields at least, `group_of` "the
+  event's group was named by an earlier own event of this kind"); `accepted` (an own command the server accepted, a
+  pattern as in `allow`, its places as they were when it was sent); `view`, one fact of the own view: `own` (the node is
+  yours), `starving` (`starve_in` set), `warehouse_full` (A3.4), `group_full` (an own group stands in the own node, every
+  unit charged), `enemy_road` (an enemy group seen on a road touching the node: the view says where a figure is, never
+  where it goes), `enemy_plan` (an enemy planned intent targets the node); `continued` (Continue on that beat) with
+  `after` ticks; `any` (the first of several that fires: A3.3's `packet_lost` or Lowfield taken by the enemy; IV.7's
+  round with a loss on either side); `ui` (client only: `select` of a group, `group` the node it stands in or absent for
+  any).
+- **`goal`**: `{"all": [...]}`, every condition at once; an `event` condition holds once its event came (`since` a beat,
+  `count` times: A2's two arrivals at Fernhold of groups named by `rally_walk_paid`), a `view` condition while it is
+  true.
 - The texts are not in the file: the key of a beat is `tutorial.<chapter>.<beat>` in the client dictionaries. Node
-  names, not ids: the file reads the way the chapter is written, and the loader checks every name against the map.
+  names, not ids: the file reads the way the chapter is written, and `check_chapter` checks every name and road against
+  the map.
 
 ### 7.4 The scripted opponent
 
@@ -878,10 +904,11 @@ bot may (`gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`; `AGENTS.md` 2): it 
 group standing in node X" there and answers `Move` (ordinary or planned with its bonus) with opaque ids. A step fires
 at a tick (`at`) or on a fact of its own view (`when`: `owns` a node, as chapters II and V need; Advanced 3's raid is
 an `at` step); each fires once; a
-step whose group is gone is skipped (the text never depends on it). Deterministic like every bot (no seed is needed);
-the `Seat` calls it every 5 ticks as any bot, so `at: 30` means the first decision at or after tick 30, and a `when`
-step answers within 5 ticks (the scripts above answered in 1 tick; 5 changes no outcome: the raiders of II leave an
-empty place either way). A paused chapter does not step, so the opponent waits with it.
+step whose group is gone is skipped (the text never depends on it). Deterministic like every bot (no seed is needed).
+**PR 1:** the server calls the scripted seat every tick (`BotSeat.decide_every = 1`; the bot is a `Glancer`, so a call
+between its steps builds no view), not every 5 ticks as the plan said: `at: 200` is the move applied at tick 200 and a
+`when` step answers in 1 tick, so every chapter plays at the ticks of section 4 exactly (the plan's 5-tick cadence would
+have moved the opponent's ticks by up to 4). A paused chapter does not step, so the opponent waits with it.
 
 ### 7.5 The beat director: the server walks the beats, the client draws them
 
@@ -894,9 +921,18 @@ disagree).
   (fog applied), the results of player 0's commands, and `match.view(0)`; it matches the next beats' triggers
   (comparing fields with the file, never working out a rule, `AGENTS.md` 7.1), keeps the current beat, its `allow`
   with the `max` counters, its pause, and checks the fails and the goal.
-- **The client** gets the beat in a new server message `tutorial` (`{beat, paused}`, sent on every change and after
-  `welcome`); it shows that beat's card, mark, `ui` and `allow`. Only the UI beats (a selection) are walked by the
-  client itself, between two server beats; they change neither the pause nor the locks.
+- **The walk** (PR 1): after a step, the beats after the current one are tried in file order and the first whose
+  trigger fires begins; a UI beat is passed over, an `optional` one may be passed over by the beat after it, any other
+  stops the search (so a later beat never fires out of order). A beat that does not pause lets the next one fire in the
+  same tick; a Continue tries the next beats again on the facts of the same tick (IV.7 and IV.8 on one tick of the
+  failure path). A failure beat fires once, from any beat; the main beats go on after it. An `action` card's pause ends
+  when the server admits a command of its `allow` (in `submit`); if the simulation then rejects it, the card waits
+  again.
+- **The client** gets the beat in a new server message `tutorial` (`{chapter, beat, paused, used, done}`: `beat` is
+  `null` before the first one (chapter V), `used` counts the accepted commands of each `allow` entry against its `max`,
+  `done` says the goal holds; sent on every change, after the tick's acks and events, and after `welcome`); it shows
+  that beat's card, mark, `ui` and `allow`. Only the UI beats (a selection) are walked by the client itself, between two
+  server beats; they change neither the pause nor the locks.
 - **The goal**: when it holds, the server queues a `Forfeit` of the scripted side, a normal command, so the match ends
   with `match_end` (the player wins, `reason = forfeit`). Chapter IV ends by itself (`reason = capital`). The client
   knows it is in a chapter (it started it) and shows the Seal instead of the match result. Alternative: a new
@@ -904,17 +940,22 @@ disagree).
 
 ### 7.6 Server
 
-- **`POST /api/tutorial-matches {chapter}`** (`gow_server.tutorial`): loads the chapter file, its map from
+- **`POST /api/tutorial-matches {chapter}`** (`gow_server.tutorialmatch`; the director in `gow_server.tutorial`; the answer
+  `{match_id, map_id, chapter, player}`, `player` always 0): loads the chapter file, its map from
   `maps/tutorial/`, the main ruleset (with `cp_start` applied); seat 0 the player, seat 1 the `ScriptedBot`; unrated,
   not a bot level of `botmatch` (no `@level`). It goes through `MatchLifecycle` like a bot match: `claim` (one active
   match per player), the caps (`GOW_MAX_BOT_MATCHES`: a scripted match is cheap but still a match), the connect
-  timeout. No replay file is kept (a chapter is scripted; the headless tests are its record). The runner gets the
-  director (`MatchRunner(..., tutorial=director)`).
-- **Locks.** `MatchRunner.step` hands the queued commands of player 0 to the director before `Match.step`: a command
-  the current beat does not allow never reaches the simulation and is answered at once with an `ack` whose
-  `reject_code` is `INVALID_ARGUMENT` (an existing code, no protocol change; the client never sends it, it only stops
-  a modified client). The scripted side is not locked. Commands are matched on the resolved internal command and the
-  state (a group's node), on the server only.
+  timeout (also while the first card waits). No replay file is kept (a chapter is scripted; the headless tests are its
+  record). The runner gets the director (`MatchRunner(..., tutorial=director)`). The chapters are loaded and checked at
+  start-up (`ChapterBook`): a broken one stops the server; a server without `maps/tutorial/` (a test's map folder) has the
+  tutorial off (503). `GET /api/me/active-match` says `chapter` for a running chapter, so a reload can return to it as a
+  chapter.
+- **Locks.** `MatchRunner.submit` hands every command of player 0 to the director (PR 1: in `submit` rather than in
+  `step`, so a refusal is answered while a card waits): a command the current beat does not allow never reaches the
+  simulation and is answered at once with an `ack` whose `reject_code` is `INVALID_ARGUMENT` and `applied_tick` the next
+  tick (an existing code, no protocol change; the client never sends it, it only stops a modified client). The scripted
+  side is not locked. Commands are matched on the resolved internal command and the state (a group's node), on the
+  server only. A `forfeit` (leaving) is always admitted and ends a card's pause.
 - **Pause.** When the director enters a beat with `pause`, the runner calls its existing `pause()` (the loop already
   waits on `_resumed`) and sends `tutorial {paused: true}`; it is not the private-match pause: no `request_pause`, no
   `_pauses_used`, no `pause_max_s` timer, no `paused` message. It ends with `resume()`:
@@ -977,11 +1018,11 @@ it (round 1: "in the browser"). No server state.
 | Change | Needs |
 |---|---|
 | Rules | none: no DEC, no `SIM_VERSION`, no golden replays (`cp_start` replaces a ruleset value for a chapter, like map tempo) |
-| The server message `tutorial` (`beat`, `paused`) | `PROTOCOL_VERSION`++, `regen:protocol`, in PR 1 |
+| The server message `tutorial` (`chapter`, `beat`, `paused`, `used`, `done`) | `PROTOCOL_VERSION`++ (53 to 54), `regen:protocol`, in PR 1 |
 | A locked command | none: an `ack` with the existing `INVALID_ARGUMENT` (Q10) |
 | Pause and resume of a chapter | none on the wire beyond `tutorial`: the existing `resume` message; the runner's existing `pause()` and `resume()`. A line in DEC-05 (mechanics.md 19: "a tutorial chapter pauses at its cards, no limit") in PR 1, no new DEC: pauses are server settings, not rules |
 | Chapter files (new Pydantic model) | the schema and `protocol.gen.ts` by `regen` (no WebSocket message carries them) |
-| `POST /api/tutorial-matches`, `GET /api/ruleset` | `api.gen.ts` by `regen:api` |
+| `POST /api/tutorial-matches`, `GET /api/ruleset`, `GET /api/me/active-match` with `chapter` | `api.gen.ts` by `regen:api` |
 | `matches.kind` | an Alembic migration |
 | Validator `--checks`, the tutorial glob of the map tasks | `mise.toml` and `AGENTS.md` section 3 in the same PR |
 | The removal of How to play v1 | `regen:howto` gone from `mise.toml` and `AGENTS.md` |

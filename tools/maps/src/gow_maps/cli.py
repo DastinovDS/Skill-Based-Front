@@ -18,7 +18,7 @@ from gow_maps.generate import generate, water_share_pct
 from gow_maps.geo import bake_geography, dump_geography, find_spec, spec_path, vector_path
 from gow_maps.mirror import HalfFormatError, dump_map, mirror_file
 from gow_maps.preview import preview_path, render_preview
-from gow_maps.validate import Issue, load_config, validate, validate_file
+from gow_maps.validate import CHECKS, TUTORIAL_CHECKS, Issue, load_config, validate, validate_file
 from gow_sim.maps import MapFormatError, load_map, parse_map
 from gow_sim.ruleset import load_ruleset
 
@@ -49,10 +49,26 @@ def _report(path: str, issues: list[Issue]) -> bool:
     return False
 
 
+def _checks(text: str | None) -> frozenset[str] | None:
+    """``--checks``: a comma list of ``CHECKS`` or ``tutorial`` (``TUTORIAL_CHECKS``)."""
+    if text is None:
+        return None
+    if text == "tutorial":
+        return TUTORIAL_CHECKS
+    names = frozenset(name.strip() for name in text.split(",") if name.strip())
+    unknown = sorted(names - set(CHECKS))
+    if unknown:
+        raise SystemExit(f"gow-maps validate: unknown checks {unknown}, known: {', '.join(CHECKS)}")
+    return names
+
+
 def _validate(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     rules = None if args.ruleset is None else load_ruleset(args.ruleset)
-    results = [_report(path, validate_file(path, config, rules)) for path in _expand(args.files)]
+    checks = _checks(args.checks)
+    results = [
+        _report(path, validate_file(path, config, rules, checks)) for path in _expand(args.files)
+    ]
     return 0 if all(results) else 1
 
 
@@ -153,6 +169,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate.add_argument("--config", help="validator thresholds (default: built-in validate.toml)")
     validate.add_argument(
         "--ruleset", help="also check the start stocks against its warehouses (DEC-26, item 5)"
+    )
+    validate.add_argument(
+        "--checks",
+        help="only these checks, comma separated, or 'tutorial' for the structural ones of the"
+        " tutorial maps (#806); default: all",
     )
     validate.set_defaults(handler=_validate)
     mirror = commands.add_parser("mirror", help="build a rot180 map from a half and validate it")

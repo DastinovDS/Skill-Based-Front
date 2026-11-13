@@ -58,6 +58,7 @@ RUN mkdir -p /data/replays /data/rulesets /replay-stats /client-logs /app \
 COPY --from=build /app/.venv /app/.venv
 COPY maps/ /app/maps/
 COPY rulesets/ /app/rulesets/
+COPY tutorial/ /app/tutorial/
 
 WORKDIR /app
 
@@ -73,6 +74,7 @@ ENV PATH=/app/.venv/bin:$PATH \
     GOW_PORT=8000 \
     GOW_DATABASE_URL=sqlite:////data/gow.db \
     GOW_MAPS_DIR=/app/maps \
+    GOW_TUTORIAL_DIR=/app/tutorial/chapters \
     GOW_RULESET_PATH=/app/rulesets/mvp-7.toml \
     GOW_RULESETS_DIR=/data/rulesets \
     GOW_CLIENT_LOG_DIR=/client-logs

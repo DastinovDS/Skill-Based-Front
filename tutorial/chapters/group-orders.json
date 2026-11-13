@@ -1,0 +1,25 @@
+{
+  "id": "group-orders",
+  "road": "advanced",
+  "number": 1,
+  "map": "tut-group",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
+         "planned", "vp", "terrainMarks", "alerts", "fort"],
+  "opponent": [],
+  "beats": [
+    {"id": "1", "on": {"start": true}, "pause": "action", "ui": ["groupSelect"],
+     "allow": [{"group_move": {"groups": ["Fernhold", "Lowfield"], "to": "Ashwood", "planned": false}}],
+     "mark": [{"group": "Fernhold"}, {"group": "Lowfield"}]},
+    {"id": "2", "on": {"ui": "select"},
+     "mark": [{"node": "Ashwood"}]},
+    {"id": "3", "on": {"accepted": {"group_move": {"to": "Ashwood"}}}, "allow": [],
+     "mark": [{"node": "Fernhold"}]},
+    {"id": "4", "on": {"event": "fight_started", "node": "Ashwood"}, "allow": [],
+     "mark": [{"node": "Ashwood", "ring": true}]},
+    {"id": "5", "on": {"event": "node_captured", "node": "Ashwood", "by": "you"}, "allow": [],
+     "with_goal": true,
+     "mark": [{"node": "Highhold"}]}
+  ],
+  "fails": [],
+  "goal": {"all": [{"event": "node_captured", "node": "Ashwood", "by": "you"}]}
+}
