@@ -2,9 +2,16 @@
 
 The budgets of AGENTS.md, section 12 are checked on synthetic grids by
 ``packages/sim/tests/test_benchmarks.py``. Here the same quantities are measured on the maps the
-queue plays, with the rules a match plays (``Match.rules``: ``[map_tempo]`` applied) and two
-smart bots (``smart_rusher`` against ``smart_expander``, hard) driving a seeded match to tick
-``WARM_TICKS``, so the state has groups on the roads, fights, builds and a grown fog memory.
+queue plays, with the rules a match plays (``Match.rules``: ``[map_tempo]`` applied), on the
+state of a seeded match of two smart bots (``smart_rusher`` against ``smart_expander``, hard) at
+tick ``WARM_TICKS``, so the state has groups on the roads, fights, builds and a grown fog memory.
+
+The bots played that match once, in ``scripts/bench_pool_record.py``; the benchmarks replay its
+recorded commands (``bench_pool/<map>.jsonl.gz``) and measure a copy of the warmed match in every
+test (#1029). Before, the live bots played the warm-up and the step benchmark moved the shared
+match on, so every bot change and every ``-k`` selection measured another state: the supply flow
+of one map moved 20 to 50% with a bot PR on the same machine, which the ceilings could not tell
+from a regression of the simulation. Only ``test_pool_decision`` measures the bots of the day.
 
 Every benchmark has two numbers:
 
@@ -16,14 +23,19 @@ Every benchmark has two numbers:
   budget does not hold on that map, which ``docs/perf.md`` reports as a finding. Nothing here
   loosens a budget; the budget tests of ``packages/sim`` are unchanged.
 
-Method and scaling are those of ``packages/sim/tests/test_benchmarks.py`` (``docs/perf.md``).
+The method is that of ``packages/sim/tests/test_benchmarks.py`` (``docs/perf.md``), with a
+``speed_factor`` workload of its own: a deep copy and a search over a graph of a few MB, the shape
+of the measured calls. The small workload of the simulation benchmarks fits any cache and reads
+the AMD EPYC 9V45 runners of CI at x1.06 to x1.09, while these benchmarks run 1.3 to 1.7 times
+the reference there: scaled by it, the supply rows sat at 1.5 to 1.6 of the reference on a
+healthy ``develop``, next to the 1.65 a 10% ceiling and ``REGRESSION`` allow (#1029).
 """
 
 import copy
 import time
 import timeit
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, Protocol
 
@@ -48,8 +60,8 @@ LOGS: Final = Path(__file__).resolve().parent / "bench_pool"
 RECORD: Final = "record them again with `mise run bench:record` (scripts/bench_pool_record.py)"
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
-REFERENCE_WORKLOAD_S: Final = 1.29e-3
-"""``_workload()`` on the reference machine; equal to the one of the simulation benchmarks."""
+REFERENCE_WORKLOAD_S: Final = 75.7e-3
+"""``_workload()`` of a 20000-node graph on the reference machine (the best of 20, #1029)."""
 KEY: Final = bytes(range(32))
 WARM_TICKS: Final = 3000
 RECORDED_TICKS: Final = 4500
@@ -87,26 +99,41 @@ class BenchmarkFixture(Protocol):
 
 
 @dataclass(slots=True)
-class _Item:
-    key: int
-    value: int
+class _Node:
+    nid: int
+    owner: int
+    stock: int
+    roads: list[int] = field(default_factory=lambda: [])
 
 
-def _workload() -> int:
-    """Copy of ``_workload`` of the simulation benchmarks: keep the two equal."""
-    items = {i: _Item(i, (i * 7919) % 1009) for i in range(5000)}
-    order = sorted(items, key=lambda k: (items[k].value, k))
-    total = 0
-    for k in order:
-        item = items[k]
-        if item.value % 3 == 0:
-            total += item.key
-    return total
+def _graph(n: int) -> dict[int, _Node]:
+    g = {i: _Node(i, i % 2, i % 7) for i in range(n)}
+    for i in range(n):
+        g[i].roads.extend(((i * 31 + 7) % n, (i * 17 + 3) % n, (i + 1) % n))
+    return g
+
+
+def _workload(graph: dict[int, _Node]) -> int:
+    """What the measured calls do, in plain Python: a deep copy of a large graph of slotted
+    objects (a few MB, like the copied state and memos) and a breadth-first search over it. The
+    small in-cache workload of the simulation benchmarks reads the AMD EPYC 9V45 runners of CI
+    at x1.06 to x1.09 while these benchmarks run 1.3 to 1.7 times the reference there (#1029)."""
+    g = copy.deepcopy(graph)
+    seen = {0: 0}
+    queue = [0]
+    for nid in queue:
+        d = seen[nid] + 1
+        for m in g[nid].roads:
+            if m not in seen:
+                seen[m] = d
+                queue.append(m)
+    return sum(sorted(seen.values()))
 
 
 @pytest.fixture(scope="module")
 def speed_factor() -> float:
-    return min(timeit.repeat(_workload, number=1, repeat=30)) / REFERENCE_WORKLOAD_S
+    graph = _graph(20000)
+    return min(timeit.repeat(lambda: _workload(graph), number=1, repeat=20)) / REFERENCE_WORKLOAD_S
 
 
 @pytest.fixture(scope="module")
@@ -183,47 +210,44 @@ def _budget(mapdef: MapDef, kind: str) -> float:
 
 
 CEILING_MS: Final[dict[tuple[str, str], float]] = {
-    ("step", "crossroads"): 0.21,
-    ("step", "highway"): 0.21,
-    ("step", "narrows"): 0.16,
-    ("step", "ridge"): 0.23,
-    ("project", "crossroads"): 0.31,
-    ("project", "highway"): 0.29,
-    ("project", "narrows"): 0.19,
-    ("project", "ridge"): 0.32,
-    ("vision", "crossroads"): 0.04,
-    ("vision", "highway"): 0.035,
-    ("vision", "narrows"): 0.025,
-    ("vision", "ridge"): 0.07,
-    ("supply", "crossroads"): 0.029,
+    ("step", "crossroads"): 0.18,
+    ("step", "highway"): 0.165,
+    ("step", "narrows"): 0.12,
+    ("step", "ridge"): 0.175,
+    ("project", "crossroads"): 0.3,
+    ("project", "highway"): 0.285,
+    ("project", "narrows"): 0.185,
+    ("project", "ridge"): 0.29,
+    ("vision", "crossroads"): 0.029,
+    ("vision", "highway"): 0.03,
+    ("vision", "narrows"): 0.021,
+    ("vision", "ridge"): 0.031,
+    ("supply", "crossroads"): 0.028,
     ("supply", "highway"): 0.042,
-    ("supply", "narrows"): 0.021,
-    ("supply", "ridge"): 0.06,
-    ("supply_replan", "crossroads"): 0.18,
-    ("supply_replan", "highway"): 0.15,
-    ("supply_replan", "narrows"): 0.065,
-    ("supply_replan", "ridge"): 0.17,
-    ("snapshot", "crossroads"): 0.4,
-    ("snapshot", "highway"): 0.3,
-    ("snapshot", "narrows"): 0.2,
-    ("snapshot", "ridge"): 0.39,
-    ("server_tick", "crossroads"): 1.7,
-    ("server_tick", "highway"): 1.65,
-    ("server_tick", "narrows"): 0.9,
-    ("server_tick", "ridge"): 1.7,
-    ("decision", "crossroads"): 0.85,
-    ("decision", "highway"): 0.78,
-    ("decision", "narrows"): 0.46,
-    ("decision", "ridge"): 0.82,
+    ("supply", "narrows"): 0.024,
+    ("supply", "ridge"): 0.031,
+    ("supply_replan", "crossroads"): 0.115,
+    ("supply_replan", "highway"): 0.1,
+    ("supply_replan", "narrows"): 0.07,
+    ("supply_replan", "ridge"): 0.155,
+    ("snapshot", "crossroads"): 0.38,
+    ("snapshot", "highway"): 0.29,
+    ("snapshot", "narrows"): 0.195,
+    ("snapshot", "ridge"): 0.3,
+    ("server_tick", "crossroads"): 1.55,
+    ("server_tick", "highway"): 1.45,
+    ("server_tick", "narrows"): 0.83,
+    ("server_tick", "ridge"): 1.5,
+    ("decision", "crossroads"): 9.9,
+    ("decision", "highway"): 9.9,
+    ("decision", "narrows"): 9.9,
+    ("decision", "ridge"): 9.9,
 }
-"""Reference-machine means (3 runs, 2026-11-12; the supply rows after #482's flow work), rounded
-up about 10%, by (kind, map): see the module docstring. A new pool map needs its row. The
-``supply_replan`` rows are raised about 30% (#1022): the CI runners measured the replanned dispatch
-1.5 to 1.8 times the reference after ``speed_factor`` on ``develop`` itself (runs 43248526758,
-43301391850: crossroads, highway, narrows over the ceiling), so the job failed on noise; the cost
-of the warm state did not change (``docs/perf.md``). The ``supply`` row of highway is raised about
-30% too (#1027): ``develop`` 9f72adf itself failed it on CI (run 43313578489: 0.062 ms at x1.17
-against the 0.032 ms ceiling), while the same benchmark measures 0.022 ms locally."""
+"""Reference-machine means of the recorded state (3 runs, 2026-11-13, #1029), rounded up about
+10%, by (kind, map): see the module docstring. A new pool map needs its row and its log. The rows
+are measured again only when the state changes: the logs recorded again (``mise run
+bench:record``) or the simulation made cheaper or dearer on purpose; a bot change keeps them
+(only the ``decision`` rows measure the bots)."""
 
 
 def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) -> None:

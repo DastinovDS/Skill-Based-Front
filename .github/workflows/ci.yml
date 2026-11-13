@@ -192,7 +192,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        copy: [1, 2, 3, 4, 5]
+        copy: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -203,10 +203,7 @@ jobs:
       - run: mise run setup:py
       - run: |
           grep -m1 "model name" /proc/cpuinfo
-          mise exec -- uv run python scripts/diag_1029.py
-          mise exec -- uv run pytest apps/bots/tests/test_benchmarks_pool.py -m perf -q --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name || true
-          mise exec -- uv run pytest packages/sim/tests/test_benchmarks.py -m perf -q --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name -k "not full_headless" || true
-          mise exec -- uv run python scripts/diag_1029.py
+          mise exec -- uv run pytest apps/bots/tests/test_benchmarks_pool.py -m perf -q -s --tb=line -p no:cacheprovider --benchmark-columns=min,median,mean,max --benchmark-name=short --benchmark-sort=name
 
   # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
   # the files of earlier commits stay frozen against the base branch.
