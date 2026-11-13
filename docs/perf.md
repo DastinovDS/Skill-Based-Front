@@ -50,7 +50,7 @@ uv run pytest --benchmark-disable                             # one run without 
 | `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (a snapshot together with the JSON encoding) against `project()` on the view of a `rusher` match on `web` after 300 ticks; a ratio on one machine, without `speed_factor` | no more expensive than `project()` (× `REGRESSION`) |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` of `expander` and `turtle` on the views of their own match on `web` after 300..1500 ticks (many groups, construction, contact with the enemy) | on average ≤ 1 ms |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide_smart_views`, `test_bench_decide_smart_v2_views` | `decide()` of every `smart_*` bot on the views of a smart match on `web` (`smart_rusher` against `smart_expander`, and against `smart_hoarder`, #166, #648) | on average ≤ 1 ms |
-| `apps/bots/tests/test_benchmarks_pool.py` (`test_pool_*`, #482) | the same quantities on the four pool maps `maps/*.json` under `mvp-7` with map tempo on (`Match.rules`), the state after 1500 ticks of `smart_rusher` against `smart_expander` (hard): `Match.step`, `project()`, the supply flow of a dispatch tick (with the plans of the previous tick kept, and without them, #482), `compute_vision` with an empty memo, `snapshot_frame`, a server tick (step, two reused views, two frames), and `view` plus `decide` of a bot as the server times it | the section 12 budget of each is in `extra_info` of the report; the test fails above a per-map ceiling (`CEILING_MS`, the measurement of 2026-11-12 + about 10%; the replanned supply rows and the highway supply row + about 30% since #1022 and #1027, as the CI runners measure that dispatch 1.5 to 1.8 times the reference after the speed factor), which is a regression net and **not** the budget: where a budget does not hold, the section below says so |
+| `apps/bots/tests/test_benchmarks_pool.py` (`test_pool_*`, #482, #1029) | the same quantities on the four pool maps `maps/*.json` under `mvp-7` with map tempo on (`Match.rules`), on the state at tick 3000 of a `smart_rusher` against `smart_expander` match (hard), replayed from the recorded commands of `apps/bots/tests/bench_pool/<map>.jsonl.gz` (`mise run bench:record`), each test on its own copy: `Match.step` (ticks 3001 to 4500 of the log), `project()`, the supply flow of a dispatch tick (with the plans of the previous tick kept, and without them, #482), `compute_vision` with an empty memo, `snapshot_frame`, a server tick (step, two reused views, two frames), and `view` plus `decide` of the bots of the day as the server times it | the section 12 budget of each is in `extra_info` of the report; the test fails above a per-map ceiling (`CEILING_MS`, the measurement of the recorded state on 2026-11-13 + about 10%, scaled by a `speed_factor` workload of its own, see "The recorded state and the CI scaling" below), which is a regression net and **not** the budget: where a budget does not hold, the section below says so |
 
 ## Regression
 
@@ -60,7 +60,8 @@ The budget on the current machine: the reference budget × `speed_factor`. `spee
 reference (`REFERENCE_WORKLOAD_S`, the best of 30 runs). A benchmark fails if the result exceeds
 the scaled budget by more than 50% (`REGRESSION = 1.5`): a slow CI runner and noise
 do not break the build, a real regression does. If the reference machine changes, re-measure
-`REFERENCE_WORKLOAD_S` and the table of measurements below.
+`REFERENCE_WORKLOAD_S` and the table of measurements below. The pool benchmarks (`apps/bots/tests/test_benchmarks_pool.py`) scale by a
+workload of their own shape with its own `REFERENCE_WORKLOAD_S` (#1029, "The recorded state and the CI scaling" below).
 
 For comparing two versions of the code on one machine there is the standard `pytest-benchmark` comparison:
 
@@ -141,7 +142,8 @@ quantities on them, measured on 2026-11-12 at `d603581` (after the memos of #983
 the flow work of #482, back to back with `6908a44`), by
 `apps/bots/tests/test_benchmarks_pool.py` (`mise run test:bench`).
 
-Method: the state after 1500 ticks of a seeded `smart_rusher` against `smart_expander` match (hard), so there are
+Method (until #1029; since then the state is replayed from a recorded log, see "The recorded state and the CI scaling"
+below): the state after 1500 ticks of a seeded `smart_rusher` against `smart_expander` match (hard), so there are
 groups on the roads, fights, builds and a grown fog memory; `Match.step` is timed alone (the bots decide in the
 untimed setup), `project()` is called without the reused vision (like the budget test), the supply flow runs on a
 copy of the dispatch-tick state (the memos travel with the copy, like in a match; in a full run the step benchmark
@@ -208,6 +210,65 @@ What holds and what does not (findings, nothing here changes a budget or the cod
 - Side note: `apps/bots/tests/conftest.py` loads **`mvp-5`** as its `mvp_rules`, so the existing bot benchmarks of
   this file's neighbour (`test_benchmarks.py`) measure the decision on a ruleset that is not played; the pool
   benchmarks load `rulesets/mvp-7.toml` themselves.
+
+### The recorded state and the CI scaling (#1029)
+
+From 846f122 (#1019) on, `py-perf` failed on `develop` itself in the pool supply rows (runs 43248526758, 43301391850,
+43309603002, 43313578489), and two bot PRs raised those ceilings (#1022: every `supply_replan` row about +30%; #1027:
+`supply[highway]` 0.032 -> 0.042 ms). The simulation did not change in that range (only `view.py`, #1004), and the
+synthetic benchmarks of `packages/sim` stayed flat against the runner (supply flow / step of `grid40` 0.21 to 0.225 in every
+run). Two causes, both of the measurement:
+
+- **The measured state followed the bots.** The live smart bots played the warm-up, and the step benchmark moved the
+  shared match on by 1500 ticks before the supply rows ran. Back to back on the reference machine, with only the bot
+  sources swapped (`PYTHONPATH`), the same benchmark measured: `supply[highway]` 0.030 ms with the bots of aa432c6 and
+  0.038 with those of 9f72adf (#1022, +27%), `supply_replan[narrows]` 0.043 -> 0.064 (+48%), `supply_replan[ridge]` 0.117
+  -> 0.141 (+20%), `supply_replan[crossroads]` 0.126 -> 0.147 with a818a4d (+17%) and back to 0.106 with 9f72adf. A run
+  with `-k supply` measured tick 1500 instead of 3000 (0.022 ms on `highway`, the number #1027 quoted). Now the bots play
+  the match once (`scripts/bench_pool_record.py`, `mise run bench:record`, 4500 ticks, about 4 KB per map) and the
+  benchmarks replay the commands, each test on a copy of the match at tick 3000: the bots of aa432c6 and of the head
+  measure the same numbers, and so does `-k supply`. `test_bench_pool_logs.py` (ordinary run) fails when a rule, `mvp-7`
+  or a pool map change makes the log give another match; record it again then, and measure the ceilings again.
+- **The `speed_factor` workload did not scale these benchmarks on the CI runners.** `ubuntu-latest` hands out several
+  CPUs; raw time of the pool benchmarks against the reference (the recorded state; runs 43385162619, 43386390401 and
+  43387621201, twelve runners):
+
+  | Runner CPU | `_workload` of the simulation benchmarks | pool step / project | pool supply / replanned | the deep-copy graph workload |
+  |---|---|---|---|---|
+  | AMD EPYC 9V45 (4 runners) | x1.06 to x1.09 | 1.34 to 1.54 | 1.42 to 1.74 | x1.27 to x1.44 |
+  | AMD EPYC 9V74 (2) | not measured | 1.75 to 2.01 | 1.87 to 2.28 | x2.02 to x2.06 |
+  | AMD EPYC 7763 (3) | not measured | 2.57 to 2.78 | 2.60 to 2.95 | x2.59 to x2.71 |
+  | Intel Xeon Platinum 8370C (2) | x2.04 | 2.28 to 2.43 | 2.40 to 2.74 | x2.38 to x2.43 |
+  | Intel Xeon 6973P-C (1) | x1.37 | 1.78 to 1.91 | 1.86 to 2.14 | not measured |
+
+  The small workload (5000 slotted objects, in every cache) reads the EPYC 9V45 runners as almost the reference, while
+  the supply flow on a freshly copied state runs 1.6 to 1.7 times it there: scaled, the `supply_replan` rows sat at 1.5
+  to 1.6 times the reference on a healthy head, against the 1.65 a ceiling of +10% and `REGRESSION` 1.5 allow, so any
+  drift of the state or of the runner failed the job (the failures of 846f122 to 9f72adf ran on 9V45 and 6973P-C
+  runners). The pool benchmarks now scale by a workload of their shape (a deep copy of a 20000-node graph of slotted
+  objects and a breadth-first search over it, `REFERENCE_WORKLOAD_S` 75.7 ms on the reference): scaled by it, the pool
+  rows are at 0.75 to 1.35 of the reference on all those runners (supply at most 1.25, replanned 1.35, on 9V45), and in
+  run 43387621201 (six runners: EPYC 7763, 9V74, Xeon 8370C) every row was at 0.75 to 1.03 of its ceiling, where
+  the test fails at 1.5. Median instead of mean, and the GC off (`--benchmark-disable-gc`), changed nothing: the
+  supply rows of one runner differ by less than 5% between them and between two runs in a job. The simulation
+  benchmarks keep their workload: their budgets have room on CI.
+
+The ceilings (`CEILING_MS`) are the means of three runs of the recorded state on the reference machine (2026-11-13,
+load average 2.3 to 2.9; the decisions of two runs), rounded up about 10%; the raises of #1022 and #1027 are gone with the state they were set on:
+
+| Quantity (ms) | `narrows` | `crossroads` | `highway` | `ridge` |
+|---|---|---|---|---|
+| `Match.step`, ticks 3001 to 4500 | 0.105 | 0.160 | 0.147 | 0.157 |
+| `project()`, one player | 0.165 | 0.269 | 0.257 | 0.263 |
+| supply flow, dispatch tick | 0.022 | 0.025 | 0.038 | 0.028 |
+| the same without the previous tick's plans | 0.063 | 0.104 | 0.091 | **0.140** |
+| `compute_vision`, empty memo | 0.019 | 0.026 | 0.027 | 0.028 |
+| `snapshot_frame`, one player | 0.175 | 0.347 | 0.265 | 0.276 |
+| server tick per match | 0.75 | 1.39 | 1.29 | 1.35 |
+| bot `view` + `decide`, ticks 300 to 3000 (mean) | 0.46 | 0.77 | 0.73 | 0.75 |
+
+The findings above hold on the recorded state: the replanned dispatch is over the 0.1 ms budget on `crossroads` and
+`ridge`, the step and the projection hold.
 
 ### The size of a snapshot (ARP-08)
 

@@ -147,6 +147,7 @@ Python jobs (the required check `py`) and the job `web` run. A tool version is e
 | `test:bench` | simulation benchmarks and the budgets of section 12 on synthetic grids and on the pool maps under `mvp-7` (`docs/perf.md`) | SIM-15, #482 |
 | `golden:check` | golden replays are re-simulated (`python -m gow_sim.replay check`) and unchanged relative to the base (`scripts/check_golden_frozen.py`; argument: a git ref, `origin/develop` by default; CI: `HEAD^1`) | SIM-16 |
 | `golden:generate` | create the golden replays `v{SIM_VERSION}` (after raising `SIM_VERSION`; does not overwrite an existing directory) | SIM-16 |
+| `bench:record` | record the smart-bot command logs the pool benchmarks replay (`apps/bots/tests/bench_pool/<map>.jsonl.gz`, `scripts/bench_pool_record.py`): after a rule, `mvp-7` or pool map change, when `test_bench_pool_logs.py` fails; then measure the `CEILING_MS` of `test_benchmarks_pool.py` again (`docs/perf.md`); a bot change needs neither | #1029 |
 | `ci` | for a person who wants the whole set (agents use `check:changed`): what the Python jobs and `web` run, locally: `check`, `test`, `golden:check`, `build` in parallel, then `test:perf` last and alone (timing benchmarks do not compete with the other load) | #301, #653 |
 | `dev` | dev servers together: the game server (`dev:server`, port 8000) and the client (`dev:client`, `http://localhost:5173`, Vite proxies `/api` and `/ws`) | SRV-01 |
 | `build` | production build of the client | INF-03 |

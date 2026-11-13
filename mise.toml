@@ -163,6 +163,10 @@ run = "uv run pytest -m perf -q --tb=short --benchmark-columns=mean,max --benchm
 description = "Simulation benchmarks and the budgets of section 12: synthetic grids and the pool maps (docs/perf.md)"
 run = "uv run pytest packages/sim/tests/test_benchmarks.py apps/bots/tests/test_benchmarks_pool.py -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
 
+[tasks."bench:record"]
+description = "Record the smart-bot command logs the pool benchmarks replay (apps/bots/tests/bench_pool/; after a rule, mvp-7 or pool map change)"
+run = "uv run python scripts/bench_pool_record.py"
+
 [tasks."golden:check"]
 description = "Golden replays re-simulate and are frozen against a base (arg: git ref, default origin/develop)"
 usage = 'arg "[base]" default="origin/develop"'

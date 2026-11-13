@@ -2,9 +2,16 @@
 
 The budgets of AGENTS.md, section 12 are checked on synthetic grids by
 ``packages/sim/tests/test_benchmarks.py``. Here the same quantities are measured on the maps the
-queue plays, with the rules a match plays (``Match.rules``: ``[map_tempo]`` applied) and two
-smart bots (``smart_rusher`` against ``smart_expander``, hard) driving a seeded match to tick
-``WARM_TICKS``, so the state has groups on the roads, fights, builds and a grown fog memory.
+queue plays, with the rules a match plays (``Match.rules``: ``[map_tempo]`` applied), on the
+state of a seeded match of two smart bots (``smart_rusher`` against ``smart_expander``, hard) at
+tick ``WARM_TICKS``, so the state has groups on the roads, fights, builds and a grown fog memory.
+
+The bots played that match once, in ``scripts/bench_pool_record.py``; the benchmarks replay its
+recorded commands (``bench_pool/<map>.jsonl.gz``) and measure a copy of the warmed match in every
+test (#1029). Before, the live bots played the warm-up and the step benchmark moved the shared
+match on, so every bot change and every ``-k`` selection measured another state: the supply flow
+of one map moved 20 to 50% with a bot PR on the same machine, which the ceilings could not tell
+from a regression of the simulation. Only ``test_pool_decision`` measures the bots of the day.
 
 Every benchmark has two numbers:
 
@@ -16,14 +23,19 @@ Every benchmark has two numbers:
   budget does not hold on that map, which ``docs/perf.md`` reports as a finding. Nothing here
   loosens a budget; the budget tests of ``packages/sim`` are unchanged.
 
-Method and scaling are those of ``packages/sim/tests/test_benchmarks.py`` (``docs/perf.md``).
+The method is that of ``packages/sim/tests/test_benchmarks.py`` (``docs/perf.md``), with a
+``speed_factor`` workload of its own: a deep copy and a search over a graph of a few MB, the shape
+of the measured calls. The small workload of the simulation benchmarks fits any cache and reads
+the AMD EPYC 9V45 runners of CI at x1.06 to x1.09, while these benchmarks run 1.3 to 1.7 times
+the reference there: scaled by it, the supply rows sat at 1.5 to 1.6 of the reference on a
+healthy ``develop``, next to the 1.65 a 10% ceiling and ``REGRESSION`` allow (#1029).
 """
 
 import copy
 import time
 import timeit
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, Protocol
 
@@ -33,7 +45,8 @@ from gow_bots.bots import BOTS
 from gow_protocol.convert import snapshot_frame
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
-from gow_sim.match import Controller, Match
+from gow_sim.match import DECIDE_EVERY, Controller, Match
+from gow_sim.replay import read_replay
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import GameState
 from gow_sim.systems.flow import supply_flow
@@ -43,13 +56,16 @@ from gow_sim.view import project
 pytestmark = pytest.mark.perf  # serial only: timings are meaningless under xdist
 
 ROOT: Final = Path(__file__).resolve().parents[3]
+LOGS: Final = Path(__file__).resolve().parent / "bench_pool"
+RECORD: Final = "record them again with `mise run bench:record` (scripts/bench_pool_record.py)"
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
-REFERENCE_WORKLOAD_S: Final = 1.29e-3
-"""``_workload()`` on the reference machine; equal to the one of the simulation benchmarks."""
+REFERENCE_WORKLOAD_S: Final = 75.7e-3
+"""``_workload()`` of a 20000-node graph on the reference machine (the best of 20, #1029)."""
 KEY: Final = bytes(range(32))
-WARM_TICKS: Final = 1500
-DECIDE_EVERY: Final = 5
+WARM_TICKS: Final = 3000
+RECORDED_TICKS: Final = 4500
+"""The ticks of the logs: ``WARM_TICKS`` plus the 1500 steps of ``test_pool_step``."""
 POOL: Final = sorted(p.stem for p in (ROOT / "maps").glob("*.json"))
 BOT_NAMES: Final = ("smart_rusher", "smart_expander")
 BOT_BUDGET_MS: Final = 1.0
@@ -83,26 +99,41 @@ class BenchmarkFixture(Protocol):
 
 
 @dataclass(slots=True)
-class _Item:
-    key: int
-    value: int
+class _Node:
+    nid: int
+    owner: int
+    stock: int
+    roads: list[int] = field(default_factory=lambda: [])
 
 
-def _workload() -> int:
-    """Copy of ``_workload`` of the simulation benchmarks: keep the two equal."""
-    items = {i: _Item(i, (i * 7919) % 1009) for i in range(5000)}
-    order = sorted(items, key=lambda k: (items[k].value, k))
-    total = 0
-    for k in order:
-        item = items[k]
-        if item.value % 3 == 0:
-            total += item.key
-    return total
+def _graph(n: int) -> dict[int, _Node]:
+    g = {i: _Node(i, i % 2, i % 7) for i in range(n)}
+    for i in range(n):
+        g[i].roads.extend(((i * 31 + 7) % n, (i * 17 + 3) % n, (i + 1) % n))
+    return g
+
+
+def _workload(graph: dict[int, _Node]) -> int:
+    """What the measured calls do, in plain Python: a deep copy of a large graph of slotted
+    objects (a few MB, like the copied state and memos) and a breadth-first search over it. The
+    small in-cache workload of the simulation benchmarks reads the AMD EPYC 9V45 runners of CI
+    at x1.06 to x1.09 while these benchmarks run 1.3 to 1.7 times the reference there (#1029)."""
+    g = copy.deepcopy(graph)
+    seen = {0: 0}
+    queue = [0]
+    for nid in queue:
+        d = seen[nid] + 1
+        for m in g[nid].roads:
+            if m not in seen:
+                seen[m] = d
+                queue.append(m)
+    return sum(sorted(seen.values()))
 
 
 @pytest.fixture(scope="module")
 def speed_factor() -> float:
-    return min(timeit.repeat(_workload, number=1, repeat=30)) / REFERENCE_WORKLOAD_S
+    graph = _graph(20000)
+    return min(timeit.repeat(lambda: _workload(graph), number=1, repeat=20)) / REFERENCE_WORKLOAD_S
 
 
 @pytest.fixture(scope="module")
@@ -111,53 +142,54 @@ def rules7() -> Ruleset:
 
 
 class _Game:
-    """A seeded smart-bot match on a pool map; restarts when it ends."""
+    """The warmed match of a pool map: the recorded commands of ``bench_pool/<map>.jsonl.gz``
+    replayed to tick ``WARM_TICKS``, with the bots deciding on the views of every
+    ``DECIDE_EVERY``-th tick (timed for ``test_pool_decision``; their commands are not played).
+
+    The simulation benchmarks measure a copy of ``match`` (``fresh()``), so neither the bots of
+    the day nor the order or selection of the tests changes the state they measure (#1029)."""
 
     def __init__(self, name: str, mapdef: MapDef, rules: Ruleset) -> None:
-        self.name, self.map, self.source = name, mapdef, rules
+        self.name, self.map = name, mapdef
+        replay = read_replay(LOGS / f"{name}.jsonl.gz")
+        self.log: dict[int, list[PlayerCommand]] = {}
+        for tick, cmd in replay.commands:
+            self.log.setdefault(tick, []).append(cmd)
+        self.checkpoints = {c.tick: c.hash for c in replay.checkpoints}
         self.decisions: list[float] = []
         """Seconds of ``view`` plus ``decide`` per call, from tick 300 (the server's bot loop)."""
-        self.match = self._new()
-
-    def _new(self) -> Match:
-        match = Match(self.map, self.source, KEY)
-        self.bots: list[Controller] = [
-            BOTS[name](self.map, match.rules, seed=7, player=p) for p, name in enumerate(BOT_NAMES)
+        self.match = Match(mapdef, rules, KEY)
+        bots: list[Controller] = [
+            BOTS[n](mapdef, self.match.rules, seed=7, player=p) for p, n in enumerate(BOT_NAMES)
         ]
-        self.seq = 0
-        return match
-
-    def commands(self) -> list[PlayerCommand]:
-        """The commands of the bots for the next step, decided on the reused vision (untimed
-        by the benchmarks; ``decisions`` keeps what each call took)."""
-        if self.match.finished:
-            self.match = self._new()
         match = self.match
-        if match.tick % DECIDE_EVERY:
-            return []
-        cmds: list[PlayerCommand] = []
-        for p in PLAYERS:
-            t0 = time.perf_counter()
-            decided = self.bots[p].decide(match.view(p, reuse=True), match.tick)
-            if match.tick >= 300:
-                self.decisions.append(time.perf_counter() - t0)
-            for cmd in decided:
-                cmds.append(PlayerCommand(p, self.seq, match.resolve(p, cmd)))
-                self.seq += 1
-        return cmds
+        while match.tick < WARM_TICKS:
+            if match.tick % DECIDE_EVERY == 0:
+                for p in PLAYERS:
+                    t0 = time.perf_counter()
+                    bots[p].decide(match.view(p, reuse=True), match.tick)
+                    if match.tick >= 300:
+                        self.decisions.append(time.perf_counter() - t0)
+            match.step(self.log.get(match.tick + 1, ()))
+        assert not match.finished
+        assert match.state_hash() == self.checkpoints[WARM_TICKS], (
+            f"{name}: the recorded commands no longer give the recorded state: {RECORD}"
+        )
 
-    def warm(self, ticks: int) -> None:
-        while self.match.tick < ticks:
-            self.match.step(self.commands())
-        assert not self.match.finished
+    def fresh(self) -> Match:
+        """A copy of the warmed match (the memos and the vision of the last step travel with it)."""
+        return copy.deepcopy(self.match)
+
+    def commands(self, match: Match) -> list[PlayerCommand]:
+        """The recorded commands of the next step of ``match``."""
+        assert match.tick < RECORDED_TICKS, f"{self.name}: the log ends at tick {RECORDED_TICKS}"
+        return self.log.get(match.tick + 1, [])
 
 
 @pytest.fixture(scope="module", params=POOL)
 def game(request: pytest.FixtureRequest, rules7: Ruleset) -> _Game:
     name: str = request.param
-    g = _Game(name, load_map(ROOT / "maps" / f"{name}.json"), rules7)
-    g.warm(WARM_TICKS)
-    return g
+    return _Game(name, load_map(ROOT / "maps" / f"{name}.json"), rules7)
 
 
 def _budget(mapdef: MapDef, kind: str) -> float:
@@ -178,47 +210,44 @@ def _budget(mapdef: MapDef, kind: str) -> float:
 
 
 CEILING_MS: Final[dict[tuple[str, str], float]] = {
-    ("step", "crossroads"): 0.21,
-    ("step", "highway"): 0.21,
-    ("step", "narrows"): 0.16,
-    ("step", "ridge"): 0.23,
-    ("project", "crossroads"): 0.31,
-    ("project", "highway"): 0.29,
-    ("project", "narrows"): 0.19,
-    ("project", "ridge"): 0.32,
-    ("vision", "crossroads"): 0.04,
-    ("vision", "highway"): 0.035,
-    ("vision", "narrows"): 0.025,
-    ("vision", "ridge"): 0.07,
-    ("supply", "crossroads"): 0.029,
+    ("step", "crossroads"): 0.18,
+    ("step", "highway"): 0.165,
+    ("step", "narrows"): 0.12,
+    ("step", "ridge"): 0.175,
+    ("project", "crossroads"): 0.3,
+    ("project", "highway"): 0.285,
+    ("project", "narrows"): 0.185,
+    ("project", "ridge"): 0.29,
+    ("vision", "crossroads"): 0.029,
+    ("vision", "highway"): 0.03,
+    ("vision", "narrows"): 0.021,
+    ("vision", "ridge"): 0.031,
+    ("supply", "crossroads"): 0.028,
     ("supply", "highway"): 0.042,
-    ("supply", "narrows"): 0.021,
-    ("supply", "ridge"): 0.06,
-    ("supply_replan", "crossroads"): 0.18,
-    ("supply_replan", "highway"): 0.15,
-    ("supply_replan", "narrows"): 0.065,
-    ("supply_replan", "ridge"): 0.17,
-    ("snapshot", "crossroads"): 0.4,
-    ("snapshot", "highway"): 0.3,
-    ("snapshot", "narrows"): 0.2,
-    ("snapshot", "ridge"): 0.39,
-    ("server_tick", "crossroads"): 1.7,
-    ("server_tick", "highway"): 1.65,
-    ("server_tick", "narrows"): 0.9,
-    ("server_tick", "ridge"): 1.7,
+    ("supply", "narrows"): 0.024,
+    ("supply", "ridge"): 0.031,
+    ("supply_replan", "crossroads"): 0.115,
+    ("supply_replan", "highway"): 0.1,
+    ("supply_replan", "narrows"): 0.07,
+    ("supply_replan", "ridge"): 0.155,
+    ("snapshot", "crossroads"): 0.38,
+    ("snapshot", "highway"): 0.29,
+    ("snapshot", "narrows"): 0.195,
+    ("snapshot", "ridge"): 0.3,
+    ("server_tick", "crossroads"): 1.55,
+    ("server_tick", "highway"): 1.45,
+    ("server_tick", "narrows"): 0.83,
+    ("server_tick", "ridge"): 1.5,
     ("decision", "crossroads"): 0.85,
-    ("decision", "highway"): 0.78,
-    ("decision", "narrows"): 0.46,
+    ("decision", "highway"): 0.8,
+    ("decision", "narrows"): 0.51,
     ("decision", "ridge"): 0.82,
 }
-"""Reference-machine means (3 runs, 2026-11-12; the supply rows after #482's flow work), rounded
-up about 10%, by (kind, map): see the module docstring. A new pool map needs its row. The
-``supply_replan`` rows are raised about 30% (#1022): the CI runners measured the replanned dispatch
-1.5 to 1.8 times the reference after ``speed_factor`` on ``develop`` itself (runs 43248526758,
-43301391850: crossroads, highway, narrows over the ceiling), so the job failed on noise; the cost
-of the warm state did not change (``docs/perf.md``). The ``supply`` row of highway is raised about
-30% too (#1027): ``develop`` 9f72adf itself failed it on CI (run 43313578489: 0.062 ms at x1.17
-against the 0.032 ms ceiling), while the same benchmark measures 0.022 ms locally."""
+"""Reference-machine means of the recorded state (3 runs, 2026-11-13, #1029), rounded up about
+10%, by (kind, map): see the module docstring. A new pool map needs its row and its log. The rows
+are measured again only when the state changes: the logs recorded again (``mise run
+bench:record``) or the simulation made cheaper or dearer on purpose; a bot change keeps them
+(only the ``decision`` rows measure the bots)."""
 
 
 def _check(benchmark_mean: float | None, factor: float, kind: str, game: _Game) -> None:
@@ -254,27 +283,31 @@ def _run(
 
 
 def test_pool_step(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
-    """``Match.step`` alone (the bots decide in the untimed setup)."""
+    """``Match.step`` alone, ticks ``WARM_TICKS + 1`` to ``RECORDED_TICKS`` of the log (the
+    recorded commands are taken in the untimed setup)."""
+    match = game.fresh()
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (game.commands(),), {}
+        return (game.commands(match),), {}
 
     def step(cmds: list[PlayerCommand]) -> None:
-        game.match.step(cmds)
+        match.step(cmds)
 
-    _run(benchmark, speed_factor, "step", game, step, setup)
+    _run(benchmark, speed_factor, "step", game, step, setup, RECORDED_TICKS - WARM_TICKS)
 
 
 def test_pool_project(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """One ``project()`` of the warmed state, vision not reused (like the section 12 budget)."""
-    state, rules = game.match.state, game.match.rules
+    match = game.fresh()
+    state, rules = match.state, match.rules
     _run(benchmark, speed_factor, "project", game, lambda: project(state, rules, 0, KEY))
 
 
 def test_pool_vision_cold(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """``compute_vision`` for one player with an empty ``GameState.memo`` (ARP-02): the cost of a
     tick whose vision inputs changed. Warm, the memo answers in microseconds."""
-    cold, rules = copy.deepcopy(game.match.state), game.match.rules
+    match = game.fresh()
+    cold, rules = match.state, match.rules
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
         cold.memo.clear()
@@ -324,14 +357,15 @@ def test_pool_supply_flow_replanned(
 
 def test_pool_snapshot_frame(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """The encoded snapshot of one player from the view of the tick (the cost on top of it)."""
-    view = game.match.view(0)
+    view = game.fresh().view(0)
     _run(benchmark, speed_factor, "snapshot", game, lambda: snapshot_frame(view))
 
 
 def test_pool_server_tick(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """What ``MatchRunner.step`` does per tick without the bot and the sockets: the step, a view
-    with the reused vision and the encoded snapshot for each player."""
-    match = game.match
+    with the reused vision and the encoded snapshot for each player; ticks ``WARM_TICKS + 1``
+    on of the log."""
+    match = game.fresh()
 
     def tick(cmds: list[PlayerCommand]) -> None:
         match.step(cmds)
@@ -339,9 +373,8 @@ def test_pool_server_tick(benchmark: BenchmarkFixture, speed_factor: float, game
             snapshot_frame(match.view(p, reuse=True))
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (game.commands(),), {}
+        return (game.commands(match),), {}
 
-    game.match.step(game.commands())  # a fresh state if the match restarted
     _run(benchmark, speed_factor, "server_tick", game, tick, setup, 1000)
 
 
