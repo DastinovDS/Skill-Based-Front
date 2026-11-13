@@ -9,6 +9,7 @@ The match is ``private`` (unrated, one pause per player, DEC-05).
 Difficulty levels are smart bots with a tempo level (``bot_factory``, ``smart_reactive@easy``),
 ordered by strength in the tournaments of #574 and #663 (``docs/balance/log.md``); the
 parameters of a bot vary with the match seed (``choose_params``).
+``GOW_LEVEL_BOTS`` replaces the bot of a level for a playtest (``gow_server.levelbots``, #1037).
 The player's side is random, like in an invite.
 An account has at most one active match of any kind (409, SRV-09): a bot match costs server CPU.
 At most ``GOW_MAX_BOT_MATCHES`` bot matches run at once and ``GOW_MAX_MATCHES`` matches in all:
@@ -18,7 +19,7 @@ The match goes through the lifecycle (``gow_server.lifecycle``): a ``matches`` r
 """
 
 import secrets
-from typing import Final, Literal
+from typing import Final
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
@@ -26,26 +27,13 @@ from pydantic import BaseModel, ConfigDict
 from gow_bots.bots import bot_factory
 from gow_server.abuse import Limits, enforce, server_full
 from gow_server.identity import CurrentPlayer
+from gow_server.levelbots import Level
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.mapgen import MapMaker
 from gow_server.maps import MapCatalog, MapSource, choose_map
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
-
-Level = Literal["easy", "normal", "hard", "expert"]
-
-LEVEL_BOTS: Final[dict[Level, str]] = {
-    "easy": "smart_turtle@easy",
-    "normal": "smart_reactive@normal",
-    "hard": "smart_strangler@hard",
-    "expert": "smart_expander@hard",
-}
-"""Bot name of every difficulty level with its tempo level (``bot_factory``; ``bot_name``).
-
-The bot screen of the client describes them in ``apps/client/src/app/botStyles.ts``;
-``tests/test_bot_styles.py`` keeps the two in step.
-"""
 
 SEED_BITS: Final = 32
 
@@ -111,7 +99,9 @@ async def create_bot_match(
         slot = secrets.randbelow(len(PLAYERS))
         bot_slot = 1 - slot
         # the runner makes the bot from ``Match.rules``: the periods the match plays (#803, #994)
-        seat = BotSeat(bot_slot, bot_factory(LEVEL_BOTS[body.level]), secrets.randbits(SEED_BITS))
+        level_bots: dict[Level, str] = request.app.state.level_bots  # GOW_LEVEL_BOTS (#1037)
+        bot_name = level_bots[body.level]
+        seat = BotSeat(bot_slot, bot_factory(bot_name), secrets.randbits(SEED_BITS))
         accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
         accounts[slot] = player.id
         runner = await lifecycle.start(
@@ -122,7 +112,7 @@ async def create_bot_match(
             (accounts[0], accounts[1]),
             private=True,
             bot=seat,
-            bot_name=LEVEL_BOTS[body.level],
+            bot_name=bot_name,
         )
     except AlreadyActiveError:
         raise HTTPException(

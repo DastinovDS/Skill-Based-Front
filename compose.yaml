@@ -107,6 +107,8 @@ services:
       GOW_QUEUE_CONFIRM_S: ${GOW_QUEUE_CONFIRM_S:-15}
       GOW_QUEUE_BOT_OFFER_S: ${GOW_QUEUE_BOT_OFFER_S:-60}
       GOW_QUEUE_STALE_S: ${GOW_QUEUE_STALE_S:-15}
+      # Playtest: replace the bot of a difficulty level, as GOW_LEVEL_BOTS='expert=owner_style' mise run stack (#1037).
+      GOW_LEVEL_BOTS: ${GOW_LEVEL_BOTS:-}
       GOW_BOT_BUDGET_S: ${GOW_BOT_BUDGET_S:-0.001}
       GOW_BOT_SHARE: ${GOW_BOT_SHARE:-0.02}
       # The rating (#924): off by default (no rating at MVP, every match unrated); true rates the

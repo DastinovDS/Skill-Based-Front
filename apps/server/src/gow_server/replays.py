@@ -60,10 +60,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from gow_server.botmatch import LEVEL_BOTS
 from gow_server.db import DbSession
 from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
+from gow_server.levelbots import LEVEL_BOTS
 from gow_server.lifecycle import STATUS_RUNNING
 from gow_server.mapgen import ORPHAN_GRACE, store_dir
 from gow_server.maps import is_match_map

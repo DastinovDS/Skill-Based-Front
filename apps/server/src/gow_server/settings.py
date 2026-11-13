@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from gow_server.levelbots import level_bots
+
 DEV_ONLY_RULESETS = frozenset({"test-short"})
 """Rulesets (file stems) a ``prod`` server refuses to play on (AGENTS.md, section 5.4)."""
 
@@ -225,6 +227,12 @@ class Settings(BaseSettings):
     bot_share: float = Field(default=0.02, ge=0, le=1)
     """Share of the wall time a bot may spend deciding; a bot over it skips calls (#1033)."""
 
+    level_bots: str = ""
+    """Playtest override (#1037): comma-separated ``level=bot`` pairs that replace the bot of a
+    difficulty level in bot matches, as ``expert=owner_style``. Empty: the table
+    ``gow_server.levelbots.LEVEL_BOTS``. Bot names are checked at start. Allowed in every
+    ``GOW_ENV``: it only picks which bot, playing from the same fair ``PlayerView``, answers."""
+
     monitor_interval_s: float = 30.0
     """How often the tick lag of running matches is checked against the 10 % alert (OPS-04)."""
 
@@ -233,6 +241,11 @@ class Settings(BaseSettings):
         archive = self.replay_stats_archive_dir
         if archive is not None and archive.resolve() == self.replays_dir.resolve():
             raise ValueError("GOW_REPLAY_STATS_ARCHIVE_DIR must not be GOW_REPLAYS_DIR itself")
+        return self
+
+    @model_validator(mode="after")
+    def _level_bots_known(self) -> "Settings":
+        level_bots(self.level_bots)
         return self
 
     @model_validator(mode="after")

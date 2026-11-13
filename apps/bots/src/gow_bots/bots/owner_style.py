@@ -5,7 +5,7 @@ of the five replays): let the bot win the land race, then harvest its thin netwo
 squads that ask for the full planned bonus, hold what he takes, and finish with one synchronized
 assault on the capital. He then wrote down eight principles of his play (#1027). This bot plays
 them from the ``PlayerView`` alone, as a fixed opponent for the gates of the bot plan. It is a
-yardstick, not a personality to tune and not a server level (``gow_server.botmatch.LEVEL_BOTS``).
+yardstick, not a personality to tune and not a server level (``gow_server.levelbots.LEVEL_BOTS``).
 
 The decision, in the order it asks for one command:
 
