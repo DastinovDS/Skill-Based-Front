@@ -17,6 +17,8 @@
   the locked look, and a paused beat the "Paused" plate; the trigger notes give the pause, the allowed commands and the
   unlocks of each beat. Every screen has a stable id (E.1, II.3, IV.F, H4 ...). State in the address:
   #s=<id>&rv=<0|1>&rm=<0|1>.
+  Round 4 (the owner's second review): no number the interface already shows or a newcomer does not need, no caption that
+  repeats the card or the mark, short natural sentences; the Seal has two buttons, All chapters and Replay chapter.
   Keys: left and right arrows, Page Up and Page Down.
 -->
 <style>
@@ -163,7 +165,8 @@ svg.marks{position:absolute;inset:0;width:1280px;height:800px;overflow:visible;p
 .window h2{margin:6px 0 10px;font:500 34px/1.1 var(--font-display);letter-spacing:.06em}
 .window .lesson{margin:22px auto 30px;padding:0;list-style:none;display:grid;gap:10px;text-align:left;width:max-content;max-width:100%}
 .window .lesson li{display:flex;align-items:center;gap:14px;font:500 20px/1.25 var(--font-text)}
-.window .acts{justify-content:center;flex-wrap:wrap;gap:14px 28px}
+.window .acts{justify-content:center;flex-wrap:wrap;gap:14px 20px}
+.window .acts .btn{height:50px;min-width:210px}
 
 /* ===== Chapter select: Road ================================================================== */
 .selpage{position:absolute;left:96px;right:96px;top:84px}
@@ -240,7 +243,6 @@ body.rv .review{display:grid}
   background:rgb(14 12 9/95%);border:1px solid rgb(236 228 209/60%);box-shadow:inset 0 0 0 3px rgb(14 12 9/95%),inset 0 0 0 4px rgb(236 228 209/22%),0 10px 26px rgb(0 0 0/55%);
   font:500 12px/1 var(--font-display);letter-spacing:.26em;text-transform:uppercase;color:var(--ink);pointer-events:none;animation:ink .2s linear both}
 .paused svg{color:var(--ink)}
-.paused .sub{font:italic 500 14px/1 var(--font-text);letter-spacing:0;text-transform:none;color:var(--ink-soft)}
 svg.warn{display:inline-block;vertical-align:-1px;margin:0 1px}
 html.rm .modal{animation:none}
 </style>
@@ -287,8 +289,8 @@ const WARN = '<svg class="warn" width="15" height="14" viewBox="0 0 15 14" role=
 const PAUSE = '<svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="0.5" y="0.5" width="3" height="11" fill="currentColor"/><rect x="6.5" y="0.5" width="3" height="11" fill="currentColor"/></svg>';
 
 // ---------------------------------------------------------------------------------------------
-// The chapters (tutorial.md, section 4). Numbers in the texts are the chapter's `ruleset_public` values: mvp-7 with map
-// tempo at 50 % (6 to 9 nodes), so the capital makes a charge every 40 s and CP come 0.5 every 10 s in Balance.
+// The chapters (tutorial.md, section 4). The cards quote no ruleset number (the owner's second review): the HUD, the
+// menus and the marks show the numbers; the rules reference keeps the ones a player looks up.
 // ---------------------------------------------------------------------------------------------
 const CH = {
   I: {n: 'I', name: 'Units and movement', road: 'main', beats: 7, len: 'About a minute', start: 'I1', end: 'IS',
@@ -296,7 +298,7 @@ const CH = {
       lesson: ['A capture costs one charge.', 'A place holds only so many units.', 'Terrain sets your speed and your sight.'],
       crop: [140, 120, 820, 600], marks: [[370, 270], [540, 160], [560, 410]]},
   II: {n: 'II', name: 'Map and economy', road: 'main', beats: 4, len: 'About a minute', start: 'II1', end: 'IIS',
-      why: 'Command points pay for your orders. Charges flow from your capital to the front, unless the enemy cuts the road.',
+      why: 'Orders cost command points. Charges flow from your capital to the front, unless the road is cut.',
       goals: ['Keep Westmarch supplied: retake Coldwell'],
       lesson: ['CP pay for your orders.', 'Your roads carry charges to the front.', 'A cut-off place starves.'],
       crop: [120, 110, 920, 620], marks: [[520, 320], [660, 150]]},
@@ -335,11 +337,6 @@ const PLACES = {
 };
 const NARROWS = [[100,465],[300,470],[190,300],[300,160],[200,660],[520,110],[420,310],[420,640],[420,800],[620,230],[620,700],[500,470],[640,850],[750,130],[750,465],[762,784],[843,68],[1007,458],[865,219],[898,689],[1062,135],[1069,295],[1097,625],[991,816],[1288,289],[1215,784],[1328,649],[1207,474],[1407,485]];
 const kick = (c) => CH[c].road === 'main' ? `${CH[c].n} · ${CH[c].name}` : `Advanced ${CH[c].n} · ${CH[c].name}`;
-const nextIntro = (c) => {
-  const i = MAIN.indexOf(c), j = SIDE.indexOf(c);
-  if (i >= 0) return i < 4 ? MAIN[i + 1] + '.0' : 'H1';
-  return j === 0 ? 'A2.0' : 'R.3';
-};
 // The tick of every frame (the simulation, tutorial.md section 4 "Verified", or the narrows match of section 5).
 const TICK = {I1: 1, I2: 1, I3: 1, I4: 65, I5: 86, I6: 161, IS: 271, II1: 1, II2: 30, II3: 124, II4: 267, IIS: 328,
   III1: 1, III2: 1, III3: 66, III4: 166, III5: 170, III6: 200, IIIS: 201, IV1: 1, IV3: 1, IV4: 61, IV5: 20, IV6: 198,
@@ -390,43 +387,43 @@ add({id: 'I.1', g: I, title: 'Your army', kind: 'card', ch: I, step: 1, img: 'I1
   say: 'This is your <b>army</b>. The number on the helmet is how many units it has.',
   act: `${click} Click the helmet to select it`, tr: 'Chapter start.', allow: 'A move of the army from Highhold to Ashford.'});
 add({id: 'I.2', g: I, title: 'Order a march', kind: 'card', ch: I, step: 2, img: 'I2', t: n(370, 270), w: 310, pause: 'action',
-  say: 'To move, select your army and click a <b>city</b> or a <b>province</b> on the map.',
+  say: 'To march, click a <b>city</b> or a <b>province</b>.',
   act: `${click} Click Ashford`, tr: 'The group is selected (UI, client only: the pause and the locks of I.1 stay).', allow: 'As I.1.'});
 add({id: 'I.3', g: I, title: 'Capacity', kind: 'card', ch: I, step: 3, img: 'I3', t: n(370, 270, 30), w: 340, pause: 'continue',
-  say: 'Every city and province has a <b>capacity</b>: the most units it can hold, shown by the segments of the ring around it. Ashford holds <b>3</b>: your army fits.',
-  act: 'Watch the ring of Ashford', tr: 'The move to Ashford accepted (tick 1).', allow: 'None.'});
+  say: 'A place holds only so many units: its <b>capacity</b>, one segment of its ring per unit.',
+  act: '', tr: 'The move to Ashford accepted (tick 1).', allow: 'None.'});
 add({id: 'I.4', g: I, title: 'A capture costs a charge', kind: 'card', ch: I, step: 4, img: 'I4', t: [n(370, 270), n(540, 160)], w: 320, pause: 'action',
-  say: 'Every capture costs one <b>charge</b>. The fill of the helmet shows your charges: it just dropped by one.',
+  say: 'Every capture costs a <b>charge</b>. The helmet’s fill shows your charges, and it just dropped.',
   act: `${click} March on to Elmstead`, tr: '<code>node_captured</code> Ashford by you.', allow: 'A move from Ashford to Elmstead.'});
 add({id: 'I.5', g: I, title: 'Cancel an order', kind: 'card', ch: I, step: 5, img: 'I5', t: n(426, 234, 22), w: 320, pause: 'action',
-  say: `Changed your mind? Press ${k('X')} to cancel your last order.`,
-  act: `Press ${k('X')}, then send the army to Elmstead again`, tr: '2 s after the move to Elmstead was accepted (the army a third of the way). <code>X</code> is the player’s <code>cancel</code> key: with nothing selected it undoes the last order, with the marching group selected it cancels that order; both turn the army back.',
+  say: `Changed your mind? Press ${k('X')} to cancel the order.`,
+  act: 'Then send the army to Elmstead again', tr: '2 s after the move to Elmstead was accepted (the army a third of the way). <code>X</code> is the player’s <code>cancel</code> key: with nothing selected it undoes the last order, with the marching group selected it cancels that order; both turn the army back.',
   allow: 'Cancel that order (once), then a move from Ashford to Elmstead. The cancel resumes the simulation.'});
 add({id: 'I.6', g: I, title: 'What your groups see', kind: 'card', ch: I, step: 6, img: 'I6', t: n(780, 290), w: 330, pause: 'continue',
-  say: 'Your groups are your eyes: you see only the places next to them. From this forest, Kestrel shows <b>a range</b> of units, Brackenfold only <b>that someone is there</b>.',
-  act: 'Open ground is seen best', tr: '<code>node_captured</code> Elmstead by you.', allow: 'None.'});
+  say: 'You see only the places next to your groups. From this forest, Kestrel shows <b>a range</b> of units, Brackenfold only <b>that someone is there</b>.',
+  act: '', tr: '<code>node_captured</code> Elmstead by you.', allow: 'None.'});
 add({id: 'I.7', g: I, title: 'Terrain and speed', kind: 'card', ch: I, step: 7, img: 'I6', t: n(560, 410), w: 320, pause: 'action',
-  say: '<b>Terrain</b> matters: units move faster on plains and slower in mountains. Forest is in between, with no bonus.',
-  act: `${click} Last goal: take Fordham`, tr: 'Continue on I.6.', allow: 'A move from Elmstead to Fordham.', ui: `The terrain mode (${k('T')}).`});
+  say: '<b>Terrain</b> sets your speed: faster on plains, slower in mountains.',
+  act: `${click} Now take Fordham`, tr: 'Continue on I.6.', allow: 'A move from Elmstead to Fordham.', ui: `The terrain mode (${k('T')}).`});
 add({id: 'I.L', g: I, title: 'Leave the chapter', kind: 'dialog', ch: I, img: 'I5',
   tr: 'The exit button of the HUD (or <code>Esc</code> twice) in a chapter. Leaving goes to the chapter select; nothing is lost, a chapter always restarts from its start.'});
-add({id: 'I.S', g: I, title: 'Result', kind: 'seal', ch: I, tr: 'The goal holds: the server ends the chapter (a <code>Forfeit</code> of the scripted side), the client shows the Seal over the last frame.'});
+add({id: 'I.S', g: I, title: 'Result', kind: 'seal', ch: I, tr: 'The goal holds: the server ends the chapter (a <code>Forfeit</code> of the scripted side), the client shows the Seal over the last frame: All chapters (primary) and Replay chapter (secondary), nothing else; the player goes on from the chapter select.'});
 
 // ---- Chapter II: Map and economy (tut-supply) ----
 const II = 'II';
 add({id: 'II.0', g: II, title: 'Intro', kind: 'intro', ch: II, goal: '<code>node_captured</code> Coldwell by you after II.4.'});
 add({id: 'II.1', g: II, title: 'Command points', kind: 'card', ch: II, step: 1, img: 'II1', t: CP, w: 350, pause: 'continue',
-  say: 'These are your <b>command points</b>, CP. Every order costs CP: a move costs <b>1&nbsp;CP</b>. They come back by themselves, <b>0.5&nbsp;CP every 10&nbsp;s</b>, up to <b>5</b>.',
-  act: 'Look at the top left', tr: 'Chapter start.', allow: 'None.', ui: 'The CP gauge, the notices.'});
+  say: 'These are your <b>command points</b>, CP. Every order costs some, and they refill on their own.',
+  act: '', tr: 'Chapter start.', allow: 'None.', ui: 'The CP gauge, the notices.'});
 add({id: 'II.2', g: II, title: 'The capital feeds the front', kind: 'card', ch: II, step: 2, img: 'II2', t: road(170, 360, 520, 320), w: 340, pause: 'continue',
-  say: 'Your capital makes a <b>charge</b> every <b>40&nbsp;s</b>. Your roads carry charges toward the front <b>by themselves</b>.',
-  act: 'Watch the charges travel the roads', tr: '3 s after Continue on II.1 (the first charges on the roads).', allow: 'None.', ui: 'Charges on roads.'});
+  say: 'Your capital makes <b>charges</b>, and your roads carry them to the front on their own.',
+  act: '', tr: '3 s after Continue on II.1 (the first charges on the roads).', allow: 'None.', ui: 'Charges on roads.'});
 add({id: 'II.3', g: II, title: 'Warehouses', kind: 'card', ch: II, step: 3, img: 'II3', t: n(660, 150), w: 340, pause: 'continue',
-  say: `Every place stores charges in its <b>warehouse</b>: the diamonds under it. Units standing there fill up from it; the amber sign ${WARN} means they still wait for charges.`,
-  act: 'Watch the helmet in Westmarch fill', tr: 'The first own <code>packet_delivered</code> at Westmarch.', allow: 'None.', ui: 'Warehouses (the diamonds, the amber sign).'});
+  say: `Each place stores charges in its <b>warehouse</b>, the diamonds under it. Units there fill up from it; ${WARN} means they are still waiting.`,
+  act: '', tr: 'The first own <code>packet_delivered</code> at Westmarch.', allow: 'None.', ui: 'Warehouses (the diamonds, the amber sign).'});
 add({id: 'II.4', g: II, title: 'Cut off', kind: 'card', ch: II, step: 4, img: 'II4', t: [n(660, 150), n(520, 320)], w: 350, pause: 'action',
-  say: 'The enemy took Coldwell, so <b>Westmarch is cut off</b>: no charges reach it. In <b>10&nbsp;s</b> it starts to starve: <b>1&nbsp;charge per 3&nbsp;units</b> every <b>10&nbsp;s</b>.',
-  act: `${click} Send Millbrook’s group to retake Coldwell`, tr: 'Westmarch has <code>starve_in</code> set (the raid took Coldwell at tick 267). The card waits for the order, so Westmarch never starves.',
+  say: 'The enemy took Coldwell, so <b>Westmarch is cut off</b>. No charges reach it, and soon it starts losing them.',
+  act: `${click} Retake Coldwell with Millbrook’s group`, tr: 'Westmarch has <code>starve_in</code> set (the raid took Coldwell at tick 267). The card waits for the order, so Westmarch never starves.',
   allow: 'A move from Millbrook to Coldwell.', ui: 'The pocket and starvation marks.'});
 add({id: 'II.S', g: II, title: 'Result', kind: 'seal', ch: II});
 
@@ -435,23 +432,23 @@ const III = 'III';
 add({id: 'III.0', g: III, title: 'Intro', kind: 'intro', ch: III,
   goal: '<code>factory_built</code> Millbrook, <code>barracks_built</code> Fernhill, a <code>recruited</code> and a <code>stance_changed</code>.'});
 add({id: 'III.1', g: III, title: 'Build a factory', kind: 'card', ch: III, step: 1, img: 'III1', t: {x: 510, y: 317, r: 16}, w: 320, pause: 'action', avoid: [[378, 210, 172, 172]],
-  say: 'A <b>factory</b> makes charges, like your capital. Build one in Millbrook: it costs <b>4&nbsp;charges</b>.',
+  say: 'A <b>factory</b> makes charges, like your capital.',
   act: `${click} Click Millbrook, then Factory`, tr: 'Chapter start. The frame has Millbrook’s menu open: Factory allowed, Barracks and Fortify road locked.',
   allow: 'A factory in Millbrook.', ui: 'Buildings (the marks, the menu’s Factory and Barracks).'});
 add({id: 'III.2', g: III, title: 'Units pay', kind: 'card', ch: III, step: 2, img: 'III2', t: n(420, 220), w: 340, pause: 'continue',
-  say: 'Millbrook’s warehouse was empty, so <b>the units standing there paid</b>: their helmet emptied. Your roads bring the rest and fill them up again.',
-  act: 'Wait for the payment to finish', tr: 'The first own <code>build_paid</code> with <code>units &gt; 0</code> (tick 1).', allow: 'None.'});
+  say: 'The warehouse was empty, so <b>the units there paid</b> with their own charges. Your roads will refill them.',
+  act: '', tr: 'The first own <code>build_paid</code> with <code>units &gt; 0</code> (tick 1).', allow: 'None.'});
 add({id: 'III.3', g: III, title: 'Build a barracks', kind: 'card', ch: III, step: 3, img: 'III3', t: {x: 474, y: 511, r: 16}, w: 330, pause: 'action', avoid: [[389, 488, 172, 172]],
-  say: 'A <b>barracks</b> lets a city recruit new units. Build one in Fernhill: <b>3&nbsp;charges</b>, paid the same way.',
+  say: 'A <b>barracks</b> lets a city recruit new units. It is paid the same way.',
   act: `${click} Click Fernhill, then Barracks`, tr: 'The factory’s <code>build_paid</code> with <code>owed = 0</code> (tick 66).', allow: 'A barracks in Fernhill.'});
 add({id: 'III.4', g: III, title: 'The factory works', kind: 'card', ch: III, step: 4, img: 'III4', t: [n(420, 220), FACT], w: 340, pause: 'continue',
-  say: 'Millbrook’s factory is working: <b>a charge every 40&nbsp;s</b>, like your capital. The counter at the top shows your factories: at most <b>3</b>.',
-  act: 'Wait for the barracks', tr: '<code>factory_built</code> (tick 166).', allow: 'None.', ui: 'The factory counter.'});
+  say: 'Your factory is working. This counter shows your factories and the limit.',
+  act: '', tr: '<code>factory_built</code> (tick 166).', allow: 'None.', ui: 'The factory counter.'});
 add({id: 'III.5', g: III, title: 'Recruit', kind: 'card', ch: III, step: 5, img: 'III5', t: {x: 473, y: 501, r: 16}, w: 330, pause: 'action', avoid: [[389, 488, 172, 172]],
-  say: 'Fernhill can recruit now: <b>1&nbsp;CP</b> a unit, ready in <b>3&nbsp;s</b>. A recruit arrives empty and fills up.',
+  say: 'Fernhill can recruit now. New units arrive empty and fill up.',
   act: `Select Fernhill and press ${k('R')}`, tr: '<code>barracks_built</code> (tick 170).', allow: 'A recruit in Fernhill (once).', ui: 'Recruiting (the menu item, the key, the queue marks).'});
 add({id: 'III.6', g: III, title: 'Stances', kind: 'card', ch: III, step: 6, img: 'III6', t: STANCE, w: 360, pause: 'action',
-  say: 'Your <b>stance</b> sets the pace. <b>Economy</b>: more charges, fewer CP. <b>War</b>: the other way. You play <b>Balance</b>, in between. Switching is free.',
+  say: 'Your <b>stance</b> sets the pace: <b>Economy</b> for more charges, <b>War</b> for more CP. You start in <b>Balance</b>.',
   act: `Press ${k('Q')} and pick Economy`, tr: '<code>recruited</code> (tick 200).', allow: 'The stance Economy.', ui: 'The stance chip and its menu.'});
 add({id: 'III.S', g: III, title: 'Result', kind: 'seal', ch: III});
 
@@ -459,37 +456,37 @@ add({id: 'III.S', g: III, title: 'Result', kind: 'seal', ch: III});
 const IV = 'IV';
 add({id: 'IV.0', g: IV, title: 'Intro', kind: 'intro', ch: IV, goal: '<code>match_ended</code>, winner you, <code>reason = capital</code> (the chapter ends by itself).'});
 add({id: 'IV.1', g: IV, title: 'A charge is a shot', kind: 'card', ch: IV, step: 1, img: 'IV1', t: n(420, 350), w: 330, pause: 'continue',
-  say: 'In a fight, every charge is one <b>shot</b>. Two shots cancel each other. A shot that meets none kills a unit, empty ones first.',
-  act: 'Look at your group’s charges', tr: 'Chapter start.', allow: 'None.'});
+  say: 'In a fight, every charge is a <b>shot</b>. Two shots cancel out; a shot that meets none kills a unit.',
+  act: '', tr: 'Chapter start.', allow: 'None.'});
 add({id: 'IV.2', g: IV, title: 'Not enough', kind: 'card', ch: IV, step: 2, img: 'IV1', t: n(680, 350), w: 330, pause: 'action',
-  say: 'Ashwood holds <b>up to 2</b> units. Against 2 charged defenders, your <b>3 charges</b> are not enough to win.',
-  act: `${click} Click your group in Fernhold`, tr: 'Continue on IV.1. Ashwood shows the range “1-2” from Fernhold’s forest.',
+  say: 'Your charges are not enough to take <b>Ashwood</b> with an ordinary attack.',
+  act: `${click} Select your group in Fernhold`, tr: 'Continue on IV.1. Ashwood shows the range “1-2” from Fernhold’s forest.',
   allow: 'A move from Fernhold to Ashwood, ordinary or planned (an ordinary one leads to IV.F, the failure kept as a lesson).'});
 add({id: 'IV.3', g: IV, title: 'Plan an attack', kind: 'card', ch: IV, step: 3, img: 'IV3', t: n(680, 350), w: 350, pause: 'action',
-  say: `A <b>planned order</b> waits and gathers <b>bonus shots</b>, and they fire first. Hold ${k('E')} over Ashwood, turn the wheel to <b>+3</b>, then click. It costs <b>1&nbsp;CP</b>, like any order.`,
-  act: `Hold ${k('E')}, wheel to +3, ${click} click Ashwood`, tr: 'The group is selected (UI). The frame holds <code>E</code> over Ashwood.', allow: 'As IV.2.', ui: 'Planned orders (E, the wheel, the bonus pill).'});
+  say: 'A <b>planned order</b> waits and gathers <b>bonus shots</b>, and they fire first.',
+  act: `Hold ${k('E')} over Ashwood, turn the wheel to +3, then ${click} click`, tr: 'The group is selected (UI). The frame holds <code>E</code> over Ashwood.', allow: 'As IV.2.', ui: 'Planned orders (E, the wheel, the bonus pill).'});
 add({id: 'IV.4', g: IV, title: 'Gathering the bonus', kind: 'card', ch: IV, step: 4, img: 'IV4', t: n(420, 350), w: 330,
-  say: 'Your group waits in Fernhold and gathers <b>+1 every 3&nbsp;s</b> from the warehouse there. At <b>+3</b> it sets off by itself.',
-  act: 'Wait for +3', tr: 'Your planned order accepted (tick 1; the frame at 61, +1 gathered). No pause: the bonus grows.', allow: 'None.'});
+  say: 'Your group gathers its bonus from the warehouse here, then sets off on its own.',
+  act: '', tr: 'Your planned order accepted (tick 1; the frame at 61, +1 gathered). No pause: the bonus grows.', allow: 'None.'});
 add({id: 'IV.5', g: IV, title: 'An enemy plan', kind: 'card', ch: IV, step: 5, img: 'IV5', t: road(790, 140, 560, 110), w: 340, pause: 'continue',
-  say: 'That arrow is an enemy <b>planned order</b>. You see where a plan goes, never how strong it is. The enemy sees yours the same way.',
-  act: 'Look at the arrow to Old Mill', tr: 'The enemy’s planned intent appears (sent at tick 20).', allow: 'None.'});
+  say: 'That arrow is an enemy <b>plan</b>. You see where it goes, never how strong it is, and they see yours the same way.',
+  act: '', tr: 'The enemy’s planned intent appears (sent at tick 20).', allow: 'None.'});
 add({id: 'IV.6', g: IV, title: 'Rounds', kind: 'card', ch: IV, step: 6, img: 'IV6', t: n(680, 350, 30), w: 330, pause: 'continue',
-  say: 'The fight runs in <b>rounds</b>: every <b>2&nbsp;s</b> each side fires one shot, <b>bonus shots first</b>.',
-  act: 'Watch the rounds', tr: '<code>fight_started</code> at Ashwood (contact at tick 198).', allow: 'None.'});
+  say: 'A fight runs in <b>rounds</b>: each side fires one shot a round, <b>bonus shots first</b>.',
+  act: '', tr: '<code>fight_started</code> at Ashwood (contact at tick 198).', allow: 'None.'});
 add({id: 'IV.7', g: IV, title: 'No retreat', kind: 'card', ch: IV, step: 7, img: 'IV7', t: n(680, 350, 30), w: 320, pause: 'continue',
   say: '<b>No retreat</b>: a group in a fight stays until it ends. Others can still join it.',
-  act: 'Watch the rounds', tr: 'The first <code>fight_round</code> at Ashwood with a loss (tick 258: a bonus shot kills).', allow: 'None.'});
+  act: '', tr: 'The first <code>fight_round</code> at Ashwood with a loss (tick 258: a bonus shot kills).', allow: 'None.'});
 add({id: 'IV.8', g: IV, title: 'How to win', kind: 'card', ch: IV, step: 8, img: 'IV8', t: [VPRAIL, CLOCK, n(1010, 360)], w: 360, pause: 'continue',
-  say: 'Ashwood is yours. <b>Take their capital and you win</b> at once. Otherwise, every <b>30&nbsp;s</b> your cities score <b>VP</b>, and more VP wins when the time runs out.',
-  act: 'Let the group fill up', tr: '<code>node_captured</code> Ashwood by you (tick 278; the group 3/1). The only beat of the tutorial with the match clock.',
+  say: 'Ashwood is yours. <b>Take their capital</b> and you win. If time runs out, the most <b>VP</b> wins. Your cities earn them.',
+  act: 'Let your group refill', tr: '<code>node_captured</code> Ashwood by you (tick 278; the group 3/1). The only beat of the tutorial with the match clock.',
   allow: 'None.', ui: 'VP (the rail, the badges of cities); the match clock, for this beat only.'});
 add({id: 'IV.9', g: IV, title: 'Take their capital', kind: 'card', ch: IV, step: 9, img: 'IV9', t: n(1010, 360), w: 300, pause: 'action',
   say: 'Your group is full again. Take <b>Stormcrown</b>, their capital.',
-  act: `Select the group, then ${click} click Stormcrown`, tr: 'Your group in Ashwood is full (<code>charged = units</code>, tick 502).', allow: 'A move from Ashwood to Stormcrown.', ui: 'The clock is hidden again.'});
+  act: '', tr: 'Your group in Ashwood is full (<code>charged = units</code>, tick 502).', allow: 'A move from Ashwood to Stormcrown.', ui: 'The clock is hidden again.'});
 add({id: 'IV.F', g: IV, title: 'Failure: an ordinary attack', kind: 'card', ch: IV, step: 0, fail: true, img: 'IVF', t: n(420, 350), w: 340, pause: 'continue',
-  say: 'Your <b>3 charges</b> ran out before Ashwood fell, so the group turned back. Plan the attack: bonus shots fire first.',
-  act: 'Let it fill up at home, then plan again', tr: '<code>fight_ended</code> at Ashwood lost by you: the ordinary order of IV.2 (contact at 78, lost at 138; one defender died). The one failure kept: the bounce is the lesson of the plan.',
+  say: 'Your charges ran out before Ashwood fell, so the group turned back. Let it refill, then <b>plan</b> the attack.',
+  act: '', tr: '<code>fight_ended</code> at Ashwood lost by you: the ordinary order of IV.2 (contact at 78, lost at 138; one defender died). The one failure kept: the bounce is the lesson of the plan.',
   allow: 'A planned move from Fernhold to Ashwood only (its acceptance leads to IV.4).'});
 add({id: 'IV.S', g: IV, title: 'Result', kind: 'seal', ch: IV});
 
@@ -498,60 +495,60 @@ const V = 'V';
 add({id: 'V.0', g: V, title: 'Intro', kind: 'intro', ch: V,
   goal: 'Your <code>road_fort_built</code> on Flatford–Eastfield, and Flatford yours after a <code>fight_ended</code> at Flatford.'});
 add({id: 'V.1', g: V, title: 'An attack on Highcrag', kind: 'card', ch: V, step: 1, img: 'V1', t: n(410, 180), w: 310, pause: 'continue',
-  say: 'The enemy is coming for <b>Highcrag</b>. Watch: its defenders stand in the <b>mountains</b>.',
-  act: 'Just watch', tr: 'An enemy group on the road toward Highcrag (the view; it left Ridgeway at tick 10).', allow: 'None.'});
+  say: 'The enemy is coming for <b>Highcrag</b>, up in the <b>mountains</b>.',
+  act: '', tr: 'An enemy group on the road toward Highcrag (the view; it left Ridgeway at tick 10).', allow: 'None.'});
 add({id: 'V.2', g: V, title: 'Terrain in a fight', kind: 'card', ch: V, step: 2, img: 'V2', t: n(410, 180, 30), w: 350, pause: 'continue',
-  say: 'Mountains give the defender <b>1 bonus shot</b>, fired first. Plains do the opposite: the defender loses <b>1 charge</b> as the fight starts. Forest does neither. The chevron by a helmet shows it.',
-  act: 'Watch the rounds', tr: '<code>fight_round</code> at Highcrag with <code>virtual_0 &gt; 0</code> (tick 119).', allow: 'None.', ui: 'The terrain chevrons of defenders.'});
+  say: '<b>Mountains</b> give the defender a bonus shot. <b>Plains</b> cost the defender a charge as the fight starts. The chevron by a helmet shows which.',
+  act: '', tr: '<code>fight_round</code> at Highcrag with <code>virtual_0 &gt; 0</code> (tick 119).', allow: 'None.', ui: 'The terrain chevrons of defenders.'});
 add({id: 'V.3', g: V, title: 'Held', kind: 'card', ch: V, step: 3, img: 'V3', t: n(410, 180), w: 310,
-  say: 'Held, and nobody died: 3 attackers could not beat 2 defenders in the mountains.',
-  act: 'Keep an eye on the east', tr: '<code>fight_ended</code> at Highcrag, not captured (tick 159).', allow: 'None.'});
+  say: 'Highcrag held against a bigger army, and nobody died.',
+  act: '', tr: '<code>fight_ended</code> at Highcrag, not captured (tick 159).', allow: 'None.'});
 add({id: 'V.4', g: V, title: 'A road fort', kind: 'card', ch: V, step: 4, img: 'V4', t: [{x: 596, y: 637, r: 16}, ALERT], w: 360, pause: 'action', avoid: [[566, 558, 148, 148]],
-  say: 'The warning at the top: a planned attack on <b>Flatford</b>, on plains. A <b>road fort</b> makes an enemy crossing it lose <b>1 charge per 3 units</b>, rounded up.',
-  act: `Select Flatford, press ${k('B')}, pick the road from Eastfield · 1.5&nbsp;CP`, tr: 'The enemy’s planned intent to Flatford appears (tick 200). The frame has Flatford’s menu open: Fortify road allowed, the rest locked.',
+  say: 'A planned attack is coming for <b>Flatford</b>, on the plains. A <b>road fort</b> makes enemies crossing it lose charges.',
+  act: `Select Flatford, press ${k('B')}, and fortify the road from Eastfield`, tr: 'The enemy’s planned intent to Flatford appears (tick 200). The frame has Flatford’s menu open: Fortify road allowed, the rest locked.',
   allow: 'A fort on Flatford’s road to Eastfield.', ui: 'The warnings at the top; road forts (B, the menu item, the marks).'});
 add({id: 'V.5', g: V, title: 'Send help', kind: 'card', ch: V, step: 5, img: 'V5', t: n(380, 450), w: 330, pause: 'action',
-  say: 'The fort works in <b>10&nbsp;s</b>. Now send Millbrook’s group to help Flatford.',
-  act: `Select Millbrook’s group, then ${click} click Flatford`, tr: 'Your <code>FortifyRoad</code> on that road accepted (tick 202).', allow: 'A move from Millbrook to Flatford.'});
+  say: 'Now send Millbrook’s group to help Flatford.',
+  act: '', tr: 'Your <code>FortifyRoad</code> on that road accepted (tick 202).', allow: 'A move from Millbrook to Flatford.'});
 add({id: 'V.6', g: V, title: 'The toll', kind: 'card', ch: V, step: 6, img: 'V6', t: n(600, 560), w: 330,
-  say: 'The fort took its toll. With Millbrook’s group in Flatford, the plains cost you only one charge of many.',
-  act: 'Hold Flatford', tr: 'Your <code>toll_taken</code> (tick 384: 2 charges from 4 units).', allow: 'None.'});
+  say: 'The fort took its toll. With help in Flatford, the charge the plains take hardly matters.',
+  act: '', tr: 'Your <code>toll_taken</code> (tick 384: 2 charges from 4 units).', allow: 'None.'});
 add({id: 'V.S', g: V, title: 'Result', kind: 'seal', ch: V});
 
 // ---- The first match (narrows, @easy) ----
 const FM = 'First match';
 add({id: 'H1', g: FM, title: 'A bigger map', kind: 'hint', img: 'H1', t: nn(100, 465, 30), w: 310,
-  say: 'This map is bigger than the tutorial’s, so it runs faster: your capital makes a charge every <b>26.3&nbsp;s</b> here, and 0.5&nbsp;CP come every <b>6.5&nbsp;s</b>.',
+  say: 'Bigger maps run faster: here charges and CP come quicker than in the tutorial.',
   key: '', tr: '5 s into the match (the periods of the match’s own <code>ruleset_public</code>, map tempo 76 %). The first match shows the full HUD and locks nothing.'});
 add({id: 'H2', g: FM, title: 'Over its capacity', kind: 'hint', img: 'H2', t: nn(1328, 649, 26), w: 310,
-  say: '<b>Fenmere</b> holds more units than its capacity: every <b>3&nbsp;s</b>, one of them is lost. Move some out.',
+  say: '<b>Fenmere</b> is over its capacity and is losing units. Move some out.',
   key: '', tr: 'The first own node with <code>attrition_in</code> set.'});
 add({id: 'H3', g: FM, title: 'Full warehouses', kind: 'hint', img: 'H3', t: STANCE, w: 340,
-  say: 'Your warehouses are full, so new charges are lost. Spend them, build, or switch to <b>War</b>.',
-  key: `Stance ${k('Q')}`, tr: 'The first own <code>charge_burned</code> (this frame) or <code>cp_burned</code>; the CP version: “Your CP are at the cap, so new ones are lost. Spend them, or switch to Economy.”, pointing at the CP gauge.'});
+  say: 'Your warehouses are full, so new charges are lost. Spend them, or switch to <b>War</b>.',
+  key: '', tr: 'The first own <code>charge_burned</code> (this frame) or <code>cp_burned</code>; the CP version: “Your CP are at the cap, so new ones are lost. Spend them, or switch to Economy.”, pointing at the CP gauge.'});
 add({id: 'H4', g: FM, title: 'Strike together', kind: 'hint', img: 'H4', t: nn(1328, 649, 30), w: 300,
-  say: 'Your groups arrived one by one. A <b>group order</b> makes them arrive in the same tick: Advanced chapter I.',
+  say: 'Your groups arrived one by one. A <b>group order</b> brings them in together (Advanced chapter I).',
   key: `${k('Shift')} click to select several`, tr: 'Advanced I not done, and an own group joins a fight that already had a round (<code>PlayerView.fights[].groups</code> grows while <code>last_round</code> is set).'});
 add({id: 'H5', g: FM, title: 'Rally point', kind: 'hint', img: 'H5', t: nn(750, 465, 30), w: 320,
-  say: 'Recruits can walk to the front by themselves: set a <b>rally point</b> (Advanced chapter II).',
+  say: 'A <b>rally point</b> sends recruits to the front by themselves (Advanced chapter II).',
   key: `Rally point ${k('P')}`, tr: 'Advanced II not done, and the third own <code>recruited</code> in a city without <code>rally_point</code>.'});
 
 // ---- Advanced I: Group orders (tut-group) ----
 const A1 = 'A1';
 add({id: 'A1.0', g: 'Advanced I', title: 'Intro', kind: 'intro', ch: A1, goal: '<code>node_captured</code> Ashwood by you.'});
 add({id: 'A1.1', g: 'Advanced I', title: 'Two groups', kind: 'card', ch: A1, step: 1, img: 'A11', t: [n(440, 260), n(230, 600)], w: 330, pause: 'action',
-  say: 'Two groups, one target. Sent one by one, they would arrive one by one, and each would fight alone.',
-  act: `${click} Click one of the groups`, tr: 'Chapter start.', allow: 'One group order of both groups to Ashwood (single moves are locked, so they never arrive one by one).', ui: 'Group selection (Shift).'});
+  say: 'Sent one by one, these groups would arrive one by one and fight alone.',
+  act: `${click} Click one of them`, tr: 'Chapter start.', allow: 'One group order of both groups to Ashwood (single moves are locked, so they never arrive one by one).', ui: 'Group selection (Shift).'});
 add({id: 'A1.2', g: 'Advanced I', title: 'Select both', kind: 'card', ch: A1, step: 2, img: 'A12', t: n(680, 330), w: 350, pause: 'action',
-  say: 'Shift-click the other group too, or Shift-drag a box. Then click <b>Ashwood</b>: one order, <b>1&nbsp;CP</b> per group, and both arrive in the same tick.',
+  say: 'One <b>group order</b> sends both, and they arrive together.',
   act: `${k('Shift')}-click the other group, then ${click} click Ashwood`, tr: 'A group is selected (UI).', allow: 'As A1.1.'});
 add({id: 'A1.3', g: 'Advanced I', title: 'One arrival', kind: 'card', ch: A1, step: 3, img: 'A13', t: n(440, 260), w: 330,
-  say: 'Lowfield sets off now; <b>Fernhold waits</b> so both arrive together. The hourglass shows the wait.',
-  act: 'Watch them close in', tr: 'Your <code>GroupMove</code> accepted (<code>kind = attack</code>, tick 1).', allow: 'None.'});
+  say: '<b>Fernhold waits</b> so both arrive together. The hourglass shows the wait.',
+  act: '', tr: 'Your <code>GroupMove</code> accepted (<code>kind = attack</code>, tick 1).', allow: 'None.'});
 add({id: 'A1.4', g: 'Advanced I', title: 'Together', kind: 'card', ch: A1, step: 4, img: 'A14', t: n(680, 330, 30), w: 290,
-  say: 'Together: <b>5 charges</b> against at most 2.', act: 'Watch the rounds', tr: '<code>fight_started</code> at Ashwood with both groups (tick 141).', allow: 'None.'});
+  say: 'Together, they far outnumber the defenders.', act: '', tr: '<code>fight_started</code> at Ashwood with both groups (tick 141).', allow: 'None.'});
 add({id: 'A1.5', g: 'Advanced I', title: 'Rally', kind: 'card', ch: A1, step: 5, img: 'A15', t: n(170, 330), w: 340, cont: 'A1.S',
-  say: 'The same order to one of your own places is a <b>rally</b>: the groups gather there for <b>half the price</b>, rounded up to a whole CP.',
+  say: 'The same order to your own place is a <b>rally</b>: the groups gather there for <b>half the price</b>.',
   act: '', tr: '<code>node_captured</code> Ashwood by you (tick 221). Fires with the goal: the card stays on the last frame with Continue.', allow: 'None.'});
 add({id: 'A1.S', g: 'Advanced I', title: 'Result', kind: 'seal', ch: A1});
 
@@ -559,15 +556,15 @@ add({id: 'A1.S', g: 'Advanced I', title: 'Result', kind: 'seal', ch: A1});
 const A2 = 'A2';
 add({id: 'A2.0', g: 'Advanced II', title: 'Intro', kind: 'intro', ch: A2, goal: 'Two own groups of <code>rally_walk_paid</code> arrived at Fernhold (<code>group_arrived</code>, then <code>groups_merged</code> there).'});
 add({id: 'A2.1', g: 'Advanced II', title: 'Set a rally point', kind: 'card', ch: A2, step: 1, img: 'A21', t: {x: 268, y: 435, r: 16}, w: 340, pause: 'action', avoid: [[131, 340, 172, 172]],
-  say: 'Your capital can recruit. Give it a <b>rally point</b>, and its new units walk to the front by themselves.',
+  say: 'Give your capital a <b>rally point</b>, and its recruits walk to the front by themselves.',
   act: `Select Highhold, press ${k('P')}, then ${click} click Fernhold`, tr: 'Chapter start. The frame has Highhold’s menu open: Rally point allowed, the rest locked.',
   allow: 'A rally point of Highhold on Fernhold.', ui: 'Rally points (P, the menu item).'});
 add({id: 'A2.2', g: 'Advanced II', title: 'Recruit two', kind: 'card', ch: A2, step: 2, img: 'A22', t: n(170, 350), w: 340, pause: 'action',
-  say: 'New units of Highhold now walk to Fernhold, paying <b>0.5&nbsp;CP</b> each as they leave. Recruit two: <b>1&nbsp;CP</b> each.',
-  act: `Press ${k('R')} twice with Highhold selected`, tr: 'Your <code>SetRallyPoint</code> accepted (tick 1).', allow: 'A recruit in Highhold, twice at most (so the walks never lack CP).'});
+  say: 'Highhold’s new units will now walk to Fernhold. Each walk costs a little CP.',
+  act: `Recruit two: press ${k('R')} twice`, tr: 'Your <code>SetRallyPoint</code> accepted (tick 1).', allow: 'A recruit in Highhold, twice at most (so the walks never lack CP).'});
 add({id: 'A2.3', g: 'Advanced II', title: 'On their way', kind: 'card', ch: A2, step: 3, img: 'A23', t: n(620, 330), w: 330,
-  say: 'A recruit is on its way to Fernhold: it paid 0.5&nbsp;CP as it left. It sets off empty and fills up there.',
-  act: 'Wait for both to arrive', tr: 'The first own <code>rally_walk_paid</code> (ticks 32 and 62).', allow: 'None.'});
+  say: 'Your first recruit is walking to Fernhold. The second will follow.',
+  act: '', tr: 'The first own <code>rally_walk_paid</code> (ticks 32 and 62).', allow: 'None.'});
 add({id: 'A2.S', g: 'Advanced II', title: 'Result', kind: 'seal', ch: A2});
 // ---------------------------------------------------------------------------------------------
 // Drawing helpers (from mockups/tutorial.html).
@@ -822,18 +819,18 @@ function roadSelect(stage) {
 // The rules reference (tutorial.md, section 6): the main ruleset mvp-7 on a 49-node map (no map tempo).
 // ---------------------------------------------------------------------------------------------
 const RULES = [
-  ['Units and charges', 'The number on a helmet is its units; its fill is their charges. An order costs 1 CP; cancelling one is free, and a marching group turns back.'],
-  ['Capture and capacity', 'Taking a place costs 1 charge; without one, the group turns back. A place holds only so many units, its capacity: a province 3, a small city 4, a medium city 6, a large city 8, a capital 10. A bigger group splits off what fits.'],
+  ['Units and charges', 'The number on a helmet is its units; its fill is their charges. Every order costs CP. Cancelling one is free, and a marching group turns back.'],
+  ['Capture and capacity', 'Taking a place costs a charge; without one, the group turns back. A place holds only so many units, one segment of its ring each; a bigger group splits off what fits.'],
   ['Vision and speed', 'You see only the places next to your groups. Open ground is seen exactly, a forest as a range, mountains least. Units are faster on plains, slower in mountains.'],
-  ['CP and supply', 'CP come back by themselves, 0.5 every 5 s in Balance, up to 5. Your capital makes a charge every 20 s; your roads carry charges toward the front by themselves. A warehouse stores 3 in a city, 1 in a province, 6 in a capital. A place cut off from your capital gets nothing; after 10 s it loses 1 charge per 3 units every 10 s.'],
-  ['Buildings and stances', 'A factory costs 4 charges and works 10 s after it is paid; a barracks costs 3 charges, 10 s. The warehouse pays first, then the units standing there. A recruit costs 1 CP and takes 3 s. Economy: more charges, fewer CP. War: the other way. Balance: between. Switching is free.'],
-  ['Fights and planned orders', 'Each charge is one shot. A fight runs in rounds every 2 s; each side fires one shot a round, bonus shots first, and two shots cancel each other. A shot that meets none kills a unit, empty ones first. No retreat. A planned order costs 1 CP, waits, gathers +1 bonus shot every 3 s from the warehouse, then sets off; the enemy sees where, not how strong.'],
-  ['Winning', 'Take the enemy capital and you win at once. Otherwise every 30 s your cities score VP (the capital triple), and more VP wins after 15 minutes.'],
-  ['Terrain and forts', 'For a defender with a charge: mountains give 1 bonus shot, plains take 1 charge as the fight starts, forest neither. A road fort costs 1.5 CP, works after 10 s, and takes 1 charge per 3 units (rounded up) from an enemy crossing it; a capture destroys it.'],
-  ['Group orders and rally points', 'One order for several groups: to an enemy place they arrive in the same tick (1 CP each); to your own place they rally for half the price, rounded up. A rally point sends a city’s recruits to an own place, 0.5 CP each.'],
-  ['Capacity and attrition', 'Above its capacity a place loses a unit every 3 s.'],
-  ['Bigger maps are faster', 'The economy runs faster on bigger maps and slower on small ones: the periods above are for a map of 49 places.'],
-  ['Also', 'A defender that just left a place is caught in the fight there. You can have at most 3 factories, your capital included.'],
+  ['CP and supply', 'In Balance, CP come 0.5 every 5\u00a0s, up to 5, and your capital makes a charge every 20\u00a0s. Your roads carry charges to the front on their own. A place cut off from your capital gets none and soon starts losing them.'],
+  ['Buildings and stances', 'A factory makes charges like your capital; a barracks lets a city recruit. The warehouse pays for a building first, then the units standing there. Economy: more charges, fewer CP. War: the other way. Balance: between. Switching is free.'],
+  ['Fights and planned orders', 'Each charge is one shot. A fight runs in rounds, one every 2\u00a0s: each side fires one shot, bonus shots first, and two shots cancel out. A shot that meets none kills a unit, empty ones first. No retreat. A planned order waits and gathers a bonus shot every 3\u00a0s from the warehouse, then sets off; the enemy sees where, not how strong.'],
+  ['Winning', 'Take the enemy capital and you win at once. Otherwise every 30\u00a0s your cities score VP (the capital triple), and the most VP after 15\u00a0minutes wins.'],
+  ['Terrain and forts', 'For a defender with a charge, mountains give a bonus shot, plains take a charge as the fight starts, forest neither. A road fort takes 1 charge for every 3\u00a0units, rounded up, from an enemy crossing it; a capture destroys it.'],
+  ['Group orders and rally points', 'One order for several groups: to an enemy place they arrive together; to your own place they rally for half the price. A rally point sends a city’s recruits to one of your places, 0.5\u00a0CP a walk.'],
+  ['Capacity and attrition', 'A place above its capacity keeps losing units.'],
+  ['Bigger maps are faster', 'The economy runs faster on bigger maps and slower on small ones; the periods above are for a map of 49 places.'],
+  ['Also', 'A defender that just left a place is caught in the fight there. Your capital counts toward the factory limit.'],
 ];
 function rulesPage() {
   return `<section class="rules stone rule-frame" aria-labelledby="ttl"><header><div><p class="lab">How to play</p><h1 id="ttl">Rules</h1></div><button class="quiet" ${go('R.2')}>Back to chapters</button></header>` +
@@ -866,23 +863,22 @@ function render(sc) {
     const act = sc.act ? `<div class="act">${sc.act}</div>` : '';
     const target = sc.cont ?? (sc.pause === 'continue' ? nextCard(sc) : null);
     const cont = target ? `<div class="row cont"><button class="btn primary small" ${go(target)}>Continue</button></div>` : '';
-    const paused = sc.pause ? `<div class="paused" role="status">${PAUSE}Paused<span class="sub">${sc.pause === 'continue' ? 'until you continue' : 'until you act'}</span></div>` : '';
+    const paused = sc.pause ? `<div class="paused" role="status">${PAUSE}Paused</div>` : '';
     return bg(sc.img, `The match screen of chapter ${CH[c].n}: ${sc.title}`) + markSvg(sc.t) + paused + leaderHtml(sc.t, `<div class="head">${head}</div><p class="say">${sc.say}</p>${act}${cont}`, sc.w, sc.at) + exitHot();
   }
   if (sc.kind === 'dialog') {
     return bg(sc.img) + '<div class="dim"></div>' +
       `<section class="modal stone rule-frame" role="dialog" aria-modal="true" aria-labelledby="ttl"><p class="lab">${esc(kick(c))}</p><h2 id="ttl">Leave the chapter?</h2>` +
-      `<p class="body">You can come back to it at any time. It starts again from the beginning.</p>` +
+      `<p class="body">You can come back at any time. It will start over.</p>` +
       `<div class="acts"><button class="btn secondary" ${go('R.2')}>Leave the chapter</button><button class="btn primary" ${go('I.5')}>Keep playing</button></div></section>`;
   }
   if (sc.kind === 'seal') {
-    const next = nextIntro(c);
-    const label = next === 'H1' ? 'Play your first match' : next === 'R.3' ? 'All chapters' : `Next: ${CH[next.split('.')[0]].name}`;
-    const second = next === 'H1' ? '' : `<button class="quiet" ${go('H1')}>Play your first match</button>`;
+    // Two buttons only (the owner's second review): the player goes on from the chapter select.
+    const road = CH[c].road === 'main' ? 'R.2' : 'R.3';
     return bg(CH[c].end) + '<div class="dim"></div>' +
       `<section class="window stone rule-frame" aria-labelledby="ttl">${sealSvg(c)}<p class="lab">${esc(CH[c].road === 'main' ? `Chapter ${CH[c].n}` : `Advanced ${CH[c].n}`)} · ${esc(CH[c].name)}</p><h2 id="ttl">Complete</h2>` +
       `<ul class="lesson">${CH[c].lesson.map((l) => `<li><span class="lz on"></span>${esc(l)}</li>`).join('')}</ul>` +
-      `<div class="acts"><button class="btn primary" ${go(next)}>${esc(label)}</button>${second}<button class="quiet" ${go(c + '.1')}>Replay chapter</button></div></section>`;
+      `<div class="acts"><button class="btn primary" ${go(road)}>All chapters</button><button class="btn secondary" ${go(c + '.1')}>Replay chapter</button></div></section>`;
   }
   if (sc.kind === 'hint') {
     const inner = `<div class="head"><span class="lab">Hint · ${esc(sc.title)}</span><button class="x" aria-label="Close the hint">${xIcon()}</button></div><p class="say">${sc.say}</p>` +
