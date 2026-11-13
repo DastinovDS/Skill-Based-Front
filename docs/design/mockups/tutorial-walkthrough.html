@@ -544,7 +544,7 @@ add({id: 'A1.1', g: 'Advanced I', title: 'Two groups', kind: 'card', ch: A1, ste
   act: `${click} Click one of the groups`, tr: 'Chapter start.', allow: 'One group order of both groups to Ashwood (single moves are locked, so they never arrive one by one).', ui: 'Group selection (Shift).'});
 add({id: 'A1.2', g: 'Advanced I', title: 'Select both', kind: 'card', ch: A1, step: 2, img: 'A12', t: n(680, 330), w: 350, pause: 'action',
   say: 'Shift-click the other group too, or Shift-drag a box. Then click <b>Ashwood</b>: one order, <b>1&nbsp;CP</b> per group, and both arrive in the same tick.',
-  act: `${k('Shift')} ${click} the other group, then ${click} Ashwood`, tr: 'A group is selected (UI).', allow: 'As A1.1.'});
+  act: `${k('Shift')}-click the other group, then ${click} click Ashwood`, tr: 'A group is selected (UI).', allow: 'As A1.1.'});
 add({id: 'A1.3', g: 'Advanced I', title: 'One arrival', kind: 'card', ch: A1, step: 3, img: 'A13', t: n(440, 260), w: 330,
   say: 'Lowfield sets off now; <b>Fernhold waits</b> so both arrive together. The hourglass shows the wait.',
   act: 'Watch them close in', tr: 'Your <code>GroupMove</code> accepted (<code>kind = attack</code>, tick 1).', allow: 'None.'});
@@ -560,7 +560,7 @@ const A2 = 'A2';
 add({id: 'A2.0', g: 'Advanced II', title: 'Intro', kind: 'intro', ch: A2, goal: 'Two own groups of <code>rally_walk_paid</code> arrived at Fernhold (<code>group_arrived</code>, then <code>groups_merged</code> there).'});
 add({id: 'A2.1', g: 'Advanced II', title: 'Set a rally point', kind: 'card', ch: A2, step: 1, img: 'A21', t: {x: 268, y: 435, r: 16}, w: 340, pause: 'action', avoid: [[131, 340, 172, 172]],
   say: 'Your capital can recruit. Give it a <b>rally point</b>, and its new units walk to the front by themselves.',
-  act: `Select Highhold, press ${k('P')}, then ${click} Fernhold`, tr: 'Chapter start. The frame has Highhold’s menu open: Rally point allowed, the rest locked.',
+  act: `Select Highhold, press ${k('P')}, then ${click} click Fernhold`, tr: 'Chapter start. The frame has Highhold’s menu open: Rally point allowed, the rest locked.',
   allow: 'A rally point of Highhold on Fernhold.', ui: 'Rally points (P, the menu item).'});
 add({id: 'A2.2', g: 'Advanced II', title: 'Recruit two', kind: 'card', ch: A2, step: 2, img: 'A22', t: n(170, 350), w: 340, pause: 'action',
   say: 'New units of Highhold now walk to Fernhold, paying <b>0.5&nbsp;CP</b> each as they leave. Recruit two: <b>1&nbsp;CP</b> each.',
