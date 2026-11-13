@@ -15,8 +15,16 @@ import { BOT_START_TIMEOUT_MS } from './waiting.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
 import type { MatchSummary } from './matchSummary.ts';
-import type { MapFile, MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
+import type { ChapterId, MapFile, MatchEndMsg, PlayerColour, PlayerId } from '../protocol.gen.ts';
 import type { Way } from './play.ts';
+import { offerAllowed, type CharterSeat } from '../tutorial/progress.ts';
+import { TutorialProgressState } from '../tutorial/progressState.svelte.ts';
+
+/** The first match of the tutorial (#806, section 5): an easy bot on the smallest pool map (Q1). */
+export const FIRST_MATCH = { level: 'easy', map: 'narrows' } as const satisfies {
+  level: BotLevel;
+  map: string;
+};
 
 export type Screen =
   /** Checking the saved guest. */
@@ -41,7 +49,19 @@ export type Screen =
   | { readonly name: 'queue' }
   /** The waiting room of an invite (host and guest). */
   | { readonly name: 'invite'; readonly code: string }
-  | { readonly name: 'match'; readonly matchId: string; readonly mapId: string }
+  /**
+   * The tutorial (#806): the chapter select (Charter, `sel`: the seat chosen when it opens) and the
+   * intro of a chapter (Sheet).
+   */
+  | { readonly name: 'tutorial'; readonly sel?: CharterSeat }
+  | { readonly name: 'chapter'; readonly chapter: ChapterId }
+  | {
+      readonly name: 'match';
+      readonly matchId: string;
+      readonly mapId: string;
+      /** A tutorial chapter: the coach draws its beats and its goal ends on the Seal. */
+      readonly chapter?: ChapterId;
+    }
   | {
       readonly name: 'result';
       readonly matchId: string;
@@ -95,6 +115,16 @@ export class AppState {
   queueBanUntil = $state.raw<number | null>(null);
   /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
   readonly backdrop: MapFile = MENU_MAP;
+  /** The tutorial progress of this browser (#806, section 7.8). */
+  readonly tutorial: TutorialProgressState;
+  /**
+   * The entry popup that offers the tutorial (#806, section 3, "Entry") is up. Asked once per
+   * entry (the first main screen after the page loads), kept in memory only.
+   */
+  offer = $state.raw(false);
+  #offerAsked = false;
+  /** The match the chapter select started as the first match: its end marks the tutorial finished. */
+  #firstMatchId: string | null = null;
 
   readonly api: Api;
   /** The pool maps: the thumbnails and tiles of the lobby, invite and bot screens (#473). */
@@ -110,6 +140,7 @@ export class AppState {
     this.api = opts.api ?? new Api();
     this.maps = new MapCache(this.api);
     this.#storage = opts.storage ?? (() => window.localStorage);
+    this.tutorial = new TutorialProgressState(this.#storage);
     this.#botTimeoutMs = opts.botTimeoutMs ?? BOT_START_TIMEOUT_MS;
     this.#location = opts.location ?? window.location;
     this.#replaceUrl =
@@ -351,9 +382,75 @@ export class AppState {
     this.queueBanUntil = Date.now() + seconds * 1000;
   }
 
-  /** Back to the running match (the socket reconnects with the same token, DEC-05). */
+  /** Back to the running match (the socket reconnects with the same token, DEC-05), a chapter too. */
   resumeMatch(match: ActiveMatch): void {
-    this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
+    this.go({
+      name: 'match',
+      matchId: match.match_id,
+      mapId: match.map_id,
+      ...(match.chapter == null ? {} : { chapter: match.chapter }),
+    });
+  }
+
+  // --- The tutorial (#806) ---------------------------------------------------------------------
+
+  /**
+   * The main screen of an entry (section 3, "Entry"): the popup offers the tutorial while no chapter
+   * is done, the first match was not played, "Don't show again" is not ticked and the player has
+   * played no match (the profile's count, a guest and an account alike). Asked once per entry.
+   */
+  async askOffer(): Promise<void> {
+    if (this.#offerAsked) return;
+    this.#offerAsked = true;
+    const guest = this.guest;
+    if (guest === null || !offerAllowed(this.tutorial.current)) return;
+    try {
+      const me = await this.api.me(guest.token);
+      const profile = await this.api.player(me.player_id, guest.token);
+      const { wins, losses, draws } = profile.record;
+      if (wins + losses + draws > 0) return;
+    } catch {
+      return; // Best effort: no popup when the server cannot say.
+    }
+    if (this.screen.name === 'menu' && offerAllowed(this.tutorial.current)) this.offer = true;
+  }
+
+  /** The popup's answer: "Start the tutorial" (the intro of chapter I) or "Not now". */
+  answerOffer(start: boolean, off: boolean): void {
+    this.offer = false;
+    if (off) this.tutorial.turnOfferOff();
+    if (start) this.go({ name: 'chapter', chapter: 'units' });
+  }
+
+  /** The chapter select ("?" > Tutorial, "All chapters"); `sel`: the seat to choose. */
+  openTutorial(sel?: CharterSeat): void {
+    this.offer = false;
+    this.go(sel === undefined ? { name: 'tutorial' } : { name: 'tutorial', sel });
+  }
+
+  /** The intro (Sheet) of a chapter. */
+  openChapter(chapter: ChapterId): void {
+    this.go({ name: 'chapter', chapter });
+  }
+
+  /** Starts a chapter (a fresh match every time); a failure is answered like `playBot`. */
+  async startChapter(chapter: ChapterId): Promise<MessageKey | null> {
+    const guest = this.#requireGuest();
+    try {
+      const match = await this.api.createTutorialMatch(guest.token, chapter);
+      this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id, chapter });
+      return null;
+    } catch (error) {
+      return this.#failHere(error);
+    }
+  }
+
+  /** The first match from the chapter select: an easy bot on Narrows (section 5). */
+  async playFirstMatch(): Promise<MessageKey | null> {
+    const failed = await this.playBot(FIRST_MATCH.level, FIRST_MATCH.map);
+    const screen = this.screen;
+    if (failed === null && screen.name === 'match') this.#firstMatchId = screen.matchId;
+    return failed;
   }
 
   go(screen: Screen): void {
@@ -421,6 +518,10 @@ export class AppState {
     summary: MatchSummary | null = null,
   ): void {
     this.activeMatch = null;
+    if (matchId === this.#firstMatchId) {
+      this.#firstMatchId = null;
+      this.tutorial.playedFirstMatch();
+    }
     this.go({ name: 'result', matchId, mapId, me, end, summary });
   }
 

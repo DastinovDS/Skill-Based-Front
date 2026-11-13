@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { MatchAudio } from '../audio/matchAudio.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import { HudChrome } from '../hud/chrome.svelte.ts';
@@ -15,6 +16,7 @@
   import type { GeoFile } from '../map/geography.ts';
   import type { ConnectionStatus } from '../net/matchConnection.ts';
   import type {
+    ChapterId,
     MapFile,
     MatchEndMsg,
     PausedMsg,
@@ -22,6 +24,15 @@
     RulesetPublic,
     ServerMsg,
   } from '../protocol.gen.ts';
+  import ChapterSeal from '../hud/ChapterSeal.svelte';
+  import TutorialCoachView from '../hud/TutorialCoach.svelte';
+  import { CAPITAL_RESULT_DELAY_MS } from '../render/style.ts';
+  import type { RenderSource } from '../render/source.ts';
+  import { chapterOf } from '../tutorial/chapters.ts';
+  import { TutorialCoach } from '../tutorial/coach.svelte.ts';
+  import { FULL_GATE } from '../tutorial/gate.ts';
+  import { TutorialSource } from '../tutorial/tutorialSource.ts';
+  import { cardKicker } from './tutorial/texts.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
@@ -46,6 +57,17 @@
     onexit: () => void;
     /** Reloads the page after a protocol version mismatch (a test replaces it). */
     onreload?: () => void;
+    /**
+     * A tutorial chapter (#806): the coach draws its beats, the HUD shows what they unlock, and the
+     * goal ends on the chapter's result (Seal) instead of the result screen.
+     */
+    chapter?: ChapterId | null;
+    /** A chapter: "All chapters" on its result, or the chapter left. */
+    onchapters?: () => void;
+    /** A chapter: "Replay chapter" on its result. */
+    onreplay?: () => void;
+    /** A chapter's goal was reached (its progress is kept). */
+    onchapterdone?: (chapter: ChapterId) => void;
   }
 
   let {
@@ -59,7 +81,16 @@
     onreload = () => {
       window.location.reload();
     },
+    chapter = null,
+    onchapters = () => undefined,
+    onreplay = () => undefined,
+    onchapterdone = () => undefined,
   }: Props = $props();
+
+  // The chapter file of a tutorial chapter (#806), bundled at build time.
+  const chapterFile = $derived(chapter === null ? null : chapterOf(chapter));
+  // The coach exists once `welcome` gave the side and the HUD (its locks read the own groups).
+  let coach = $state.raw<TutorialCoach | null>(null);
 
   // `welcome` brings the ruleset and the side, so the HUD exists only after it.
   let hud = $state.raw<HudState | null>(null);
@@ -93,6 +124,14 @@
 
   function handle(msg: ServerMsg): void {
     pauseState.onMessage(msg, me);
+    if (msg.type === 'tutorial') {
+      coach?.onMessage(msg);
+      return;
+    }
+    if (msg.type === 'match_end' && chapterFile !== null) {
+      endChapter(msg);
+      return;
+    }
     if (msg.type === 'paused') {
       paused = msg.paused ? msg : null;
       pauseLeft = msg.ends_in_s ?? 0;
@@ -115,17 +154,56 @@
     }
   }
 
+  /**
+   * The end of a chapter: the goal (the scripted side forfeits, or chapter IV's capital) shows the
+   * result over the last frame once the capture is seen; leaving it (the player's own forfeit) goes
+   * to the chapter select.
+   */
+  function endChapter(end: MatchEndMsg): void {
+    const file = chapterFile;
+    if (file === null) return;
+    clearTimeout(endTimer);
+    if (end.winner !== me) {
+      onchapters();
+      return;
+    }
+    onchapterdone(file.id);
+    const wait = Math.max(resultDelayMs(end), CAPITAL_RESULT_DELAY_MS);
+    endTimer = setTimeout(() => {
+      endTimer = undefined;
+      coach?.finish();
+    }, wait);
+  }
+
   $effect(() => {
+    const file = untrack(() => chapterFile);
     const current = new MatchSession({
       matchId,
       token,
       context: (welcome) => {
-        const state = new HudState({
-          me: welcome.player,
-          nicks: welcome.nicks,
-          rules: welcome.ruleset_public,
-          map,
-        });
+        const state = new HudState(
+          {
+            me: welcome.player,
+            nicks: welcome.nicks,
+            rules: welcome.ruleset_public,
+            map,
+          },
+          { startBanner: file === null },
+        );
+        if (file !== null) {
+          coach = new TutorialCoach(file, {
+            resume: () => {
+              current.resume();
+            },
+            context: {
+              map,
+              groupNode: (id: string) => {
+                const at = state.ownGroup(id)?.location;
+                return at?.kind === 'node' ? at.node : null;
+              },
+            },
+          });
+        }
         me = welcome.player;
         colours = welcome.colours;
         rules = welcome.ruleset_public;
@@ -151,6 +229,7 @@
     return () => {
       current.stop();
       session = null;
+      coach = null;
       drawn = false;
       hud?.destroy();
       hud = null;
@@ -190,10 +269,12 @@
     if (live === null || hud === null || rules === null) {
       return null;
     }
+    const tutor = coach;
     return new OrderController({
       hud,
       map,
       rules,
+      locks: tutor,
       book: live.orders,
       send: (cmd) => live.send(cmd),
       alerts: hud.alerts,
@@ -210,6 +291,38 @@
       current?.destroy();
     };
   });
+
+  // A UI beat of the chapter begins on a selection (I.2, IV.3, A1.2): the coach looks at each one.
+  $effect(() => {
+    const tutor = coach;
+    const state = hud;
+    if (tutor === null || state === null) return undefined;
+    const look = (): void => {
+      const selection = state.selection;
+      if (selection?.kind !== 'group') {
+        tutor.onSelection(null);
+        return;
+      }
+      const at = state.ownGroup(selection.id)?.location;
+      tutor.onSelection({ node: at?.kind === 'node' ? at.node : null });
+    };
+    look();
+    return state.listen(look);
+  });
+
+  // In a chapter the map draws what the beat shows, and the goal marks of its card (#806).
+  const source = $derived.by<RenderSource | null>(() => {
+    const live = session;
+    const tutor = coach;
+    if (live === null || tutor === null) return live;
+    const ordersNow = orders;
+    return new TutorialSource(live, tutor, map, () => {
+      const menu = ordersNow?.cityMenu.current;
+      return menu?.open === true ? menu.target : null;
+    });
+  });
+  const gate = $derived(coach?.current.gate ?? FULL_GATE);
+  const kicker = $derived(chapterFile === null ? null : cardKicker(chapterFile));
 
   function doStatusAction(action: StatusAction): void {
     if (action === 'retry') session?.retry();
@@ -280,7 +393,7 @@
     <GameCanvas
       bind:this={canvas}
       {map}
-      source={session}
+      {source}
       interaction={orders}
       player={me}
       {colours}
@@ -299,6 +412,8 @@
       {chrome}
       colour={colours?.[me] ?? null}
       paused={paused !== null}
+      {gate}
+      chapter={kicker}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
             session?.pause();
@@ -312,6 +427,24 @@
         group: (id: string) => canvas?.groupAnchor(id) ?? null,
       }}
     />
+  {/if}
+
+  {#if coach !== null && orders !== null && chapterFile !== null && kicker !== null}
+    <!-- The coach stands over the menus it marks; a dialog of the HUD hides it (#806). -->
+    {#if !coach.sealed && !chrome.exitOpen && !chrome.settingsOpen}
+      <TutorialCoachView
+        {coach}
+        {kicker}
+        {map}
+        {orders}
+        anchors={{
+          node: (id: number) => canvas?.nodeAnchor(id) ?? null,
+          group: (id: string) => canvas?.groupAnchor(id) ?? null,
+        }}
+      />
+    {:else if coach.sealed}
+      <ChapterSeal chapter={chapterFile} {onchapters} {onreplay} />
+    {/if}
   {/if}
 
   {#if loadingStage !== null}

@@ -44,6 +44,7 @@ describe('legal content', () => {
       'sbf.locale',
       'sbf.settings',
       'sbf.sound',
+      'sbf.tutorial',
     ]);
     for (const locale of LOCALES) {
       const text = JSON.stringify(LEGAL_CONTENT[locale].privacy);

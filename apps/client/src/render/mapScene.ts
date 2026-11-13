@@ -34,6 +34,7 @@ import { DEFAULT_ROUND_TICKS, DEFAULT_TICK_HZ } from './renderRules.ts';
 import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { FlowView } from './flowView.ts';
+import { CoachMarkView } from './coachMarkView.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
@@ -132,6 +133,8 @@ export class MapScene {
   private readonly tolls: TollView;
   private readonly sight: SightView;
   private readonly alerts: AlertView;
+  /** The goal marks of a tutorial card (#806). */
+  private readonly coach: CoachMarkView;
   private interaction: MapInteraction | null;
   private hovering = false;
   /** Where the pointer rests on the canvas, CSS px; `null`: off it. */
@@ -217,6 +220,7 @@ export class MapScene {
     this.flow = new FlowView(map, this.layers, me, radiusOf, this.sprites);
     this.sight = new SightView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf, colours);
+    this.coach = new CoachMarkView(map, this.layers, radiusOf, this.sprites);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -323,6 +327,7 @@ export class MapScene {
     this.controller.destroy();
     this.fog.destroy();
     this.alerts.destroy();
+    this.coach.destroy();
     this.effects.destroy();
     this.intents.destroy();
     this.entities.destroy();
@@ -504,6 +509,21 @@ export class MapScene {
     this.forts.advance(this.frameMs);
     this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
+    // A tutorial chapter (#806): the VP badges by its gate, and the goal marks of its card.
+    const gate = this.source.gate?.() ?? null;
+    this.cities.setVpBadges(gate === null || gate.has('vp'));
+    const points = this.entities.groupPoints();
+    this.coach.update(
+      this.source.coachMarks?.() ?? null,
+      (node) => {
+        for (const group of frame.base.view.groups) {
+          if (group.location.kind !== 'node' || group.location.node !== node) continue;
+          return points.get(group.id) ?? null;
+        }
+        return null;
+      },
+      performance.now(),
+    );
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
@@ -623,6 +643,7 @@ export class MapScene {
     this.undo.setCamera(camera.scale, this.app.renderer.resolution);
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
+    this.coach.setLabelResolution(resolution);
     this.forts.setLabelResolution(resolution);
     this.forts.setCameraScale(camera.scale);
     this.forts.setDeviceResolution(this.app.renderer.resolution);

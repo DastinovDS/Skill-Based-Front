@@ -35,6 +35,8 @@ export default defineConfig({
       allow: [
         '.',
         '../../maps',
+        // The tutorial's chapter files (#806, src/tutorial/chapters.ts).
+        '../../tutorial',
         '../../packages/sim/tests/maps',
         '../../packages/protocol/fixtures',
         '../../packages/protocol/vectors',

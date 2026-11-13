@@ -320,6 +320,10 @@ export class MatchConnection {
       case 'paused':
         this.#paused = msg.paused;
         break;
+      // A tutorial chapter waits at its cards (#806): no snapshots while it does, as in a pause.
+      case 'tutorial':
+        this.#paused = msg.paused;
+        break;
       case 'pong': {
         const sentAt = this.#pingSentAt.get(msg.id);
         if (sentAt !== undefined) {

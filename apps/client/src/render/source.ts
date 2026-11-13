@@ -1,6 +1,8 @@
 import type { EventMsg, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { RenderRules } from './renderRules.ts';
+import type { CoachMarks } from './coachMarks.ts';
+import type { RenderGate } from './renderGate.ts';
 
 /**
  * What the renderer draws, asked every frame. The match controller (CLI-06) serves it from a
@@ -26,4 +28,11 @@ export interface RenderSource {
    * nothing new arrived: the renderer rebuilds its marks when the array or its length changes.
    */
   events(): readonly EventMsg[];
+  /**
+   * A tutorial chapter (#806): the pieces the map shows (the frame is filtered already; the VP
+   * badges of the map file are switched by it); absent or `null`: everything.
+   */
+  gate?(): RenderGate;
+  /** A tutorial chapter: the goal marks of the card on screen; absent or `null`: none. */
+  coachMarks?(): CoachMarks | null;
 }

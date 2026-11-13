@@ -9,7 +9,8 @@ mark, short natural sentences, two buttons on the Seal); so is the owner's third
 chapter select Charter, the Advanced chapter "Supply distribution", a popup instead of the forced start, no chapter row
 on the intro, and a note per screen). The defaults of section 9 are in force until the owner changes them. PR 1 of
 section 7.10 (server, bots, data) is in the code; section 7 records what it built, and where it had to differ from the plan
-(each such place says so). PR 2 and PR 3 (the client) are still the plan. The mockup is
+(each such place says so). PR 2 (the client's chapters) is in the code too; section 7.11 records where it had to differ.
+PR 3 (the first match's hints and the rules reference) is still the plan. The mockup is
 [`mockups/tutorial.html`](mockups/tutorial.html) (the chosen look); the whole tutorial, screen by screen with the final
 copy and the gating, is the walkthrough [`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html)
 (section 8). The texts of section 4 and section 5 are the final copy; the walkthrough shows them on the real frames.
@@ -182,7 +183,7 @@ Charter ─> any open intro (II ... V; Advanced I to III after V) ─> the chapt
 
 | Screen | What is on it | Comes from | Goes to |
 |---|---|---|---|
-| **Popup (first entry)** | over the main screen, the stone dialog of the client (`theme/StoneOverlay.svelte`, as the logout dialog): eyebrow "How to play", title "New to the game?", one line "A short tutorial teaches the basics, one chapter at a time.", "Start the tutorial" (primary), "Not now" (secondary), the checkbox "Don't show again" | the main screen of an entry (section "Entry") | the intro of chapter I, the main screen |
+| **Popup (first entry)** | over the main screen, the stone dialog of the client (the stone window of `theme/primitives.css` on a dim that keeps the main screen in view, as the walkthrough's E.1; PR 2, section 7.11): eyebrow "How to play", title "New to the game?", one line "A short tutorial teaches the basics, one chapter at a time.", "Start the tutorial" (primary), "Not now" (secondary), the checkbox "Don't show again" | the main screen of an entry (section "Entry") | the intro of chapter I, the main screen |
 | **Chapter intro (Sheet)** | "Tutorial · Chapter N of V" (Advanced: "Advanced · N of III"), the name, one sentence, the goal list, a crop of the chapter map with the goals ringed, Start and "All chapters"; no row of chapters (round 5) | the popup; Charter | the chapter, Charter |
 | **Chapter** | the match screen with only the unlocked HUD (section 4, "Shown"), the hint card (Leader), the goal mark (Compass), the "Paused" plate while the simulation waits; no start banner (beat 1 takes its place); the exit button reads "Leave the chapter" | intro | Seal, or Charter (leave) |
 | **Result (Seal)** | a stone window over the chapter's last moment: the seal, "Complete", the three lessons, two buttons: "All chapters" (primary) and "Replay chapter" (secondary) | the goal of the chapter | Charter, the chapter again |
@@ -257,7 +258,8 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   - `action`: the card asks for a command; the simulation resumes when the server accepts the first allowed command of
     the beat, so the player is never rushed and nothing happens behind the card;
   - none: the simulation runs (a card that only comments on what is happening).
-  The "Paused" plate (top centre, where the start banner of a match is) shows while the simulation waits. A pause adds
+  The "Paused" plate (bottom centre, clear of the top-bar pieces and the warnings at the top, as the walkthrough draws
+  it; PR 2) shows while the simulation waits. A pause adds
   no tick: the "Verified" ticks below are the simulation's, with the player acting on the tick after each pause.
 - **Failures.** A failure branch stays only where the failure is the lesson: chapter IV's ordinary attack that
   bounces (beat IV.F). Every other mistake is prevented: by `allow` (no wrong target, no wrong group, a bounded number
@@ -1039,6 +1041,52 @@ not quoted (beat IV.8 points at the VP rail, whose `vp_gain` already includes it
 | 2. Client: chapters | the entry popup with "Don't show again", the Sheet, Charter with the Advanced seals (after V) and the "First match" button, the Seal, the slides of IV.2, the marks in turn of I.7, the coach (Leader card, Continue, Paused plate, Compass sprite, HUD outlines), the gate in the top bar, the alerts, the tips and the map views, the locks in `OrderController` and the locked look of the radial and the chip, the exit wording, no start banner in a chapter, progress; Vitest of the gate (each flag hides its pieces, "everything" changes nothing), of the allow matcher and of the coach on recorded `tutorial` streams; `shots` of the new screens and of gated chapter scenes; the `visual` references | L, 5 days |
 | 3. Client: first match and reference | the five hints of section 5 with their triggers; the rules reference on `GET /api/ruleset`; the removal of How to play v1 and `regen:howto` | M, 2 days |
 
+### 7.11 PR 2 as built (the client's chapters)
+
+What the client PR built, and where it differs from 7.7 or from the walkthrough (each with its reason):
+
+- **Data.** `src/tutorial/chapters.ts` bundles `tutorial/chapters/*.json` and the chapter maps of `maps/tutorial/`
+  (`*.json`, `*.bg.webp`) at build time; the caddy image copies them (`deploy/caddy.Dockerfile`). A Vitest
+  (`src/tutorial/tutorial.test.ts`) checks that every beat of every chapter file (its slides, its failure beat) has its
+  text in the dictionary, that every `tutorial.<chapter>.*` key is a beat's text, its action line or the chapter's own
+  words (name, line, goals, lessons, length), and that every mark names a place of the map.
+- **Card texts** are dictionary strings with a little markup cut into segments (`tutorial/rich.ts`): `**word**` bold,
+  `{click}` the mouse glyph, `{warn_sign}` the amber sign, `{shift}` and `{<action>_key}` a key cap with the player's
+  binding. No `{@html}`.
+- **Coach** (`tutorial/coach.svelte.ts`): reads the `tutorial` messages, walks the UI beats on a selection, pages the
+  slides, keeps the A1.5 card with Continue before the Seal; `current` is replaced on a change only. Continue sends
+  `resume`. The connection treats a chapter's pause like a private pause (no snapshots while it waits, so the watchdog
+  of a silent link does not reconnect).
+- **Gate.** The HUD reads the gate as a prop (`TopBar`, `Hud`: the warnings at the top, the notices, no start banner).
+  The map reads it through its source: the chapter's `TutorialSource` filters the frame the map draws
+  (`render/renderGate.ts`: the warehouse row and the amber sign, the packets and the pocket and starvation marks, the
+  building marks, the recruit queue, the rally point, the terrain chevrons, the road forts and their toll) and the scene
+  switches the VP badges of the map file. A filter of the frame, rather than a flag in each view, keeps the views as
+  they are; a normal match has no gate and the frame goes through as the same object. The dev screen shows a frozen
+  scene through a gate (`/?scene=<id>&gate=cp,notices`, `mise run shots`: `gate-chapter-<n>.png`).
+- **Marks.** The Compass of a place, a group, a VP badge, a road and the marks in turn are drawn by PixiJS
+  (`render/coachMarkView.ts`, baked sprites of `render/compassShapes.ts`); the HUD outlines and the ring of a menu item
+  are HTML/SVG over the HUD. A group's mark has the size of its place's mark (the walkthrough rings the place). A
+  menu mark (`{"menu": ..., "at": X}`) rings the place X until its menu is open, then the item: the menu is closed
+  when the card shows, and the player has to find X first. The coach stands over the radial menus (it points into
+  them) and hides while a dialog of the HUD is open.
+- **Card placement** (`tutorial/leader.ts`) is the walkthrough's: a 10 px grid scored by overlap with every place and
+  its name, the marks, the top bar, the open menus and the Paused plate, then by the distance to the target; it is done
+  again when the card, its slide or its size changes, or its target moves (the camera).
+- **Locks.** `OrderController` takes `locks` (the coach): a command the beat does not allow is not sent, a click on a
+  target it does not allow keeps the selection and pulses the card's action line, the keys of hidden pieces do nothing,
+  split, merge and release are never in a chapter. A locked menu item has the radial's disabled look, its icon only
+  and a padlock; the stance chip is at 40 % with a padlock; both say "Not yet".
+- **Screens.** "?" on the screens before a match now opens the chapter select (the help of #919 is the tutorial);
+  "Rules" on Charter opens the How to play page as it is until PR 3 replaces it. The Sheet's map is the chapter map
+  drawn as an SVG over its baked ground (as the map cards of the menus), not a frame of the client: a frame needs a
+  running chapter. The first match is the bot match of section 5 started from Charter; its end sets `firstMatch`.
+- **Privacy.** `sbf.tutorial` is listed in the privacy text with the other browser entries (`legal.svelte.test.ts`).
+- **E2E.** The players of the existing e2e tests turn the popup off before the page loads (`Player.create`); the new
+  `e2e/tests/tutorial.spec.ts` plays the popup, the intro, chapter I to its Seal with a reload in the middle, Charter
+  in progress, the slides of IV.2 and leaving a chapter (on `test-short`, the e2e ruleset: a chapter counts ticks, and
+  chapter I ends at tick 229 of its 600).
+
 ---
 
 ## 8. The look [accepted 2026-11-13]
@@ -1058,7 +1106,7 @@ piece and per moment; the state is in the address (`#el=card&m=IV.5`).
 | Chapter select (round 5) | **Charter** (`mockups/tutorial-roadmap.html`): a stone sheet of seals under the client's top bar; the main rule I to V ending in an arrow at the first match's seal (the enemy star, a minium rim), the Advanced rule dropping from it after V to its three seals; a seal is an empty dashed seat with a lock while closed, a dark seal while open, the Compass on the next, pressed in ivory with the check lozenge when done; the detail under the seals with Start, "First match" and "Rules" | Road (accepted in round 2, replaced), Campaign, March, Cards |
 | Entry popup (round 5) | the client's stone dialog: "How to play", "New to the game?", one line, "Start the tutorial" (primary), "Not now", the checkbox "Don't show again" (an engraved box, an ivory check) | the forced intro of round 1 |
 | Hint of the first match | **Leader**: the chapter card without the step lozenges, with "Turn off hints" | Toast |
-| Paused (round 3) | **Plate**: a small stone plate at the top centre of the map, the pause glyph and "Paused", ivory on the casing; the frame under it unchanged (nothing is dimmed: the card asks the player to look at it) | |
+| Paused (round 3) | **Plate**: a small stone plate at the bottom centre of the map (PR 2, as the walkthrough), the pause glyph and "Paused", ivory on the casing; the frame under it unchanged (nothing is dimmed: the card asks the player to look at it) | |
 | Locked (round 3) | the radial's existing disabled style, icon only, plus a small lock; the top-bar chip at 40% with the lock at its corner | |
 
 Checked with `design:design-critique` and `design:accessibility-review` in round 1 (contrast of every text pair

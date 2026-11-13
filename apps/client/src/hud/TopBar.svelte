@@ -20,6 +20,7 @@
   import { atCap, railTicks, vpShare } from './topBar.ts';
   import BarGlyph from '../theme/BarGlyph.svelte';
   import CpMark from '../theme/CpMark.svelte';
+  import { FULL_GATE, type Gate } from '../tutorial/gate.ts';
 
   interface Props {
     data: HudData | null;
@@ -34,6 +35,11 @@
     anchors?: MapAnchors;
     /** The name of a place by its id (the accessible name of a walk the CP do not pay). */
     names?: NodeNamer;
+    /**
+     * A tutorial chapter (#806): the pieces shown; a hidden one is not drawn (the CP gauge, the
+     * factory counter, the stance chip, the VP rail, the clock). A normal match shows everything.
+     */
+    gate?: Gate;
   }
 
   let {
@@ -44,7 +50,11 @@
     paused = false,
     anchors = NO_ANCHORS,
     names = (node: number) => String(node),
+    gate = FULL_GATE,
   }: Props = $props();
+
+  // A tutorial beat that shows the stance chip but allows no stance (#806): the chip is locked.
+  const chipLocked = $derived(orders.locks !== null && orders.stanceChipLocked);
 
   const STANCE_ICONS: Record<'economy' | 'balance' | 'war', IconName> = {
     economy: 'economy',
@@ -140,9 +150,10 @@
      numbers and signs only; the words are the accessible names and the tooltips. -->
 <header class="bar">
   <div class="left">
-    {#if data !== null}
+    {#if data !== null && gate.has('cp')}
       <div
         class="cp"
+        data-coach="cp"
         class:short
         role="img"
         title={short ? t('bar.cpShortHint') : full ? t('bar.cpMaxHint') : undefined}
@@ -165,10 +176,13 @@
           {anchors}
         />
       </div>
+    {/if}
+    {#if data !== null}
       <!-- DEC-41, item 2; #762: own factories, builds under way counted, of the max. -->
-      {#if factories !== null}
+      {#if factories !== null && gate.has('factories')}
         <span
           class="factories"
+          data-coach="factories"
           class:full={factoriesFull}
           role="img"
           title={factoriesFull ? t('bar.factoriesFull') : t('bar.factories')}
@@ -182,37 +196,59 @@
         </span>
       {/if}
       <!-- The stance (DEC-44) as its icon, the capital's next charge as a small upright cell, and the key. -->
-      <button
-        type="button"
-        class="chip"
-        aria-label={tf('orders.stanceOpen', {
-          stance: t(`stance.${data.stance}`),
-          stanceKey: keyBindings.label('stance'),
-        })}
-        title={next === null
-          ? undefined
-          : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
-              amount: formatCentis(data.cp.quantum, locale),
-              cp: next.cp.seconds,
-              capital: next.capital.seconds,
-            })}
-        onclick={() => {
-          orders.openRadial(true);
-        }}
-      >
-        <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
-        {#if next !== null}
-          <span class="capital" aria-hidden="true">
-            <i style:height="{next.capital.share * 100}%"></i>
-          </span>
-        {/if}
-        <kbd>{keyBindings.label('stance')}</kbd>
-      </button>
+      {#if gate.has('stance')}
+        <button
+          type="button"
+          class="chip"
+          class:locked={chipLocked}
+          data-coach="stance"
+          aria-disabled={chipLocked}
+          aria-label={tf('orders.stanceOpen', {
+            stance: t(`stance.${data.stance}`),
+            stanceKey: keyBindings.label('stance'),
+          })}
+          title={chipLocked
+            ? t('tutorial.locked')
+            : next === null
+              ? undefined
+              : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
+                  amount: formatCentis(data.cp.quantum, locale),
+                  cp: next.cp.seconds,
+                  capital: next.capital.seconds,
+                })}
+          onclick={() => {
+            orders.openRadial(true);
+          }}
+        >
+          <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
+          {#if next !== null}
+            <span class="capital" aria-hidden="true">
+              <i style:height="{next.capital.share * 100}%"></i>
+            </span>
+          {/if}
+          <kbd>{keyBindings.label('stance')}</kbd>
+          {#if chipLocked}
+            <!-- Locked by a tutorial beat (#806): the chip dims, a small padlock at its corner. -->
+            <svg class="padlock" width="12" height="14" viewBox="-7 -8 14 17" aria-hidden="true">
+              <path class="pl-case" d="M-5.5 -1h11v9h-11z" />
+              <path class="pl-shackle-case" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
+              <path class="pl-body" d="M-5.5 -1h11v9h-11z" />
+              <path class="pl-shackle" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
+            </svg>
+          {/if}
+        </button>
+      {/if}
     {/if}
   </div>
 
-  {#if data !== null}
-    <div class="score" class:railed={countdown !== null} role="img" aria-label={scoreLabel}>
+  {#if data !== null && gate.has('vp')}
+    <div
+      class="score"
+      class:railed={countdown !== null}
+      data-coach="vp"
+      role="img"
+      aria-label={scoreLabel}
+    >
       <HelmetIcon side="own" size={22} engraved />
       <span class="total mine" aria-hidden="true">
         {#if vpNext !== null && countdown !== null}
@@ -271,8 +307,8 @@
   {/if}
 
   <div class="right">
-    {#if data !== null}
-      <span class="timer" class:last={lastMinute}>
+    {#if data !== null && gate.has('clock')}
+      <span class="timer" class:last={lastMinute} data-coach="clock">
         <MatchClock seconds={data.secondsLeft} last={lastMinute} {paused} />
       </span>
     {/if}
@@ -395,6 +431,50 @@
   .icon-button {
     width: 30px;
     padding: 0;
+  }
+
+  /* The stance chip locked by a tutorial beat (#806): at 40 %, a padlock at its corner, no hover. */
+  .chip.locked {
+    position: relative;
+    cursor: default;
+  }
+
+  .chip.locked > :global(:not(.padlock)) {
+    opacity: 0.4;
+  }
+
+  .chip.locked:hover {
+    border-color: rgb(236 228 209 / 60%);
+    background: none;
+  }
+
+  .padlock {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+  }
+
+  .pl-case {
+    fill: var(--casing);
+    stroke: var(--casing);
+    stroke-width: 2.6;
+    stroke-linejoin: round;
+  }
+
+  .pl-shackle-case {
+    fill: none;
+    stroke: var(--casing);
+    stroke-width: 4;
+  }
+
+  .pl-body {
+    fill: var(--ink-dim);
+  }
+
+  .pl-shackle {
+    fill: none;
+    stroke: var(--ink-dim);
+    stroke-width: 1.8;
   }
 
   .cp {

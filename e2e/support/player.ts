@@ -34,7 +34,16 @@ export class Player {
     this.page = page;
   }
 
-  static async create(browser: Browser, baseURL: string, nick: string): Promise<Player> {
+  /**
+   * `tutorialOffer`: the main screen may offer the tutorial to the new guest (#806); by default the
+   * popup is turned off before the page loads, so the tests of the main screen reach the plinth.
+   */
+  static async create(
+    browser: Browser,
+    baseURL: string,
+    nick: string,
+    { tutorialOffer = false }: { tutorialOffer?: boolean } = {},
+  ): Promise<Player> {
     const context = await browser.newContext({
       baseURL,
       locale: 'en-US',
@@ -46,6 +55,17 @@ export class Player {
     await context.addInitScript(() => {
       window.sessionStorage.setItem('sbf.introSeen', '1');
     });
+    if (!tutorialOffer) {
+      // The entry popup of the tutorial (#806) is for players new to the game: "Don't show again".
+      await context.addInitScript(() => {
+        if (window.localStorage.getItem('sbf.tutorial') === null) {
+          window.localStorage.setItem(
+            'sbf.tutorial',
+            JSON.stringify({ v: 1, done: [], offerOff: true, firstMatch: false }),
+          );
+        }
+      });
+    }
     const player = new Player(nick, await context.newPage());
     await player.page.routeWebSocket(/\/ws\/match\//, (route) => {
       const server = route.connectToServer();

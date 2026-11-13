@@ -10,6 +10,8 @@ import { HudChrome } from './chrome.svelte.ts';
 import { DEV_PLAYER, DEV_RULES, devSnapshot } from './devFeed.ts';
 import Hud from './Hud.svelte';
 import { HudState } from './hudState.svelte.ts';
+import type { UiFlag } from '../protocol.gen.ts';
+import { FULL_GATE, UI_FLAGS } from '../tutorial/gate.ts';
 
 describe('Hud', () => {
   const initial = getLocale();
@@ -36,6 +38,8 @@ describe('Hud', () => {
       rendererFailed?: boolean;
       onreload?: () => void;
       onpause?: () => void;
+      gate?: ReadonlySet<UiFlag>;
+      chapter?: string;
     } = {},
   ) {
     const state = new HudState({
@@ -65,6 +69,8 @@ describe('Hud', () => {
         orders,
         chrome,
         oninsets: options.oninsets,
+        ...(options.gate === undefined ? {} : { gate: options.gate }),
+        ...(options.chapter === undefined ? {} : { chapter: options.chapter }),
         dev:
           options.dev === true
             ? {
@@ -114,6 +120,61 @@ describe('Hud', () => {
     // A rated match, or a pause already used: nothing to click.
     const none = render();
     expect(button(none.target, 'Pause')).toBeUndefined();
+  });
+
+  // The tutorial gate (#806, docs/design/tutorial.md 4.9): each flag hides its pieces of the top
+  // bar; "everything" (a normal match) is the same HUD as without a gate.
+  it('hides the top-bar pieces of a tutorial beat, each by its flag', () => {
+    setLocale('en');
+    const pieces = (gate: ReadonlySet<UiFlag> | undefined): string[] => {
+      const { target, state } = render(gate === undefined ? {} : { gate });
+      state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+      flushSync();
+      const found = [...target.querySelectorAll('[data-coach]')].map(
+        (el) => el.getAttribute('data-coach') ?? '',
+      );
+      void unmount(mounted as Record<string, unknown>);
+      mounted = undefined;
+      document.body.innerHTML = '';
+      return found.sort();
+    };
+    const all = ['alerts', 'clock', 'cp', 'factories', 'stance', 'vp'];
+    expect(pieces(undefined)).toEqual(all);
+    expect(pieces(FULL_GATE)).toEqual(all);
+    expect(pieces(new Set())).toEqual([]);
+    const flagOf: Record<string, UiFlag> = {
+      cp: 'cp',
+      factories: 'factories',
+      stance: 'stance',
+      vp: 'vp',
+      clock: 'clock',
+      alerts: 'alerts',
+    };
+    for (const piece of all) {
+      const flag = flagOf[piece] as UiFlag;
+      const gate = new Set(UI_FLAGS.filter((f) => f !== flag));
+      expect(pieces(gate), piece).toEqual(all.filter((p) => p !== piece));
+    }
+  });
+
+  it('hides the notices in a chapter until they are unlocked, and words the exit for a chapter', () => {
+    setLocale('en');
+    const { target, state, chrome } = render({
+      gate: new Set<UiFlag>(),
+      chapter: 'I · Units and movement',
+    });
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+    state.toasts.push({ tone: 'neutral', icon: 'info', text: 'a notice' });
+    flushSync();
+    expect(target.textContent).not.toContain('a notice');
+    chrome.openExit();
+    flushSync();
+    const dialog = target.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain('Leave the chapter?');
+    expect(dialog?.textContent).toContain('I · Units and movement');
+    expect(dialog?.textContent).toContain('It will start over.');
+    expect(button(target, 'Leave the chapter')).toBeDefined();
+    expect(button(target, 'Forfeit')).toBeUndefined();
   });
 
   it('has no side panel and shows the numbers of the snapshot in the top bar', () => {

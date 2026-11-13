@@ -23,6 +23,9 @@ COPY maps/menu/*.json maps/menu/*.bg.webp /repo/maps/menu/
 COPY maps/menu/geo/ /repo/maps/menu/geo/
 COPY maps/geo/ /repo/maps/geo/
 COPY maps/gen/geo/ /repo/maps/gen/geo/
+# The tutorial (#806, src/tutorial/chapters.ts): the chapter files, their maps and baked grounds.
+COPY tutorial/chapters/ /repo/tutorial/chapters/
+COPY maps/tutorial/*.json maps/tutorial/*.bg.webp /repo/maps/tutorial/
 
 # Dependencies first: this layer is rebuilt only when the lockfile or package.json changes.
 COPY apps/client/package.json apps/client/pnpm-lock.yaml ./

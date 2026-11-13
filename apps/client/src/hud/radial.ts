@@ -62,6 +62,11 @@ export interface RadialItem {
   readonly compact?: boolean;
   /** Cannot be chosen now: dimmed, never lit by the pointer. */
   readonly disabled?: boolean;
+  /**
+   * Locked by a tutorial beat (#806): dimmed, its icon only (no name, price or key), a small lock,
+   * never lit; a click tells the coach (the card's action line pulses) and does nothing else.
+   */
+  readonly locked?: boolean;
 }
 
 /** A price in a radial sector (or a rate of the stance menu), as signs. */

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DRAWN_MAP_VARIANCE, columnLuminance, mapVariance } from './mapPixels.ts';
-import { DOCK_CLICKS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
+import { DOCK_CLICKS, GATE_SHOTS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
 // comparison with a reference. Per scene: `<scene>.png` is the whole screen with the HUD,
@@ -32,6 +32,17 @@ for (const scene of SCENES) {
     await page.screenshot({ path: join(OUT, `${scene.id}.png`) });
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await page.locator('canvas').screenshot({ path: join(OUT, `${scene.id}-map.png`) });
+  });
+}
+
+// A tutorial beat's gate on a frozen scene (#806): only the pieces it shows, on the HUD and the map.
+for (const shot of GATE_SHOTS) {
+  test(`shot of the tutorial gate ${shot.name}`, async ({ page }) => {
+    await page.goto(`/?scene=${shot.scene}&gate=${shot.gate}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(shot.tick));
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.move(5, 5);
+    await page.screenshot({ path: join(OUT, `gate-${shot.name}.png`) });
   });
 }
 
@@ -634,6 +645,8 @@ for (const id of MENU_SCENES) {
           .click();
     }
     await page.mouse.move(1000, 700);
+    // The chapter select presses its done seals in turn (#806): the frame once they are all in.
+    if (id.startsWith('tutorial-')) await page.waitForTimeout(1800);
     await page.screenshot({ path: join(OUT, `screen-${id}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
     await page.screenshot({ path: join(OUT, `screen-${id}-gray.png`) });
