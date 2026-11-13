@@ -265,6 +265,15 @@ against the field and against the benchmark (``docs/balance/log.md``, #624):
     holds, else its origin is a target, or a garrison it would kill whole leaves. A lost node,
     the source of an enemy siege and the empty enemy rear while its army is committed score more
     (``score``).
+30. **Army upkeep** (#1032, step 4c of the bot plan; ``gow_bots.bots.upkeep``, ``UPKEEP``, off for
+    the benchmarks). The army keeps a floor of ``FLOOR_PCT`` percent of the own start army
+    (less in the opening, none when all in); below it a recruit comes before the attacks once
+    per ``upkeep.FIRST_TICKS`` ticks and otherwise right after them, before the rallies, merges
+    and splits, without ``recruit_keep``; the scouts and the threat fortifications leave its
+    price, and a retake or a block goes with two units at least. A visible strike at an own node
+    other than the capital is answered only when the sum of forces holds (``defense.answer``,
+    every strike at the node together), never by the nearest group alone; a gathering plan that
+    the target, as seen now, beats is called off (``recall_plans``).
 
 An order is planned when the bonus it gathers makes it take its target (DEC-41, item 10), the
 same rule for all bots (AGENTS.md, section 8), and with item 28 whenever it attacks a defended
@@ -291,6 +300,7 @@ from gow_bots.bots.logistics import Arrival, arrivals, garrison_need
 from gow_bots.bots.pockets import Pockets, heading, read_pockets
 from gow_bots.bots.stance import StanceInputs, StancePolicy, factories_full, wanted_stance
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
+from gow_bots.bots.upkeep import FIRST_TICKS, army, floor, recall_plans
 from gow_bots.bots.utility import (
     defender_pool,
     shots_to_take,
@@ -583,6 +593,12 @@ class SmartBot(CampaignBot):
     """Item 29: a lost node is retaken before any attack (``defense.seal``)."""
     PULL_OUT: ClassVar[bool] = True
     """Item 29: a garrison a visible strike would kill whole leaves (``defense.pull_out``)."""
+    UPKEEP: ClassVar[bool] = True
+    """Item 30 (#1032): the army floor, the reinforcements with the sum of forces, the beaten
+    stacks that recharge, the plans called off (``gow_bots.bots.upkeep``); the benchmarks keep it
+    off."""
+    FLOOR_PCT: ClassVar[int] = 80
+    """Item 30: the army floor in percent of the own start army of the map (``upkeep.floor``)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -743,6 +759,11 @@ class SmartBot(CampaignBot):
         """Item 28: an enemy node the bot took to the tick it saw it taken (``EXPLOIT_TICKS``)."""
         self.defense = Defense()
         """Item 29: the memory of the defense (``gow_bots.bots.defense``)."""
+        self.deficit = 0
+        self.first_recruit = -FIRST_TICKS
+        """Item 30: the tick of the last recruit sent before the attacks (``FIRST_TICKS``)."""
+        """Item 30: units the army (with the queued recruits) is below its floor in this
+        decision (``upkeep.floor``); 0: none."""
         for e, edef in enumerate(mapdef.edges):
             self.edge_between[(edef.a, edef.b)] = e
             self.edge_between[(edef.b, edef.a)] = e
@@ -803,6 +824,7 @@ class SmartBot(CampaignBot):
         self.pockets = self.read_pockets(view, tick, supplied)
         read_defense(self, view, self.defense)  # item 29
         self.params = self.adjusted(a)
+        self.deficit = max(0, floor(self) - army(view)) if self.upkeep() else 0  # item 30
         try:
             return self._decide(view, tick, a)
         finally:
@@ -1012,6 +1034,38 @@ class SmartBot(CampaignBot):
         """Item 29 is on: the personality's ``DEFENSE`` with ``insight`` (item 9)."""
         return self.DEFENSE and self.tempo.insight
 
+    def upkeep(self) -> bool:
+        """Item 30 is on: the personality's ``UPKEEP`` with ``insight`` (item 9)."""
+        return self.UPKEEP and self.tempo.insight
+
+    def thin(self) -> bool:
+        """Item 30: the army is below its floor in this decision (``deficit``)."""
+        return self.deficit > 0
+
+    def recruit_price(self, ctx: Ctx) -> int:
+        """Item 30: the CP in hundredths the routine spending leaves for a recruit while the army
+        is below its floor and a city can queue one; 0 otherwise."""
+        if not self.thin():
+            return 0
+        view = ctx.view
+        if not any(self.can_queue(view, n.id, self.load(ctx, n.id)) for n in view.nodes):
+            return 0
+        return self.cost(Recruit(self.home))
+
+    def upkeep_recruit(self, ctx: Ctx) -> bool:
+        """Item 30: below the floor a recruit comes after the attacks and before the rallies, the
+        merges and the splits, without ``recruit_keep``; whether one was queued."""
+        if not self.thin():
+            return False
+        keep = self.params["recruit_keep"]
+        self.params["recruit_keep"] = 0  # ``params`` is this decision's copy (``adjusted``)
+        sent = len(ctx.cmds)
+        try:
+            self._recruit(ctx)
+        finally:
+            self.params["recruit_keep"] = keep
+        return len(ctx.cmds) > sent
+
     def adjusted(self, a: Assessment) -> dict[str, int]:
         """The drawn parameters with the thresholds of this decision (module docstring, 1);
         without ``insight`` (item 9) only the capital guard of an alarm. With item 22: while the
@@ -1084,6 +1138,8 @@ class SmartBot(CampaignBot):
             if cmd is not None:
                 self.spend(ctx, cmd)
         self._recall(ctx)
+        if self.upkeep():
+            recall_plans(self, ctx)  # item 30: a gathering plan that would lose units
         held, ctx.held, ctx.saved = ctx.held, 0, 0  # the urgent answers do not wait for the plan
         self.defend_capital(ctx, a)
         self.answer_worry(ctx)
@@ -1098,10 +1154,12 @@ class SmartBot(CampaignBot):
             save = self.unpaid(ctx, save)
         ctx.saved = save
         self.garrison(ctx)
+        ctx.saved = max(save, self.recruit_price(ctx))  # item 30: a recruit before a scout
         self.scout(ctx)
-        ctx.saved = 0  # item 23: the strike spends what was saved
+        ctx.saved = self.recruit_price(ctx)  # item 30: and before a threat fortification
         if not saving:
             self.fortify(ctx)
+        ctx.saved = 0  # item 23: the strike spends what was saved
         ctx.held = 0
         if self.striking():
             self.converge(ctx)
@@ -1110,8 +1168,11 @@ class SmartBot(CampaignBot):
         self.leave_pockets(ctx, charged=False)  # item 20
         self.leave_pockets(ctx, charged=True)
         ctx.saved = self.unpaid(ctx, save)
+        if ctx.tick - self.first_recruit >= FIRST_TICKS and self.upkeep_recruit(ctx):
+            self.first_recruit = ctx.tick  # item 30: below the floor a recruit now and then first
         self._attack(ctx)
         self._combine(ctx)  # item 28: what no single group takes, squads take together
+        self.upkeep_recruit(ctx)  # item 30: below the floor, before the rallies and merges
         self._fit_split(ctx)
         self._gather(ctx)
         self._rally(ctx)
@@ -2076,6 +2137,8 @@ class SmartBot(CampaignBot):
             lesser = target != self.home and target not in self.paired  # item 17: pairs count
             if lesser and level == 1 and not self.worth_defending(target):
                 continue
+            if target != self.home and self.defending() and self.UPKEEP:
+                continue  # item 30: ``answer`` below, only when the sum of forces holds
             if self.reinforce(ctx, target):
                 self.answered[intent.id] = True
         if self.defending():  # item 29: a strike at any own node
@@ -2346,6 +2409,8 @@ class SmartBot(CampaignBot):
         hops = self.hops[here][dest]
         if not self.in_reach(ctx, g, dest):
             return None
+        if self.thin() and g.units < 2 and dest in self.defense.lost:
+            return None  # item 30: a small army retakes with two units at least
         if node.capital_of is not None:
             return None if self.STRIKE_ONLY else 10_000 - hops  # item 12
         far = self.hops[self.enemy_home]
