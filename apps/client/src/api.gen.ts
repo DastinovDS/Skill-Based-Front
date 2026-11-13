@@ -471,6 +471,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/tutorial-matches': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create Tutorial Match
+     * @description Start a chapter (``docs/design/tutorial.md``, section 7.6).
+     */
+    post: operations['create_tutorial_match_api_tutorial_matches_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/ruleset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Ruleset
+     * @description The public numbers of the main ruleset, without map tempo (the rules reference, #806).
+     */
+    get: operations['get_ruleset_api_ruleset_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/queue': {
     parameters: {
       query?: never;
@@ -556,6 +596,7 @@ export interface components {
       match_id: string;
       /** Map Id */
       map_id: string;
+      chapter?: components['schemas']['ChapterId'] | null;
     };
     /** BotMatchOut */
     BotMatchOut: {
@@ -587,6 +628,62 @@ export interface components {
        * @description Calibration matches needed (a server setting, 5 by default).
        */
       total: number;
+    };
+    /**
+     * CapacityPublic
+     * @description Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.
+     */
+    CapacityPublic: {
+      /**
+       * Attrition Ticks
+       * @description Ticks over the capacity in a row before one unit dies.
+       */
+      attrition_ticks: number;
+      /**
+       * Grace Ticks
+       * @description Ticks after a capture in which the garrison is not counted.
+       */
+      grace_ticks: number;
+    };
+    /**
+     * CapturePublic
+     * @description ``capture`` of the ruleset (DEC-38): a capture spends ``charge_cost`` real charges of the
+     *     capturing groups in the node, with fewer they bounce; 0: a capture is free.
+     */
+    CapturePublic: {
+      /** Charge Cost */
+      charge_cost: number;
+    };
+    /** @enum {string} */
+    ChapterId:
+      | 'units'
+      | 'economy'
+      | 'building'
+      | 'attack'
+      | 'defence'
+      | 'group-orders'
+      | 'rally-points'
+      | 'supply-distribution';
+    /**
+     * CityUpgradesPublic
+     * @description The barracks (DEC-26; ``city_upgrades`` of the ruleset) and the warehouse of a province.
+     */
+    CityUpgradesPublic: {
+      /**
+       * Barracks Ticks
+       * @description Ticks from the full payment to the barracks.
+       */
+      barracks_ticks: number;
+      /**
+       * Barracks Charges
+       * @description The barracks costs this many charges (DEC-41, item 7).
+       */
+      barracks_charges: number;
+      /**
+       * Warehouse Province
+       * @description The warehouse of every province holds this many charges (DEC-41, item 13).
+       */
+      warehouse_province: number;
     };
     /**
      * ClientEntry
@@ -661,6 +758,63 @@ export interface components {
     ColourChange: {
       colour: components['schemas']['PlayerColour'];
     };
+    /** CombatPublic */
+    CombatPublic: {
+      terrain_defense_mod: components['schemas']['TerrainDefensePublic'];
+      /**
+       * Round Ticks
+       * @description Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.
+       */
+      round_ticks: number;
+      /** Shots Per Round */
+      shots_per_round: number;
+      /**
+       * Regroup Ticks
+       * @description The pause of an edge winner before it goes on (DEC-24, item G4).
+       */
+      regroup_ticks: number;
+      /**
+       * @description ``round``: a group may leave a fight after the nearest round (DEC-24, item E); ``none``:
+       *     no retreat (DEC-40, variant N), the client hides the retreat hints and the cancel in a fight.
+       */
+      retreat: components['schemas']['Retreat'];
+    };
+    /**
+     * CostsPublic
+     * @description Command costs in hundredths of CP (``orders.cost`` of the ruleset).
+     */
+    CostsPublic: {
+      /** Move */
+      move: number;
+      /** Planned Move */
+      planned_move: number;
+      /** Cancel */
+      cancel: number;
+      /** Split */
+      split: number;
+      /** Merge */
+      merge: number;
+      /** Recruit */
+      recruit: number;
+      /** Stance */
+      stance: number;
+      /**
+       * Barracks
+       * @description ``build_barracks`` (DEC-26, item 2); its charges are ``city_upgrades.barracks_charges``.
+       */
+      barracks: number;
+    };
+    /**
+     * CpPublic
+     * @description CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is
+     *     ``stances.cp_period_ticks`` of the own stance.
+     */
+    CpPublic: {
+      /** Cap */
+      cap: number;
+      /** Per Period */
+      per_period: number;
+    };
     /** CreateBotMatch */
     CreateBotMatch: {
       /**
@@ -695,6 +849,80 @@ export interface components {
        * @default false
        */
       public: boolean;
+    };
+    /** CreateTutorialMatch */
+    CreateTutorialMatch: {
+      chapter: components['schemas']['ChapterId'];
+    };
+    /**
+     * FactoryPublic
+     * @description Factories (``factory`` of the ruleset, DEC-41, item 2). The own capital makes one charge
+     *     per ``stances.capital_period_ticks`` of the own stance.
+     */
+    FactoryPublic: {
+      /**
+       * Built Period Ticks
+       * @description Every other factory makes one charge per this many ticks; ``None`` under
+       *     ``stances.factories_follow`` (DEC-47): then it follows the stance like the capital.
+       */
+      built_period_ticks: number | null;
+      /**
+       * Cost
+       * @description Charges ``build_factory`` pays (progressive payment, item 7).
+       */
+      cost: number;
+      /**
+       * Build Ticks
+       * @description Ticks from the full payment to the factory.
+       */
+      build_ticks: number;
+      /**
+       * Max
+       * @description Factories of a player at most, the capital and the builds under way included.
+       */
+      max: number;
+    };
+    /**
+     * FortPublic
+     * @description Road fortifications (``fort`` of the ruleset, DEC-43, item D).
+     */
+    FortPublic: {
+      /**
+       * Cost
+       * @description CP in hundredths ``fortify_road`` costs, flat.
+       */
+      cost: number;
+      /**
+       * Build Ticks
+       * @description Ticks from the command to a working fortification.
+       */
+      build_ticks: number;
+      /**
+       * Toll Units
+       * @description The toll: ``toll_charges`` per started ``toll_units`` units of an enemy group crossing the
+       *     line towards the node, never more than its charged units.
+       */
+      toll_units: number;
+      /** Toll Charges */
+      toll_charges: number;
+    };
+    /**
+     * GroupOrderPublic
+     * @description The group order (DEC-48, ``[group_order]`` of the ruleset): ``group_move`` works and
+     *     ``release_plan`` is disabled.
+     */
+    GroupOrderPublic: {
+      /**
+       * Max Groups
+       * @description Groups in one ``group_move`` at most.
+       */
+      max_groups: number;
+      /**
+       * Rally Pct
+       * @description A rally of ``n`` groups costs ``ceil(n * cost.move * rally_pct / 100 / 100)`` whole CP;
+       *     an attack ``cost.move`` per group (``cost.planned_move`` planned).
+       */
+      rally_pct: number;
     };
     /** GuestCreate */
     GuestCreate: {
@@ -865,6 +1093,18 @@ export interface components {
       bot: boolean;
     };
     /**
+     * OrdersPublic
+     * @description Planned orders (``orders`` of the ruleset).
+     */
+    OrdersPublic: {
+      /**
+       * Plan Ticks Per Bonus
+       * @description A gathering planned order takes one charge and gains one bonus per this many ticks
+       *     (DEC-41, item 10).
+       */
+      plan_ticks_per_bonus: number;
+    };
+    /**
      * PasswordSet
      * @description A new password; ``old_password`` is required when the account already has one.
      */
@@ -980,6 +1220,39 @@ export interface components {
       draws: number;
     };
     /**
+     * RecruitPublic
+     * @description The recruit queue of a city (``recruit`` of the ruleset, DEC-25).
+     */
+    RecruitPublic: {
+      /**
+       * Unit Ticks
+       * @description Ticks of production per unit: the full progress of the current unit.
+       */
+      unit_ticks: number;
+      /**
+       * Queue Max
+       * @description Units in the queue of one city at most, the one in production included.
+       */
+      queue_max: number;
+      /**
+       * Refund Started Pct
+       * @description Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started
+       *     yet returns all of it.
+       */
+      refund_started_pct: number;
+      /**
+       * Rally Point
+       * @description DEC-48, item H: a city may send its new units to a rally point (``set_rally_point``).
+       */
+      rally_point: boolean;
+      /**
+       * Rally Cost
+       * @description Hundredths of CP a recruit pays when it leaves for the rally point (with fewer CP it stays
+       *     in its city, event ``rally_walk_no_cp``); 0 without ``rally_point``.
+       */
+      rally_cost: number;
+    };
+    /**
      * ReplayGone
      * @description Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);
      *     ``unavailable``: the match is over and no frames were or will be made.
@@ -1017,6 +1290,119 @@ export interface components {
       status: 'preparing';
     };
     /**
+     * Retreat
+     * @description ``combat.retreat`` (DEC-40, #626): ``round`` is the retreat of DEC-24, item E (a group
+     *     leaves a fight after the nearest round); ``none`` is variant N: a group that entered a fight
+     *     stays in it until the fight ends.
+     * @enum {string}
+     */
+    Retreat: 'round' | 'none';
+    /** RulesetPublic */
+    RulesetPublic: {
+      /** Tick Hz */
+      tick_hz: number;
+      /** Match Ticks */
+      match_ticks: number;
+      cp: components['schemas']['CpPublic'];
+      cost: components['schemas']['CostsPublic'];
+      combat: components['schemas']['CombatPublic'];
+      capture: components['schemas']['CapturePublic'];
+      orders: components['schemas']['OrdersPublic'];
+      capacity: components['schemas']['CapacityPublic'];
+      recruit: components['schemas']['RecruitPublic'];
+      city_upgrades: components['schemas']['CityUpgradesPublic'];
+      vision: components['schemas']['VisionPublic'];
+      factory: components['schemas']['FactoryPublic'];
+      fort: components['schemas']['FortPublic'];
+      /**
+       * Supply Dispatch Ticks
+       * @description ``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it
+       *     (DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first
+       *     snapshot (#705).
+       */
+      supply_dispatch_ticks: number;
+      /**
+       * Supply Leaf Shift
+       * @description ``supply.leaf_shift``: the player may move the level of the flow back with
+       *     ``set_leaf_shift`` (DEC-43, item B). ``False`` (DEC-50): no lever, the shift stays 0 and the
+       *     command gives ``INVALID_ARGUMENT``; the client hides the lever.
+       */
+      supply_leaf_shift: boolean;
+      stances: components['schemas']['StancesPublic'];
+      /** @description DEC-48: the group order, ``None`` when the ruleset has none. */
+      group_order: components['schemas']['GroupOrderPublic'] | null;
+      victory: components['schemas']['VictoryPublic'];
+    };
+    /**
+     * Sight
+     * @description What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels
+     *     ``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog).
+     * @enum {string}
+     */
+    Sight: 'exact' | 'range' | 'presence';
+    /**
+     * SightRowPublic
+     * @description What a source on one terrain shows of a neighbouring node, by the terrain of that node.
+     */
+    SightRowPublic: {
+      plains: components['schemas']['Sight'];
+      forest: components['schemas']['Sight'];
+      mountains: components['schemas']['Sight'];
+    };
+    /**
+     * StancePeriodsPublic
+     * @description Ticks per quantum under each stance (DEC-44).
+     */
+    StancePeriodsPublic: {
+      /** Economy */
+      economy: number;
+      /** Balance */
+      balance: number;
+      /** War */
+      war: number;
+    };
+    /**
+     * StancesPublic
+     * @description Stances with local progress (``stances`` of the ruleset, DEC-44).
+     */
+    StancesPublic: {
+      /** @description One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them. */
+      cp_period_ticks: components['schemas']['StancePeriodsPublic'];
+      /** @description One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them. */
+      capital_period_ticks: components['schemas']['StancePeriodsPublic'];
+      /**
+       * Factories Follow
+       * @description DEC-47 (#888): every other own factory (built or captured) makes one charge per
+       *     ``capital_period_ticks`` of the own stance as well, on its own counter, so a stance's charge
+       *     rate is this period times the own factories; ``False``: they keep ``factory.built_period_ticks``
+       *     whatever the stance.
+       */
+      factories_follow: boolean;
+    };
+    /**
+     * TerrainDefensePublic
+     * @description ``terrain.defense_mod``: charges added to the node defender's pool; a negative value burns
+     *     that many of its charges at the start of the first round (DEC-45).
+     */
+    TerrainDefensePublic: {
+      /** Plains */
+      plains: number;
+      /** Forest */
+      forest: number;
+      /** Mountains */
+      mountains: number;
+    };
+    /** TutorialMatchOut */
+    TutorialMatchOut: {
+      /** Match Id */
+      match_id: string;
+      /** Map Id */
+      map_id: string;
+      chapter: components['schemas']['ChapterId'];
+      /** Player */
+      player: number;
+    };
+    /**
      * UnratedReason
      * @description Why a match did not change your rating (DEC-34, #414).
      * @enum {string}
@@ -1040,6 +1426,40 @@ export interface components {
       input?: unknown;
       /** Context */
       ctx?: Record<string, never>;
+    };
+    /**
+     * VictoryPublic
+     * @description The VP credit (``victory`` of the ruleset, DEC-03, mechanics.md section 11).
+     */
+    VictoryPublic: {
+      /**
+       * Vp Period Ticks
+       * @description ``victory.vp_period_ticks``: VP are credited on every tick ``t > 0`` with
+       *     ``t % vp_period_ticks == 0`` up to ``match_ticks`` (the first credit on the tick
+       *     ``vp_period_ticks``; every kept ruleset's ``match_ticks`` is a multiple of it, so the last
+       *     credit falls on the last tick). A snapshot of tick ``t`` already holds the credit of ``t``
+       *     in ``View.vp``, so the next credit is ``vp_period_ticks - t % vp_period_ticks`` ticks away
+       *     (``vp_period_ticks`` right after a credit, never 0), with ``View.vp_gain`` its amounts.
+       */
+      vp_period_ticks: number;
+    };
+    /**
+     * VisionPublic
+     * @description The vision table by terrain (``vision.by_terrain``, DEC-21, item 2): ``by_terrain.<source>.
+     *     <target>`` is ``exact``, ``range`` or ``presence``. The client only displays it (the legend of
+     *     the terrain map mode); the level of a place in the snapshot is decided by the server.
+     */
+    VisionPublic: {
+      by_terrain: components['schemas']['VisionTablePublic'];
+    };
+    /**
+     * VisionTablePublic
+     * @description One row per terrain of the source.
+     */
+    VisionTablePublic: {
+      plains: components['schemas']['SightRowPublic'];
+      forest: components['schemas']['SightRowPublic'];
+      mountains: components['schemas']['SightRowPublic'];
     };
   };
   responses: never;
@@ -1762,6 +2182,59 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  create_tutorial_match_api_tutorial_matches_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateTutorialMatch'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TutorialMatchOut'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_ruleset_api_ruleset_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RulesetPublic'];
         };
       };
     };

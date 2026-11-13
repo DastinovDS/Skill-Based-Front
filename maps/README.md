@@ -14,7 +14,10 @@ still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mi
 the client, which bundles them; they are outside the pool too (`valley` built from `menu/src/valley.half.json`),
 validated, previewed and baked with the pool (`docs/design/map-format.md`, "The menu map"). The format:
 [`docs/design/map-format.md`](../docs/design/map-format.md). Generated maps without a mirror lie in `gen/` (#771), outside the pool:
-the section "Generated maps" at the end.
+the section "Generated maps" at the end. The maps of the tutorial chapters lie in `tutorial/` (#806, `tut-move` ..
+`tut-flow`, 6 to 9 nodes, `meta.symmetry = "none"`): only their chapter plays them (`tutorial/chapters/`), the server serves
+them for drawing and never lists or picks them; they are validated with the structural checks only (`--checks tutorial`),
+baked and previewed like the pool. Their tables are in `docs/design/tutorial.md`, section 4.
 
 Map ids and the names of cities and provinces are English (part 3 of the switch of the repository to English, #390): the names
 are chosen by meaning, not transliterated, and the text below quotes them as they are in `maps/*.json`. The ids were Russian

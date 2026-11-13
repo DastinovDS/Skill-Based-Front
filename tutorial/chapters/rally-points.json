@@ -1,0 +1,24 @@
+{
+  "id": "rally-points",
+  "road": "advanced",
+  "number": 2,
+  "map": "tut-rally",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
+         "planned", "vp", "terrainMarks", "alerts", "fort"],
+  "opponent": [],
+  "beats": [
+    {"id": "1", "on": {"start": true}, "pause": "action", "ui": ["rally"],
+     "allow": [{"set_rally_point": {"node": "Highhold", "to": "Fernhold"}}],
+     "mark": [{"menu": "rally", "at": "Highhold"}]},
+    {"id": "2", "on": {"accepted": {"set_rally_point": {"node": "Highhold", "to": "Fernhold"}}},
+     "pause": "action",
+     "allow": [{"recruit": {"node": "Highhold"}, "max": 2}],
+     "mark": [{"node": "Highhold"}]},
+    {"id": "3", "on": {"event": "rally_walk_paid", "by": "you"},
+     "mark": [{"node": "Fernhold"}]}
+  ],
+  "fails": [],
+  "goal": {"all": [
+    {"event": "group_arrived", "node": "Fernhold", "by": "you", "group_of": "rally_walk_paid", "count": 2}
+  ]}
+}

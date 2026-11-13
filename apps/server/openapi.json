@@ -966,6 +966,75 @@
         ]
       }
     },
+    "/api/tutorial-matches": {
+      "post": {
+        "tags": [
+          "tutorial"
+        ],
+        "summary": "Create Tutorial Match",
+        "description": "Start a chapter (``docs/design/tutorial.md``, section 7.6).",
+        "operationId": "create_tutorial_match_api_tutorial_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTutorialMatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialMatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/ruleset": {
+      "get": {
+        "tags": [
+          "ruleset"
+        ],
+        "summary": "Get Ruleset",
+        "description": "The public numbers of the main ruleset, without map tempo (the rules reference, #806).",
+        "operationId": "get_ruleset_api_ruleset_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RulesetPublic"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/queue": {
       "get": {
         "tags": [
@@ -1125,6 +1194,16 @@
           "map_id": {
             "type": "string",
             "title": "Map Id"
+          },
+          "chapter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChapterId"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1194,6 +1273,96 @@
         ],
         "title": "Calibration",
         "description": "Calibration progress of an account: the first matches of a rated account do not show its\nrating (DEC-34, #414)."
+      },
+      "CapacityPublic": {
+        "properties": {
+          "attrition_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Attrition Ticks",
+            "description": "Ticks over the capacity in a row before one unit dies."
+          },
+          "grace_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Grace Ticks",
+            "description": "Ticks after a capture in which the garrison is not counted."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attrition_ticks",
+          "grace_ticks"
+        ],
+        "title": "CapacityPublic",
+        "description": "Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12."
+      },
+      "CapturePublic": {
+        "properties": {
+          "charge_cost": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Charge Cost"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "charge_cost"
+        ],
+        "title": "CapturePublic",
+        "description": "``capture`` of the ruleset (DEC-38): a capture spends ``charge_cost`` real charges of the\ncapturing groups in the node, with fewer they bounce; 0: a capture is free."
+      },
+      "ChapterId": {
+        "type": "string",
+        "enum": [
+          "units",
+          "economy",
+          "building",
+          "attack",
+          "defence",
+          "group-orders",
+          "rally-points",
+          "supply-distribution"
+        ]
+      },
+      "CityUpgradesPublic": {
+        "properties": {
+          "barracks_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Barracks Ticks",
+            "description": "Ticks from the full payment to the barracks."
+          },
+          "barracks_charges": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Barracks Charges",
+            "description": "The barracks costs this many charges (DEC-41, item 7)."
+          },
+          "warehouse_province": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Warehouse Province",
+            "description": "The warehouse of every province holds this many charges (DEC-41, item 13)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "barracks_ticks",
+          "barracks_charges",
+          "warehouse_province"
+        ],
+        "title": "CityUpgradesPublic",
+        "description": "The barracks (DEC-26; ``city_upgrades`` of the ruleset) and the warehouse of a province."
       },
       "ClientEntry": {
         "properties": {
@@ -1391,6 +1560,138 @@
         ],
         "title": "ColourChange"
       },
+      "CombatPublic": {
+        "properties": {
+          "terrain_defense_mod": {
+            "$ref": "#/components/schemas/TerrainDefensePublic"
+          },
+          "round_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Round Ticks",
+            "description": "Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight."
+          },
+          "shots_per_round": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Shots Per Round"
+          },
+          "regroup_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Regroup Ticks",
+            "description": "The pause of an edge winner before it goes on (DEC-24, item G4)."
+          },
+          "retreat": {
+            "$ref": "#/components/schemas/Retreat",
+            "description": "``round``: a group may leave a fight after the nearest round (DEC-24, item E); ``none``:\nno retreat (DEC-40, variant N), the client hides the retreat hints and the cancel in a fight."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "terrain_defense_mod",
+          "round_ticks",
+          "shots_per_round",
+          "regroup_ticks",
+          "retreat"
+        ],
+        "title": "CombatPublic"
+      },
+      "CostsPublic": {
+        "properties": {
+          "move": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Move"
+          },
+          "planned_move": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Planned Move"
+          },
+          "cancel": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Cancel"
+          },
+          "split": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Split"
+          },
+          "merge": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Merge"
+          },
+          "recruit": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Recruit"
+          },
+          "stance": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Stance"
+          },
+          "barracks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Barracks",
+            "description": "``build_barracks`` (DEC-26, item 2); its charges are ``city_upgrades.barracks_charges``."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "move",
+          "planned_move",
+          "cancel",
+          "split",
+          "merge",
+          "recruit",
+          "stance",
+          "barracks"
+        ],
+        "title": "CostsPublic",
+        "description": "Command costs in hundredths of CP (``orders.cost`` of the ruleset)."
+      },
+      "CpPublic": {
+        "properties": {
+          "cap": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Cap"
+          },
+          "per_period": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Per Period"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cap",
+          "per_period"
+        ],
+        "title": "CpPublic",
+        "description": "CP: ``per_period`` hundredths per quantum, up to ``cap``; the period of the quantum is\n``stances.cp_period_ticks`` of the own stance."
+      },
       "CreateBotMatch": {
         "properties": {
           "level": {
@@ -1484,6 +1785,135 @@
         "additionalProperties": false,
         "type": "object",
         "title": "CreateMatch"
+      },
+      "CreateTutorialMatch": {
+        "properties": {
+          "chapter": {
+            "$ref": "#/components/schemas/ChapterId"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chapter"
+        ],
+        "title": "CreateTutorialMatch"
+      },
+      "FactoryPublic": {
+        "properties": {
+          "built_period_ticks": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Built Period Ticks",
+            "description": "Every other factory makes one charge per this many ticks; ``None`` under\n``stances.factories_follow`` (DEC-47): then it follows the stance like the capital."
+          },
+          "cost": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Cost",
+            "description": "Charges ``build_factory`` pays (progressive payment, item 7)."
+          },
+          "build_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Build Ticks",
+            "description": "Ticks from the full payment to the factory."
+          },
+          "max": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Max",
+            "description": "Factories of a player at most, the capital and the builds under way included."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "built_period_ticks",
+          "cost",
+          "build_ticks",
+          "max"
+        ],
+        "title": "FactoryPublic",
+        "description": "Factories (``factory`` of the ruleset, DEC-41, item 2). The own capital makes one charge\nper ``stances.capital_period_ticks`` of the own stance."
+      },
+      "FortPublic": {
+        "properties": {
+          "cost": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Cost",
+            "description": "CP in hundredths ``fortify_road`` costs, flat."
+          },
+          "build_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Build Ticks",
+            "description": "Ticks from the command to a working fortification."
+          },
+          "toll_units": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Toll Units",
+            "description": "The toll: ``toll_charges`` per started ``toll_units`` units of an enemy group crossing the\nline towards the node, never more than its charged units."
+          },
+          "toll_charges": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Toll Charges"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cost",
+          "build_ticks",
+          "toll_units",
+          "toll_charges"
+        ],
+        "title": "FortPublic",
+        "description": "Road fortifications (``fort`` of the ruleset, DEC-43, item D)."
+      },
+      "GroupOrderPublic": {
+        "properties": {
+          "max_groups": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Max Groups",
+            "description": "Groups in one ``group_move`` at most."
+          },
+          "rally_pct": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rally Pct",
+            "description": "A rally of ``n`` groups costs ``ceil(n * cost.move * rally_pct / 100 / 100)`` whole CP;\nan attack ``cost.move`` per group (``cost.planned_move`` planned)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "max_groups",
+          "rally_pct"
+        ],
+        "title": "GroupOrderPublic",
+        "description": "The group order (DEC-48, ``[group_order]`` of the ruleset): ``group_move`` works and\n``release_plan`` is disabled."
       },
       "GuestCreate": {
         "properties": {
@@ -2003,6 +2433,24 @@
         ],
         "title": "Opponent"
       },
+      "OrdersPublic": {
+        "properties": {
+          "plan_ticks_per_bonus": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Plan Ticks Per Bonus",
+            "description": "A gathering planned order takes one charge and gains one bonus per this many ticks\n(DEC-41, item 10)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan_ticks_per_bonus"
+        ],
+        "title": "OrdersPublic",
+        "description": "Planned orders (``orders`` of the ruleset)."
+      },
       "PasswordSet": {
         "properties": {
           "password": {
@@ -2294,6 +2742,54 @@
         ],
         "title": "Record"
       },
+      "RecruitPublic": {
+        "properties": {
+          "unit_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Unit Ticks",
+            "description": "Ticks of production per unit: the full progress of the current unit."
+          },
+          "queue_max": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Queue Max",
+            "description": "Units in the queue of one city at most, the one in production included."
+          },
+          "refund_started_pct": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Refund Started Pct",
+            "description": "Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started\nyet returns all of it."
+          },
+          "rally_point": {
+            "type": "boolean",
+            "title": "Rally Point",
+            "description": "DEC-48, item H: a city may send its new units to a rally point (``set_rally_point``)."
+          },
+          "rally_cost": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Rally Cost",
+            "description": "Hundredths of CP a recruit pays when it leaves for the rally point (with fewer CP it stays\nin its city, event ``rally_walk_no_cp``); 0 without ``rally_point``."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "unit_ticks",
+          "queue_max",
+          "refund_started_pct",
+          "rally_point",
+          "rally_cost"
+        ],
+        "title": "RecruitPublic",
+        "description": "The recruit queue of a city (``recruit`` of the ruleset, DEC-25)."
+      },
       "ReplayGone": {
         "properties": {
           "detail": {
@@ -2365,6 +2861,263 @@
         "title": "ReplayPreparing",
         "description": "Body of ``202``: the replay will be there shortly (or when the match is over)."
       },
+      "Retreat": {
+        "type": "string",
+        "enum": [
+          "round",
+          "none"
+        ],
+        "title": "Retreat",
+        "description": "``combat.retreat`` (DEC-40, #626): ``round`` is the retreat of DEC-24, item E (a group\nleaves a fight after the nearest round); ``none`` is variant N: a group that entered a fight\nstays in it until the fight ends."
+      },
+      "RulesetPublic": {
+        "properties": {
+          "tick_hz": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Tick Hz"
+          },
+          "match_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Match Ticks"
+          },
+          "cp": {
+            "$ref": "#/components/schemas/CpPublic"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/CostsPublic"
+          },
+          "combat": {
+            "$ref": "#/components/schemas/CombatPublic"
+          },
+          "capture": {
+            "$ref": "#/components/schemas/CapturePublic"
+          },
+          "orders": {
+            "$ref": "#/components/schemas/OrdersPublic"
+          },
+          "capacity": {
+            "$ref": "#/components/schemas/CapacityPublic"
+          },
+          "recruit": {
+            "$ref": "#/components/schemas/RecruitPublic"
+          },
+          "city_upgrades": {
+            "$ref": "#/components/schemas/CityUpgradesPublic"
+          },
+          "vision": {
+            "$ref": "#/components/schemas/VisionPublic"
+          },
+          "factory": {
+            "$ref": "#/components/schemas/FactoryPublic"
+          },
+          "fort": {
+            "$ref": "#/components/schemas/FortPublic"
+          },
+          "supply_dispatch_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Supply Dispatch Ticks",
+            "description": "``supply.dispatch_ticks``: the supply dispatch runs on the ticks ``t > 0`` divisible by it\n(DEC-43, item A6), so the countdown to ``View.me.next_dispatch_tick`` is exact from the first\nsnapshot (#705)."
+          },
+          "supply_leaf_shift": {
+            "type": "boolean",
+            "title": "Supply Leaf Shift",
+            "description": "``supply.leaf_shift``: the player may move the level of the flow back with\n``set_leaf_shift`` (DEC-43, item B). ``False`` (DEC-50): no lever, the shift stays 0 and the\ncommand gives ``INVALID_ARGUMENT``; the client hides the lever."
+          },
+          "stances": {
+            "$ref": "#/components/schemas/StancesPublic"
+          },
+          "group_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroupOrderPublic"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "DEC-48: the group order, ``None`` when the ruleset has none."
+          },
+          "victory": {
+            "$ref": "#/components/schemas/VictoryPublic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tick_hz",
+          "match_ticks",
+          "cp",
+          "cost",
+          "combat",
+          "capture",
+          "orders",
+          "capacity",
+          "recruit",
+          "city_upgrades",
+          "vision",
+          "factory",
+          "fort",
+          "supply_dispatch_ticks",
+          "supply_leaf_shift",
+          "stances",
+          "group_order",
+          "victory"
+        ],
+        "title": "RulesetPublic"
+      },
+      "Sight": {
+        "type": "string",
+        "enum": [
+          "exact",
+          "range",
+          "presence"
+        ],
+        "title": "Sight",
+        "description": "What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels\n``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog)."
+      },
+      "SightRowPublic": {
+        "properties": {
+          "plains": {
+            "$ref": "#/components/schemas/Sight"
+          },
+          "forest": {
+            "$ref": "#/components/schemas/Sight"
+          },
+          "mountains": {
+            "$ref": "#/components/schemas/Sight"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plains",
+          "forest",
+          "mountains"
+        ],
+        "title": "SightRowPublic",
+        "description": "What a source on one terrain shows of a neighbouring node, by the terrain of that node."
+      },
+      "StancePeriodsPublic": {
+        "properties": {
+          "economy": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Economy"
+          },
+          "balance": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Balance"
+          },
+          "war": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "War"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "economy",
+          "balance",
+          "war"
+        ],
+        "title": "StancePeriodsPublic",
+        "description": "Ticks per quantum under each stance (DEC-44)."
+      },
+      "StancesPublic": {
+        "properties": {
+          "cp_period_ticks": {
+            "$ref": "#/components/schemas/StancePeriodsPublic",
+            "description": "One CP quantum (``cp.per_period``) per this many ticks; ``View.me.cp_ticks`` counts them."
+          },
+          "capital_period_ticks": {
+            "$ref": "#/components/schemas/StancePeriodsPublic",
+            "description": "One charge of the own capital per this many ticks; ``View.me.capital_ticks`` counts them."
+          },
+          "factories_follow": {
+            "type": "boolean",
+            "title": "Factories Follow",
+            "description": "DEC-47 (#888): every other own factory (built or captured) makes one charge per\n``capital_period_ticks`` of the own stance as well, on its own counter, so a stance's charge\nrate is this period times the own factories; ``False``: they keep ``factory.built_period_ticks``\nwhatever the stance."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cp_period_ticks",
+          "capital_period_ticks",
+          "factories_follow"
+        ],
+        "title": "StancesPublic",
+        "description": "Stances with local progress (``stances`` of the ruleset, DEC-44)."
+      },
+      "TerrainDefensePublic": {
+        "properties": {
+          "plains": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": -2147483647.0,
+            "title": "Plains"
+          },
+          "forest": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": -2147483647.0,
+            "title": "Forest"
+          },
+          "mountains": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": -2147483647.0,
+            "title": "Mountains"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plains",
+          "forest",
+          "mountains"
+        ],
+        "title": "TerrainDefensePublic",
+        "description": "``terrain.defense_mod``: charges added to the node defender's pool; a negative value burns\nthat many of its charges at the start of the first round (DEC-45)."
+      },
+      "TutorialMatchOut": {
+        "properties": {
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          },
+          "chapter": {
+            "$ref": "#/components/schemas/ChapterId"
+          },
+          "player": {
+            "type": "integer",
+            "title": "Player"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "map_id",
+          "chapter",
+          "player"
+        ],
+        "title": "TutorialMatchOut"
+      },
       "UnratedReason": {
         "type": "string",
         "enum": [
@@ -2417,6 +3170,60 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VictoryPublic": {
+        "properties": {
+          "vp_period_ticks": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Vp Period Ticks",
+            "description": "``victory.vp_period_ticks``: VP are credited on every tick ``t > 0`` with\n``t % vp_period_ticks == 0`` up to ``match_ticks`` (the first credit on the tick\n``vp_period_ticks``; every kept ruleset's ``match_ticks`` is a multiple of it, so the last\ncredit falls on the last tick). A snapshot of tick ``t`` already holds the credit of ``t``\nin ``View.vp``, so the next credit is ``vp_period_ticks - t % vp_period_ticks`` ticks away\n(``vp_period_ticks`` right after a credit, never 0), with ``View.vp_gain`` its amounts."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vp_period_ticks"
+        ],
+        "title": "VictoryPublic",
+        "description": "The VP credit (``victory`` of the ruleset, DEC-03, mechanics.md section 11)."
+      },
+      "VisionPublic": {
+        "properties": {
+          "by_terrain": {
+            "$ref": "#/components/schemas/VisionTablePublic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "by_terrain"
+        ],
+        "title": "VisionPublic",
+        "description": "The vision table by terrain (``vision.by_terrain``, DEC-21, item 2): ``by_terrain.<source>.\n<target>`` is ``exact``, ``range`` or ``presence``. The client only displays it (the legend of\nthe terrain map mode); the level of a place in the snapshot is decided by the server."
+      },
+      "VisionTablePublic": {
+        "properties": {
+          "plains": {
+            "$ref": "#/components/schemas/SightRowPublic"
+          },
+          "forest": {
+            "$ref": "#/components/schemas/SightRowPublic"
+          },
+          "mountains": {
+            "$ref": "#/components/schemas/SightRowPublic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plains",
+          "forest",
+          "mountains"
+        ],
+        "title": "VisionTablePublic",
+        "description": "One row per terrain of the source."
       }
     },
     "securitySchemes": {

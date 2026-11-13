@@ -3,7 +3,7 @@
 /**
  * Wire format of Fines Imperii, generated from gow_protocol.
  */
-export type Protocol = ClientMsg | ServerMsg | MapFile;
+export type Protocol = ClientMsg | ServerMsg | MapFile | Chapter;
 export type ClientMsg =
   HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg | ReachQueryMsg;
 export type Command =
@@ -36,7 +36,8 @@ export type ServerMsg =
   | ErrorMsg
   | PongMsg
   | PausedMsg
-  | ReachMsg;
+  | ReachMsg
+  | TutorialMsg;
 export type PlayerId = 0 | 1;
 /**
  * ``combat.retreat`` (DEC-40, #626): ``round`` is the retreat of DEC-24, item E (a group
@@ -97,11 +98,42 @@ export type OrderKind = 'rally' | 'attack';
  * How the match ended (DEC-03, DEC-05).
  */
 export type EndReason = 'capital_captured' | 'timer' | 'forfeit' | 'disconnect' | 'double_defeat';
+export type ChapterId =
+  | 'units'
+  | 'economy'
+  | 'building'
+  | 'attack'
+  | 'defence'
+  | 'group-orders'
+  | 'rally-points'
+  | 'supply-distribution';
 export type Terrain = 'plains' | 'forest' | 'mountains';
 /**
  * Kind of a node (DEC-22, item 1; DEC-23, item 1): its capacity is ``capacity.by_kind``.
  */
 export type NodeKind = 'capital' | 'city_large' | 'city_medium' | 'city_small' | 'province';
+export type UiFlag =
+  | 'terrainMode'
+  | 'cp'
+  | 'notices'
+  | 'supply'
+  | 'warehouse'
+  | 'buildings'
+  | 'factories'
+  | 'recruit'
+  | 'stance'
+  | 'planned'
+  | 'vp'
+  | 'clock'
+  | 'terrainMarks'
+  | 'alerts'
+  | 'fort'
+  | 'groupSelect'
+  | 'rally';
+export type Side = 'you' | 'enemy';
+export type Pause = 'continue' | 'action';
+export type HudPiece = 'cp' | 'stance' | 'vp' | 'clock' | 'alerts' | 'factories';
+export type MenuItem = 'factory' | 'barracks' | 'recruit' | 'fortify' | 'rally';
 
 /**
  * First message of a connection. The token is never in the URL, a log or an error text.
@@ -1448,6 +1480,36 @@ export interface ReachSplit {
    */
   path: [number, number, ...number[]] | null;
 }
+/**
+ * The beat of a tutorial chapter (#806, ``docs/design/tutorial.md``, section 7.5): sent after
+ * ``welcome`` and whenever it changes. The server walks the beats of the chapter file and
+ * refuses the commands the beat does not allow (``ack`` with ``INVALID_ARGUMENT``); the client
+ * draws the card, the marks and the HUD of ``beat`` and walks the UI beats (a selection) on its
+ * own between two server beats.
+ */
+export interface TutorialMsg {
+  type: 'tutorial';
+  chapter: ChapterId;
+  /**
+   * The current beat of the chapter file (``F``: its failure beat); ``None`` before the first
+   * one (chapter V starts with the opponent's march).
+   */
+  beat: string | null;
+  /**
+   * The simulation waits: for ``resume`` (Continue) on a ``continue`` beat, for an allowed
+   * command on an ``action`` beat. No tick passes meanwhile.
+   */
+  paused: boolean;
+  /**
+   * For each ``allow`` entry of the beat (the one it keeps, for a beat without its own): how
+   * many such commands were accepted, against its ``max``.
+   */
+  used: number[];
+  /**
+   * The goal holds: the chapter ends with the next tick (``match_end``).
+   */
+  done: boolean;
+}
 export interface MapFile {
   meta: MapMetaFile;
   nodes: MapNodeFile[];
@@ -1525,8 +1587,332 @@ export interface MapMirrorFile {
     [k: string]: number;
   };
 }
+/**
+ * A chapter file (``tutorial/chapters/<id>.json``).
+ */
+export interface Chapter {
+  id: ChapterId;
+  road: 'main' | 'advanced';
+  /**
+   * I to V on the main road, I to III on the Advanced one.
+   */
+  number: number;
+  /**
+   * A map of ``maps/tutorial/``.
+   */
+  map: string;
+  /**
+   * The starting CP of the chapter: ``cap`` or hundredths up to ``cp.cap``; ``None``: the
+   * ruleset's ``cp.start``. The only ruleset value a chapter replaces (section 7.3).
+   */
+  cp_start?: 'cap' | number | null;
+  /**
+   * The pieces shown at the start: those of the chapters before it (``check_chapters``).
+   */
+  ui?: UiFlag[];
+  opponent?: OpponentStep[];
+  /**
+   * @minItems 1
+   */
+  beats: [Beat, ...Beat[]];
+  /**
+   * Failure beats (IV.F): checked at every step, each fires once; the beats go on after it.
+   */
+  fails?: Beat[];
+  goal: Goal;
+}
+/**
+ * One command of the scripted opponent (section 7.4), given once: at a tick (``at``: it
+ * applies at that tick) or when a fact of its own view holds (``when``). A step whose group is
+ * gone is skipped.
+ */
+export interface OpponentStep {
+  at?: number | null;
+  when?: OpponentWhen | null;
+  move: OpponentMove;
+}
+export interface OpponentWhen {
+  /**
+   * The opponent owns this node.
+   */
+  owns: string;
+}
+export interface OpponentMove {
+  /**
+   * The node the opponent's group stands in.
+   */
+  from: string;
+  to: string;
+  planned?: boolean;
+  bonus?: number;
+}
+/**
+ * One hint card (section 4.0): it shows when its trigger fires and stays until the next.
+ */
+export interface Beat {
+  id: string;
+  on: Trigger;
+  /**
+   * ``continue``: the simulation waits for Continue; ``action``: for the first accepted
+   * command of ``allow``; ``None``: it runs.
+   */
+  pause?: Pause | null;
+  /**
+   * The commands the beat allows; ``None``: the ``allow`` of the beat before it (its counts
+   * too); ``()``: none.
+   */
+  allow?: Allow[] | null;
+  /**
+   * HUD pieces the beat shows from now on.
+   */
+  ui?: UiFlag[];
+  /**
+   * HUD pieces the beat hides again (IV.9 hides the clock IV.8 showed).
+   */
+  hide?: UiFlag[];
+  mark?: Mark[];
+  /**
+   * Client only: the marks in turn (I.7).
+   */
+  turns?: Turn[];
+  /**
+   * Client only: the slides of the card (IV.2: 3), keys ``tutorial.<id>.<beat>.<n>``.
+   */
+  slides?: number;
+  /**
+   * The beat fires with the goal (A1.5): the client keeps its card, with Continue, before the
+   * result.
+   */
+  with_goal?: boolean;
+  /**
+   * The beat after it may begin first, and this one is then passed over (IV.5: the enemy plan
+   * is seen only on the planned path; on the failure path it is over before the plan).
+   */
+  optional?: boolean;
+}
+/**
+ * When a beat begins, or a condition of the goal (section 7.3, ``on``).
+ *
+ * Exactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,
+ * with filters), ``accepted`` (an own command the server accepted, by its pattern; the places
+ * are those at the moment it was sent), ``view`` (a fact of the own view), ``continued``
+ * (Continue on that beat, ``after`` ticks later), ``ui`` (client only: a selection) or ``any``
+ * (the first of several that fires).
+ */
+export interface Trigger {
+  start?: true | null;
+  /**
+   * An event kind of ``gow_protocol.convert.EVENT_FIELDS``.
+   */
+  event?: string | null;
+  /**
+   * The event's ``node``.
+   */
+  node?: string | null;
+  /**
+   * The event's ``to_node`` (``packet_sent``).
+   */
+  to?: string | null;
+  /**
+   * The event's ``edge``, by its two ends in any order.
+   */
+  edge?: [string, string] | null;
+  /**
+   * The event's ``player`` (``owner`` for ``warehouse_lost``).
+   */
+  by?: Side | null;
+  /**
+   * The event's ``winner`` (``fight_ended``).
+   */
+  winner?: Side | null;
+  /**
+   * Other fields of the event, equal to these values.
+   */
+  where?: {
+    [k: string]: boolean | number | string;
+  } | null;
+  /**
+   * Integer fields of the event, at least these values.
+   */
+  min?: {
+    [k: string]: number;
+  } | null;
+  /**
+   * The event's ``group`` was the ``group`` of an earlier event of this kind (both own).
+   */
+  group_of?: string | null;
+  accepted?: CommandPattern | null;
+  view?: ViewFact | null;
+  continued?: string | null;
+  /**
+   * With ``continued``: ticks after the Continue.
+   */
+  after?: number;
+  ui?: 'select' | null;
+  /**
+   * With ``ui``: the own group standing in this node; ``None``: any own group.
+   */
+  group?: string | null;
+  any?: Trigger[] | null;
+  /**
+   * A goal condition only: the event counts from this beat on.
+   */
+  since?: string | null;
+  /**
+   * A goal condition only: so many such events.
+   */
+  count?: number;
+}
+/**
+ * One kind of command by its wire ``type`` and its places; an absent field matches any.
+ */
+export interface CommandPattern {
+  move?: MovePattern | null;
+  cancel_order?: GroupPattern | null;
+  build_factory?: NodePattern | null;
+  build_barracks?: NodePattern | null;
+  recruit?: NodePattern | null;
+  set_stance?: StancePattern | null;
+  fortify_road?: RoadPattern | null;
+  group_move?: GroupMovePattern | null;
+  set_rally_point?: RallyPattern | null;
+}
+export interface MovePattern {
+  /**
+   * The node the group stands in; ``None``: any.
+   */
+  from?: string | null;
+  to?: string | null;
+  /**
+   * ``True`` a planned order only, ``False`` an ordinary one only, ``None`` either.
+   */
+  planned?: boolean | null;
+}
+export interface GroupPattern {
+  /**
+   * The node the group stands in; ``None``: any own group.
+   */
+  from?: string | null;
+}
+export interface NodePattern {
+  node?: string | null;
+}
+export interface StancePattern {
+  stance?: Stance | null;
+}
+export interface RoadPattern {
+  node?: string | null;
+  /**
+   * The other end of the fortified road.
+   */
+  toward?: string | null;
+}
+export interface GroupMovePattern {
+  /**
+   * The nodes the groups stand in, one per group, in any order.
+   */
+  groups?: string[] | null;
+  to?: string | null;
+  planned?: boolean | null;
+}
+export interface RallyPattern {
+  node?: string | null;
+  /**
+   * The rally point; ``None``: any.
+   */
+  to?: string | null;
+}
+/**
+ * A fact of the player's own view (``PlayerView``), compared, never computed.
+ */
+export interface ViewFact {
+  /**
+   * The node is the player's.
+   */
+  own?: string | null;
+  /**
+   * The own node has ``starve_in`` set (cut off from the capital, DEC-43 item H).
+   */
+  starving?: string | null;
+  /**
+   * The own node's ``warehouse`` equals its ``warehouse_cap``.
+   */
+  warehouse_full?: string | null;
+  /**
+   * The node is the player's and an own group stands in it with every unit charged (not
+   * one that only arrived to attack it).
+   */
+  group_full?: string | null;
+  /**
+   * An enemy group is seen on a road that touches the node.
+   */
+  enemy_road?: string | null;
+  /**
+   * An enemy planned intent targets the node.
+   */
+  enemy_plan?: string | null;
+}
+/**
+ * A command a beat allows; ``max`` bounds how often it is accepted while the beat (or a
+ * beat that keeps its ``allow``) lasts. Leaving (``forfeit``) is always allowed.
+ */
+export interface Allow {
+  move?: MovePattern | null;
+  cancel_order?: GroupPattern | null;
+  build_factory?: NodePattern | null;
+  build_barracks?: NodePattern | null;
+  recruit?: NodePattern | null;
+  set_stance?: StancePattern | null;
+  fortify_road?: RoadPattern | null;
+  group_move?: GroupMovePattern | null;
+  set_rally_point?: RallyPattern | null;
+  max?: number | null;
+}
+/**
+ * The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item
+ * of a node or the VP badge of a city.
+ */
+export interface Mark {
+  node?: string | null;
+  /**
+   * With ``node``: the wide ring around the place (capacity, a fight).
+   */
+  ring?: boolean;
+  /**
+   * The own group standing in this node.
+   */
+  group?: string | null;
+  road?: [string, string] | null;
+  hud?: HudPiece | null;
+  menu?: MenuItem | null;
+  /**
+   * With ``menu``: the node whose menu holds the item.
+   */
+  at?: string | null;
+  vp_badge?: string | null;
+}
+/**
+ * One group of places the marks in turn ring (I.7), with the word of the card it lights.
+ */
+export interface Turn {
+  word: string;
+  /**
+   * @minItems 1
+   */
+  nodes: [string, ...string[]];
+}
+/**
+ * The chapter is done when all conditions hold at once: an event condition holds once its
+ * event came (``since`` a beat, ``count`` times), a view condition while it is true.
+ */
+export interface Goal {
+  /**
+   * @minItems 1
+   */
+  all: [Trigger, ...Trigger[]];
+}
 
-export const PROTOCOL_VERSION = 53;
+export const PROTOCOL_VERSION = 54;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

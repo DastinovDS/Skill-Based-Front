@@ -9,7 +9,11 @@ choice, in an unrated match (by link, public or against a bot, #889), and never 
 ``MapCatalog.pool`` keeps them out of every random pick and so out of the queue,
 ``MatchLifecycle.start`` out of the rating.
 
-A third kind is not in the catalog: the per-match maps (#884), made by the server for one unrated
+The tutorial maps (``maps/tutorial/*.json``, #806) are a third group: only a tutorial chapter
+plays them (``gow_server.tutorial``); no map choice, random pick or list names them, and
+``GET /api/maps/{id}`` serves them for the client to draw.
+
+A fourth kind is not in the catalog: the per-match maps (#884), made by the server for one unrated
 invite or bot match (``gow_server.mapgen``) and stored next to the replays. Their ids start with
 ``MATCH_MAP_PREFIX``, which no file of the catalog may use, so they never collide with a pool or a
 stored generated map. The endpoints below serve them like the catalog maps once they are made.
@@ -27,6 +31,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from gow_sim.maps import GENERATED_SUBDIR, MapDef, MapFormatError, load_map
+
+TUTORIAL_SUBDIR: Final = "tutorial"
+"""The maps of the tutorial chapters lie in this subfolder of the map folder (#806)."""
 
 if TYPE_CHECKING:
     from gow_server.mapgen import MapMaker
@@ -63,6 +70,8 @@ class MapEntry:
     """The vector file of the geography, ``geo/<id>.json`` (DEC-36)."""
     per_match: bool = False
     """Made by the server for one match (#884), stored next to the replays."""
+    tutorial: bool = False
+    """From ``maps/tutorial/`` (#806): played only by a tutorial chapter."""
 
 
 def is_match_map(map_id: str) -> bool:
@@ -71,7 +80,12 @@ def is_match_map(map_id: str) -> bool:
 
 
 def entry_of(
-    path: Path, definition: MapDef, *, generated: bool, per_match: bool = False
+    path: Path,
+    definition: MapDef,
+    *,
+    generated: bool,
+    per_match: bool = False,
+    tutorial: bool = False,
 ) -> MapEntry:
     """The entry of a loaded map file with the files next to it (the layout of ``maps/``)."""
     map_id = definition.meta.name
@@ -87,6 +101,7 @@ def entry_of(
         thumb=thumb if thumb.is_file() else None,
         vectors=vectors if vectors.is_file() else None,
         per_match=per_match,
+        tutorial=tutorial,
     )
 
 
@@ -98,7 +113,8 @@ class MapCatalog:
 
     @classmethod
     def load(cls, directory: Path) -> Self:
-        """Load the pool ``directory/*.json`` and the generated maps ``directory/gen/*.json``.
+        """Load the pool ``directory/*.json``, the generated maps ``directory/gen/*.json`` and the
+        tutorial maps ``directory/tutorial/*.json``.
 
         Not recursive otherwise: ``maps/src/`` holds halves, ``maps/fixtures/`` is not served.
         """
@@ -106,23 +122,30 @@ class MapCatalog:
             [
                 *_load_folder(directory, generated=False),
                 *_load_folder(directory / GENERATED_SUBDIR, generated=True),
+                *_load_folder(directory / TUTORIAL_SUBDIR, generated=False, tutorial=True),
             ]
         )
 
     def pool(self) -> list[MapEntry]:
         """The maps of the queue and of a random pick."""
-        return [entry for entry in self._entries.values() if not entry.generated]
+        return [
+            entry for entry in self._entries.values() if not entry.generated and not entry.tutorial
+        ]
 
     def generated(self) -> list[MapEntry]:
         """The maps played only by an explicit choice, never rated."""
         return [entry for entry in self._entries.values() if entry.generated]
 
     def get(self, map_id: str) -> MapEntry | None:
-        """A map of either group by id."""
+        """A map of any group by id."""
         return self._entries.get(map_id)
 
+    def all(self) -> list[MapEntry]:
+        """Every map of the catalog, by id."""
+        return list(self._entries.values())
 
-def _load_folder(directory: Path, *, generated: bool) -> list[MapEntry]:
+
+def _load_folder(directory: Path, *, generated: bool, tutorial: bool = False) -> list[MapEntry]:
     entries: list[MapEntry] = []
     for path in sorted(directory.glob("*.json")):
         definition = load_map(path)
@@ -131,7 +154,7 @@ def _load_folder(directory: Path, *, generated: bool) -> list[MapEntry]:
             raise MapFormatError(f"{path}: file name must be <meta.name>.json ({map_id}.json)")
         if map_id.startswith(MATCH_MAP_PREFIX):
             raise MapFormatError(f"{path}: the id prefix {MATCH_MAP_PREFIX} is for per-match maps")
-        entries.append(entry_of(path, definition, generated=generated))
+        entries.append(entry_of(path, definition, generated=generated, tutorial=tutorial))
     return entries
 
 
@@ -146,7 +169,8 @@ def choose_map(
     """The map asked for by an unrated match (an invite or a bot match); ``None``: make a new map
     for it (#884).
 
-    ``map_id`` names a map of the catalog (a per-match map is never chosen again). Without it,
+    ``map_id`` names a map of the catalog (a per-match map is never chosen again, a tutorial map
+    only by its chapter). Without it,
     ``source`` says where the map comes from, ``default`` when absent; ``random_generated`` is the
     older spelling of ``source="generated"`` (#771). A random pick draws from the pool or from the
     stored generated maps.
@@ -159,7 +183,7 @@ def choose_map(
         if source is not None:
             raise _unprocessable("map_id and map_source exclude each other")
         entry = catalog.get(map_id)
-        if entry is None:
+        if entry is None or entry.tutorial:
             raise _unprocessable("unknown map")
         return entry
     source = default if source is None else source

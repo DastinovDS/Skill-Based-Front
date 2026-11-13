@@ -10,6 +10,7 @@
 !tools/
 !maps/
 !rulesets/
+!tutorial/
 !deploy/
 
 # Never in the context, even if the allowlist above changes.

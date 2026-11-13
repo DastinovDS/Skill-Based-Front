@@ -1,0 +1,37 @@
+{
+  "id": "building",
+  "road": "main",
+  "number": 3,
+  "map": "tut-build",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse"],
+  "opponent": [],
+  "beats": [
+    {"id": "1", "on": {"start": true}, "pause": "action", "ui": ["buildings"],
+     "allow": [{"build_factory": {"node": "Millbrook"}}],
+     "mark": [{"menu": "factory", "at": "Millbrook"}]},
+    {"id": "2", "on": {"event": "build_paid", "by": "you", "min": {"units": 1}}, "pause": "continue",
+     "allow": [],
+     "mark": [{"node": "Millbrook"}]},
+    {"id": "3", "on": {"event": "build_paid", "by": "you", "where": {"kind": "factory", "owed": 0}},
+     "pause": "action",
+     "allow": [{"build_barracks": {"node": "Fernhill"}}],
+     "mark": [{"menu": "barracks", "at": "Fernhill"}]},
+    {"id": "4", "on": {"event": "factory_built", "node": "Millbrook", "by": "you"}, "pause": "continue",
+     "allow": [], "ui": ["factories"],
+     "mark": [{"node": "Millbrook"}, {"hud": "factories"}]},
+    {"id": "5", "on": {"event": "barracks_built", "node": "Fernhill", "by": "you"}, "pause": "action",
+     "ui": ["recruit"],
+     "allow": [{"recruit": {"node": "Fernhill"}, "max": 1}],
+     "mark": [{"menu": "recruit", "at": "Fernhill"}]},
+    {"id": "6", "on": {"event": "recruited", "by": "you"}, "pause": "action", "ui": ["stance"],
+     "allow": [{"set_stance": {"stance": "economy"}}],
+     "mark": [{"hud": "stance"}]}
+  ],
+  "fails": [],
+  "goal": {"all": [
+    {"event": "factory_built", "node": "Millbrook", "by": "you"},
+    {"event": "barracks_built", "node": "Fernhill", "by": "you"},
+    {"event": "recruited", "by": "you"},
+    {"event": "stance_changed", "by": "you"}
+  ]}
+}

@@ -32,6 +32,7 @@ from gow_protocol.messages import (
     ClientMsg,
     ServerMsg,
 )
+from gow_protocol.tutorial import Chapter
 
 SCHEMA_PATH: Final = Path(__file__).resolve().parents[2] / "protocol.schema.json"
 """``packages/protocol/protocol.schema.json``."""
@@ -39,9 +40,10 @@ SCHEMA_PATH: Final = Path(__file__).resolve().parents[2] / "protocol.schema.json
 EVENT_FIELDS_PATH: Final = Path(__file__).resolve().parents[2] / "vectors" / "event_fields.json"
 """``packages/protocol/vectors/event_fields.json``: the fields of each event kind (ARC-02, #457)."""
 
-ROOTS: Final[tuple[object, ...]] = (ClientMsg, ServerMsg, MapFile)
+ROOTS: Final[tuple[object, ...]] = (ClientMsg, ServerMsg, MapFile, Chapter)
 """Top-level types of the schema. Each is a named definition (a model or a ``type`` alias), and
-TypeScript gets it under the same name."""
+TypeScript gets it under the same name. ``Chapter`` is the tutorial chapter file (#806): no
+message carries it, the client imports the files at build time."""
 
 
 class WireJsonSchema(GenerateJsonSchema):

@@ -1,0 +1,29 @@
+{
+  "id": "supply-distribution",
+  "road": "advanced",
+  "number": 3,
+  "map": "tut-flow",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
+         "planned", "vp", "terrainMarks", "alerts", "fort"],
+  "opponent": [
+    {"at": 20, "move": {"from": "Gullmoor", "to": "Lowfield"}}
+  ],
+  "beats": [
+    {"id": "1", "on": {"start": true}, "pause": "continue", "allow": [],
+     "mark": [{"node": "Fernhold"}, {"node": "Lowfield"}]},
+    {"id": "2", "on": {"continued": "1", "after": 30}, "pause": "continue", "allow": [],
+     "mark": [{"road": ["Highhold", "Millbrook"]}]},
+    {"id": "3", "on": {"any": [
+       {"event": "packet_lost", "by": "you"},
+       {"event": "node_captured", "node": "Lowfield", "by": "enemy"}]},
+     "pause": "continue", "allow": [],
+     "mark": [{"node": "Lowfield"}, {"node": "Coldwell"}]},
+    {"id": "4", "on": {"view": {"warehouse_full": "Fernhold"}}, "pause": "action",
+     "allow": [{"move": {"from": "Fernhold", "to": "Ashwood", "planned": false}}],
+     "mark": [{"node": "Ashwood"}]},
+    {"id": "5", "on": {"event": "packet_sent", "to": "Ashwood", "by": "you"}, "allow": [],
+     "mark": [{"node": "Ashwood"}, {"road": ["Fernhold", "Ashwood"]}]}
+  ],
+  "fails": [],
+  "goal": {"all": [{"view": {"group_full": "Ashwood"}}]}
+}

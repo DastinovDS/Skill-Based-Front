@@ -131,6 +131,8 @@ function describeServerMsg(msg: ServerMsg): string {
       return `paused ${String(msg.paused)}`;
     case 'reach':
       return `reach ${String(msg.nodes.length)} nodes`;
+    case 'tutorial':
+      return `tutorial ${msg.chapter} ${msg.beat ?? '-'}`;
     default:
       return unreachable(msg);
   }

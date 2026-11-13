@@ -3,7 +3,7 @@
 Client -> server: ``hello`` (first message, with the token), ``command``, ``ping``, ``resync``,
 ``pause`` and ``resume`` (private matches only, DEC-05), ``reach_query`` (DEC-20).
 Server -> client: ``welcome``, ``snapshot``, ``ack``, ``event``, ``match_end``, ``error``, ``pong``,
-``paused``, ``reach``.
+``paused``, ``reach``, ``tutorial`` (a tutorial chapter only, #806).
 The connection rules are in AGENTS.md, section 5.3 (SRV-03 #48, SRV-04 #50).
 
 Any change of these models is a protocol change: bump ``PROTOCOL_VERSION`` and regenerate the
@@ -29,10 +29,11 @@ from gow_protocol.base import (
 )
 from gow_protocol.commands import Command
 from gow_protocol.ruleset import RulesetPublic
+from gow_protocol.tutorial import BeatId, ChapterId
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 53
+PROTOCOL_VERSION: Final = 54
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -527,6 +528,28 @@ class ReachMsg(WireModel):
     node id, each with the size that fits."""
 
 
+class TutorialMsg(WireModel):
+    """The beat of a tutorial chapter (#806, ``docs/design/tutorial.md``, section 7.5): sent after
+    ``welcome`` and whenever it changes. The server walks the beats of the chapter file and
+    refuses the commands the beat does not allow (``ack`` with ``INVALID_ARGUMENT``); the client
+    draws the card, the marks and the HUD of ``beat`` and walks the UI beats (a selection) on its
+    own between two server beats."""
+
+    type: Literal["tutorial"] = "tutorial"
+    chapter: ChapterId
+    beat: BeatId | None
+    """The current beat of the chapter file (``F``: its failure beat); ``None`` before the first
+    one (chapter V starts with the opponent's march)."""
+    paused: bool
+    """The simulation waits: for ``resume`` (Continue) on a ``continue`` beat, for an allowed
+    command on an ``action`` beat. No tick passes meanwhile."""
+    used: tuple[NonNegInt, ...]
+    """For each ``allow`` entry of the beat (the one it keeps, for a beat without its own): how
+    many such commands were accepted, against its ``max``."""
+    done: bool
+    """The goal holds: the chapter ends with the next tick (``match_end``)."""
+
+
 type ServerMsg = Annotated[
     WelcomeMsg
     | SnapshotMsg
@@ -536,6 +559,7 @@ type ServerMsg = Annotated[
     | ErrorMsg
     | PongMsg
     | PausedMsg
-    | ReachMsg,
+    | ReachMsg
+    | TutorialMsg,
     Field(discriminator="type"),
 ]

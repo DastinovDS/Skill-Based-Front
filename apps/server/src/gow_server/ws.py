@@ -26,7 +26,8 @@
      player closes the older one with ``CLOSE_REPLACED``, after which the old client must not
      reconnect (``CLOSE_REPLACED`` is final for it, ``matchConnection.ts``);
    - ``pause`` / ``resume`` go to the match (private matches, DEC-05): a refusal is ``error``
-     ``PAUSE_DENIED``.
+     ``PAUSE_DENIED``. In a tutorial chapter (#806) ``resume`` is the Continue of a card and
+     ``pause`` is refused; the chapter's ``tutorial`` message follows ``welcome``.
 5. A dropped connection starts the player's reconnect window in the match (``MatchRunner``, SRV-04):
    the same token reconnects within it and gets ``welcome`` with ``last_seq`` and a full
    ``snapshot`` again; otherwise the match applies a ``Forfeit`` for the player.
@@ -263,6 +264,9 @@ async def _serve(
             pause_available=runner.pause_available(player),
         )
     )
+    tutorial = runner.tutorial_msg(player)  # a tutorial chapter: its beat (#806)
+    if tutorial is not None:
+        outbox.put(tutorial)
     outbox.put_snapshot(runner.snapshot(player))
     extra = {"match_id": match_id, "player": player}
     log.info("ws connected", extra=extra)

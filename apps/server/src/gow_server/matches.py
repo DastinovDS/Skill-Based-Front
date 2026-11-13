@@ -44,6 +44,17 @@ started: the runner ends without an outcome (``never_started``), its partial com
 and no frames are built; the lifecycle saves it as ``aborted`` / ``never_started``. Without this
 a plain HTTP client could keep one bot match per account running until the reconnect window.
 
+A tutorial chapter (#806, ``docs/design/tutorial.md``, section 7.5) is a bot match whose runner
+has a ``TutorialDirector`` (``gow_server.tutorial``): ``submit`` hands it every command of the
+player and answers a command the current beat does not allow at once with an ``ack``
+``INVALID_ARGUMENT`` (the simulation never sees it); after every step it reads the player's
+events, command results and view and names the beat in a ``tutorial`` message (also after
+``welcome``). Its pauses are this runner's ``pause()`` and ``resume()``, not a player's pause: no
+``paused`` message, no time limit, the player's own ``pause`` is refused; ``resume`` from the
+player is the Continue of a card. When the chapter's goal holds the runner queues the scripted
+side's ``Forfeit``. A chapter keeps no replay. A paused chapter still runs the connect timeout of
+a bot match and the reconnect window.
+
 A runner given a ``ReplayWriter`` writes the command log of its match tick by tick (SRV-07);
 ``MatchManager`` hands a finished match to ``ReplayService`` for the frames file. A failing log
 (a full disk) stops the recording and never the match.
@@ -73,7 +84,7 @@ from gow_protocol.convert import (
     reach_msg,
     snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, PlayerColour, ReachMsg, ServerMsg
+from gow_protocol.messages import AckMsg, PausedMsg, PlayerColour, ReachMsg, ServerMsg, TutorialMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.colours import DEFAULT_PAIR
@@ -87,15 +98,17 @@ from gow_server.ladder import (
     settle,
 )
 from gow_server.metrics import ServerMetrics
+from gow_server.tutorial import Admission, CommandFacts, TutorialDirector, facts_of
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
 from gow_sim.analysis import ResultTally
-from gow_sim.commands import Command, PlayerCommand
+from gow_sim.commands import Command, Forfeit, Ok, PlayerCommand, RejectCode
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.match import DECIDE_EVERY, Controller, ControllerFactory, Match, Seat
 from gow_sim.replay import ReplayWriter
 from gow_sim.ruleset import Ruleset
+from gow_sim.state import Event
 from gow_sim.view import PlayerView
 
 log = logging.getLogger("gow_server.matches")
@@ -210,6 +223,9 @@ class BotSeat:
     slot: int
     factory: ControllerFactory
     seed: int
+    decide_every: int = DECIDE_EVERY
+    """Ticks between two calls: every bot of a match ``DECIDE_EVERY`` (AGENTS.md, section 8);
+    the scripted opponent of a tutorial chapter 1 (``gow_server.tutorialmatch``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +260,7 @@ class MatchRunner:
         validate_snapshots: bool = False,
         connect_timeout_s: float | None = None,
         colours: tuple[PlayerColour, PlayerColour] = DEFAULT_PAIR,
+        tutorial: TutorialDirector | None = None,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -284,7 +301,9 @@ class MatchRunner:
         """Decisions slower than ``bot_budget_s`` (counted only)."""
         self.bot_skipped = 0
         self.bot_share: Final = bot_share
-        self._bot_earn_s: Final = bot_share * DECIDE_EVERY * self.dt
+        self._bot_earn_s: Final = (
+            bot_share * (DECIDE_EVERY if bot is None else bot.decide_every) * self.dt
+        )
         """What a due call adds to the account: the share of the time between two calls."""
         self._bot_account_s = BOT_BURST_S
         """Time the bot may still spend; a call with a negative account is skipped."""
@@ -297,7 +316,13 @@ class MatchRunner:
             None
             if bot is None
             else Seat.build(
-                self.match, bot.slot, bot.factory, seed=bot.seed, decide=self._decide_bot, seq=1
+                self.match,
+                bot.slot,
+                bot.factory,
+                seed=bot.seed,
+                decide_every=bot.decide_every,
+                decide=self._decide_bot,
+                seq=1,
             )
         )
         """The driver of the bot (its ``seq`` counts from 1 like a client's)."""
@@ -319,6 +344,17 @@ class MatchRunner:
         self._paused_by: int | None = None
         self._pause_ends = 0.0
         self._pause_timer: asyncio.Task[None] | None = None
+        self.tutorial: Final = tutorial
+        """The beats of a tutorial chapter (#806); ``None``: any other match."""
+        self._admitted: dict[int, tuple[Admission, CommandFacts]] = {}
+        """Commands of the tutorial player the director admitted, by ``seq``, until applied."""
+        self._tutorial_sent: TutorialMsg | None = None
+        self._goal_forfeit = False
+        """The chapter's goal holds: the next step applies the scripted side's ``Forfeit``."""
+        self._leaving = False
+        """The chapter's player forfeited (left): no card pauses the match any more."""
+        if tutorial is not None and tutorial.paused:
+            self.pause()  # the first card waits before tick 1
 
     def __repr__(self) -> str:
         return f"MatchRunner({self.match_id!r}, map={self.map_id!r}, tick={self.match.tick})"
@@ -344,7 +380,7 @@ class MatchRunner:
         self._cancel_forfeit_timer(player)
         if self.finished:
             box.close()
-        elif self.paused:
+        elif self.paused and self.tutorial is None:  # a chapter's pause is in ``tutorial_msg``
             box.put(self._paused_msg())
         return box
 
@@ -392,8 +428,88 @@ class MatchRunner:
         if self.finished or seq <= self._last_seq[player]:
             return False
         self._last_seq[player] = seq
+        director = self.tutorial
+        if director is not None and player == director.player and not self._admit(seq, cmd):
+            return True
         self._inbox.append(_Queued(player, seq, cmd))
         return True
+
+    # Tutorial ------------------------------------------------------------------------------
+
+    def tutorial_msg(self, player: int) -> TutorialMsg | None:
+        """The current beat of a chapter for its player (after ``welcome``); ``None``: not a
+        chapter, or not its player."""
+        director = self.tutorial
+        return None if director is None or player != director.player else director.message()
+
+    def _admit(self, seq: int, cmd: wire.Command) -> bool:
+        """A command of the chapter's player: ``False``, refused by the beat (answered here, at
+        once, with ``INVALID_ARGUMENT``); ``True``, queued (an ``action`` card's pause ends)."""
+        director = self.tutorial
+        assert director is not None
+        if isinstance(cmd, wire.ForfeitCmd):  # leaving is always allowed, also from a card
+            self._leaving = True
+            self.resume()
+            return True
+        player = director.player
+        resolved = self.match.resolve(player, command_from_wire(cmd))
+        facts = facts_of(self.match.state, player, resolved)
+        admission = None if facts is None else director.admit(facts)
+        if admission is None or facts is None:
+            box = self._outboxes.get(player)
+            if box is not None:
+                box.put(
+                    AckMsg(
+                        seq=seq,
+                        applied_tick=self.match.tick + 1,
+                        reject_code=RejectCode.INVALID_ARGUMENT.value,
+                    )
+                )
+            return False
+        self._admitted[seq] = (admission, facts)
+        self._sync_tutorial()
+        return True
+
+    def _settle_tutorial(self, events: list[Event]) -> None:
+        """After a step: the results of the admitted commands, then the beats, then the goal."""
+        director = self.tutorial
+        assert director is not None
+        match, player = self.match, director.player
+        for result in match.results:
+            if result.player == player and result.seq in self._admitted:
+                admission, facts = self._admitted.pop(result.seq)
+                director.settle(admission, facts, accepted=isinstance(result.outcome, Ok))
+        view = match.view(player, reuse=True)  # only ``step()`` changed the state
+        director.observe(match.tick, events_msgs(events, player, match.match_key), view)
+        if director.done and not match.finished and not self._goal_forfeit:
+            self._goal_forfeit = True
+            log.info("tutorial goal", extra={"match_id": self.match_id, "tick": match.tick})
+        self._sync_tutorial()
+
+    def _sync_tutorial(self) -> None:
+        """Send the beat if it changed and follow the director's pause (a done chapter runs on:
+        the ``Forfeit`` is applied by the next tick)."""
+        director = self.tutorial
+        assert director is not None
+        msg = director.message()
+        if msg != self._tutorial_sent:
+            self._tutorial_sent = msg
+            box = self._outboxes.get(director.player)
+            if box is not None and not self.finished:
+                box.put(msg)
+        if director.paused and not director.done and not self._leaving and not self.finished:
+            self.pause()
+        else:
+            self.resume()
+
+    def _goal_commands(self) -> list[PlayerCommand]:
+        """The scripted side's ``Forfeit`` once the chapter's goal holds."""
+        seat = self._bot_seat
+        if not self._goal_forfeit or seat is None:
+            return []
+        self._goal_forfeit = False
+        seat.seq += 1
+        return [PlayerCommand(seat.player, seat.seq - 1, Forfeit())]
 
     # Disconnects ---------------------------------------------------------------------------
 
@@ -445,12 +561,19 @@ class MatchRunner:
 
     def pause_available(self, player: int) -> bool:
         """``player`` may still pause (``welcome.pause_available``): a private match whose pause
-        ``player`` has not used. A pause going on now, whoever's, does not count here."""
-        return self.private and player not in self._pauses_used
+        ``player`` has not used. A pause going on now, whoever's, does not count here. Never in a
+        tutorial chapter (its pauses are its cards')."""
+        return self.private and self.tutorial is None and player not in self._pauses_used
 
     def request_pause(self, player: int) -> bool:
         """A player's pause (DEC-05). ``False``: rated match, pause already used, or paused now."""
-        if not self.private or self.finished or self.paused or player in self._pauses_used:
+        if (
+            not self.private
+            or self.tutorial is not None
+            or self.finished
+            or self.paused
+            or player in self._pauses_used
+        ):
             return False
         self._pauses_used.add(player)
         self._paused_by = player
@@ -463,7 +586,16 @@ class MatchRunner:
         return True
 
     def request_resume(self, player: int) -> bool:
-        """End the pause early; only the player who paused may. ``False``: not their pause."""
+        """End the pause early; only the player who paused may. ``False``: not their pause.
+
+        In a tutorial chapter it is the Continue of a ``continue`` card (the director decides;
+        ``False`` on any other beat, also during an ``action`` card)."""
+        director = self.tutorial
+        if director is not None:
+            if player != director.player or self.finished or not director.continue_():
+                return False
+            self._sync_tutorial()
+            return True
         if self._paused_by != player:
             return False
         self.resume()
@@ -505,7 +637,7 @@ class MatchRunner:
         try:
             while not self.finished:
                 if self.paused:
-                    await self._resumed.wait()
+                    await self._wait_resumed(run_started)
                     start, ticks = self.clock.now(), 0
                 now = self.clock.now()
                 if self._nobody_came(now - run_started):
@@ -544,6 +676,23 @@ class MatchRunner:
             for box in self._outboxes.values():
                 box.close()
 
+    async def _wait_resumed(self, run_started: float) -> None:
+        """Wait for ``resume()``; while a bot match nobody connected to is paused (a chapter's
+        first card), at most until its connect timeout, which the loop then checks."""
+        left = None
+        if self.bot is not None and self.connect_timeout_s is not None and not self._seen:
+            left = run_started + self.connect_timeout_s - self.clock.now()
+        if left is None:
+            await self._resumed.wait()
+            return
+        resumed = asyncio.ensure_future(self._resumed.wait())
+        timer = asyncio.ensure_future(self.clock.sleep(left))
+        try:
+            await asyncio.wait((resumed, timer), return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            resumed.cancel()
+            timer.cancel()
+
     def _nobody_came(self, waited_s: float) -> bool:
         """A bot match that no player connected to within ``connect_timeout_s`` of its start."""
         return (
@@ -561,6 +710,7 @@ class MatchRunner:
             for q in self._inbox
         ]
         commands.extend(self._bot_commands())
+        commands.extend(self._goal_commands())
         self._inbox = []
         self._record_start()
         events = match.step(commands)
@@ -596,6 +746,8 @@ class MatchRunner:
                     )
                 )
                 box.close()
+        if self.tutorial is not None:  # after the acks and events of the tick it reads
+            self._settle_tutorial(events)
 
     def intro_notice(self, player: int) -> Notice:
         """What ``player`` is told about the rating before the match (``welcome``)."""
@@ -813,6 +965,7 @@ class MatchManager:
         bot: BotSeat | None = None,
         rating_plan: RatingPlan | None = None,
         colours: tuple[PlayerColour, PlayerColour] = DEFAULT_PAIR,
+        tutorial: TutorialDirector | None = None,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining and
         ``ServerFullError`` at the caps (``check_capacity``, #412).
@@ -823,13 +976,15 @@ class MatchManager:
         ``bot``: the slot a bot plays (SRV-06); that entry of ``players`` is ``BOT_ACCOUNT``.
         ``rating_plan``: the rating rules of a queue match (RAT-02, DEC-34), for ``welcome`` and
         ``match_end``. ``colours``: the colours of the players by player id (DEC-49), resolved
-        by ``MatchLifecycle.start``.
+        by ``MatchLifecycle.start``. ``tutorial``: the director of a tutorial chapter (#806),
+        whose match keeps no replay.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
         self.check_capacity(bot is not None)
         match_id = match_id or self._new_id()
-        replay = self._replays.writer(match_id) if self._replays is not None else None
+        keep = self._replays is not None and tutorial is None
+        replay = self._replays.writer(match_id) if keep and self._replays is not None else None
         runner = MatchRunner(
             match_id,
             map_id,
@@ -848,6 +1003,7 @@ class MatchManager:
             validate_snapshots=self._validate_snapshots,
             connect_timeout_s=self._bot_connect_timeout_s if bot is not None else None,
             colours=colours,
+            tutorial=tutorial,
         )
         self.start(runner)
         return runner

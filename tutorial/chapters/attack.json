@@ -1,0 +1,45 @@
+{
+  "id": "attack",
+  "road": "main",
+  "number": 4,
+  "map": "tut-attack",
+  "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance"],
+  "opponent": [
+    {"at": 20, "move": {"from": "Thornwick", "to": "Old Mill", "planned": true, "bonus": 1}}
+  ],
+  "beats": [
+    {"id": "1", "on": {"start": true}, "pause": "continue", "allow": [],
+     "mark": [{"node": "Fernhold"}]},
+    {"id": "2", "on": {"continued": "1"}, "pause": "action", "slides": 3,
+     "allow": [{"move": {"from": "Fernhold", "to": "Ashwood"}}],
+     "mark": [{"node": "Ashwood"}]},
+    {"id": "3", "on": {"ui": "select", "group": "Fernhold"}, "ui": ["planned"],
+     "mark": [{"node": "Ashwood"}]},
+    {"id": "4", "on": {"accepted": {"move": {"from": "Fernhold", "to": "Ashwood", "planned": true}}},
+     "allow": [],
+     "mark": [{"node": "Fernhold"}]},
+    {"id": "5", "on": {"view": {"enemy_plan": "Old Mill"}}, "pause": "continue", "allow": [],
+     "optional": true,
+     "mark": [{"road": ["Thornwick", "Old Mill"]}]},
+    {"id": "6", "on": {"event": "fight_started", "node": "Ashwood"}, "pause": "continue", "allow": [],
+     "mark": [{"node": "Ashwood", "ring": true}]},
+    {"id": "7", "on": {"any": [
+       {"event": "fight_round", "node": "Ashwood", "min": {"losses_0": 1}},
+       {"event": "fight_round", "node": "Ashwood", "min": {"losses_1": 1}}]},
+     "pause": "continue", "allow": [],
+     "mark": [{"node": "Ashwood", "ring": true}]},
+    {"id": "8", "on": {"event": "node_captured", "node": "Ashwood", "by": "you"}, "pause": "continue",
+     "allow": [], "ui": ["vp", "clock"],
+     "mark": [{"hud": "vp"}, {"hud": "clock"}, {"node": "Stormcrown"}, {"vp_badge": "Ashwood"}]},
+    {"id": "9", "on": {"view": {"group_full": "Ashwood"}}, "pause": "action", "hide": ["clock"],
+     "allow": [{"move": {"from": "Ashwood", "to": "Stormcrown", "planned": false}}],
+     "mark": [{"node": "Stormcrown"}]}
+  ],
+  "fails": [
+    {"id": "F", "on": {"event": "fight_ended", "node": "Ashwood", "winner": "enemy"}, "pause": "continue",
+     "ui": ["planned"],
+     "allow": [{"move": {"from": "Fernhold", "to": "Ashwood", "planned": true}}],
+     "mark": [{"node": "Fernhold"}]}
+  ],
+  "goal": {"all": [{"event": "node_captured", "node": "Stormcrown", "by": "you"}]}
+}

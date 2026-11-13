@@ -94,6 +94,13 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     isInt(m.tick) &&
     every(m.nodes, (n) => isObj(n) && isInt(n.node) && isInt(n.ticks)) &&
     every(m.split, (s) => isObj(s) && isInt(s.node) && isInt(s.units)),
+  // A tutorial chapter (#806): its beat. The coach that draws it comes with the client PR.
+  tutorial: (m) =>
+    isStr(m.chapter) &&
+    (m.beat === null || isStr(m.beat)) &&
+    typeof m.paused === 'boolean' &&
+    every(m.used, isInt) &&
+    typeof m.done === 'boolean',
 };
 
 function isServerType(type: unknown): type is ServerMsg['type'] {

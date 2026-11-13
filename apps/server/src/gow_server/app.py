@@ -25,6 +25,7 @@ from gow_server import (
     maps,
     matchqueue,
     replays,
+    tutorialmatch,
     ws,
 )
 from gow_server.abuse import Limits
@@ -41,6 +42,7 @@ from gow_server.passwords import PasswordHasher
 from gow_server.ratelimit import ConnectionGate, SlidingWindowLimiter
 from gow_server.replay_retention import RetentionPolicy, run_cleanup
 from gow_server.settings import Settings
+from gow_server.tutorial import ChapterBook
 from gow_sim.ruleset import load_ruleset
 
 log = logging.getLogger("gow_server")
@@ -108,6 +110,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             rating_enabled=settings.rating_enabled,
         )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
+        app.state.tutorial = ChapterBook.load(
+            settings.tutorial_dir, app.state.maps, app.state.ruleset
+        )
         await asyncio.to_thread(
             archive_rulesets,
             settings.ruleset_path,
@@ -242,6 +247,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(invites.router)
     app.include_router(invites.lobby_router)
     app.include_router(botmatch.router)
+    app.include_router(tutorialmatch.router)
+    app.include_router(tutorialmatch.ruleset_router)
     app.include_router(matchqueue.router)
     app.include_router(clientlog.router)
     app.include_router(ws.router)

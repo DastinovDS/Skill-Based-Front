@@ -1,0 +1,24 @@
+{
+  "meta": {"name": "tut-rally", "version": 1, "symmetry": "none", "width": 1200, "height": 700},
+  "nodes": [
+    {"id": 0, "name": "Highhold", "x": 170, "y": 350, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 6},
+    {"id": 1, "name": "Wyre", "x": 400, "y": 200, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 2, "name": "Fernhold", "x": 620, "y": 330, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 1, "start_charged": 1, "start_stock": 0},
+    {"id": 3, "name": "Lowfield", "x": 400, "y": 520, "terrain": "forest", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 4, "name": "Ashwood", "x": 860, "y": 260, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 0},
+    {"id": 5, "name": "Stormcrown", "x": 1060, "y": 380, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 1, "start_charged": 1, "start_stock": 6}
+  ],
+  "edges": [
+    {"id": 0, "a": 0, "b": 1, "max_level": 2, "travel_ticks": 82, "border_permille": 500},
+    {"id": 1, "a": 0, "b": 3, "max_level": 2, "travel_ticks": 86, "border_permille": 500},
+    {"id": 2, "a": 1, "b": 2, "max_level": 2, "travel_ticks": 77, "border_permille": 500},
+    {"id": 3, "a": 3, "b": 2, "max_level": 2, "travel_ticks": 87, "border_permille": 500},
+    {"id": 4, "a": 2, "b": 4, "max_level": 2, "travel_ticks": 75, "border_permille": 500},
+    {"id": 5, "a": 4, "b": 5, "max_level": 2, "travel_ticks": 70, "border_permille": 500},
+    {"id": 6, "a": 3, "b": 5, "max_level": 2, "travel_ticks": 202, "border_permille": 500}
+  ],
+  "mirror": {
+    "nodes": {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5},
+    "edges": {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6}
+  }
+}
