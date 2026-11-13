@@ -2816,7 +2816,7 @@ The style-fit list, the variants dropped before the page, the table with estimat
 - **Its own sign beside the CP gauge's cap frame** (the round 1 open point): the cap frame is open hairlines round the 150 px scale, 12 px tall, with small bare lozenges, and it is there only at the cap; the cartouche is always there, a filled 2.3 : 1 tablet round figures, and has what the cap frame never has: the four corner brackets, the plate, and larger serifs set in a casing.
 - **Evenness**: the box has even sides and sits on whole pixels (the bar centres it like the 30 px buttons); every rule, dash and bracket is a whole-pixel rectangle, mirror-symmetric about both middle lines and never painting a pixel twice (`cartouche.test.ts`); a dashed rule begins and ends on a whole dash (its length is `6n - 2`). GPU rasterisers sample a slanted edge unevenly (a small lozenge leaned an eighth of a pixel at ratio 1), so the serifs are pixel lozenges under a device pixel ratio of 2 and polygons with every corner on a device pixel from 2. The figures are centred by their ink, not their line box: the baseline 0.31 em (bold 0.295 em) below the middle line, and a leading digit's left side bearing corrected (a leading "1" would stand a pixel right); the last digit is not corrected, so the figures never move as the seconds run. Measured on the shots (`mise run shots -- --grep "match clock"`): the frame mirror-equal at ratios 1 and 2 in every state and at the beat's peak; the gaps from the figures' ink to the inner rule equal within 0.5 px left and right (the last digit's own bearing), top and bottom equal at ratio 2 and 1 px more below at ratio 1 (the figures a hair high, by choice); the box never changes width (9:59 to 10:00, 1:00 to 0:59).
 
-## 77. The tutorial round: hint card, goal mark, chapter screens, match hints (#806) **[accepted: Leader, Compass, Sheet, Seal, Road, Leader; owner 2026-11-13]**
+## 77. The tutorial round: hint card, goal mark, chapter screens, match hints (#806) **[accepted: Leader, Compass, Sheet, Seal, Charter, Leader; owner 2026-11-13]**
 
 The look of the playable tutorial (`docs/design/tutorial.md`: the five main chapters, the first match and the Advanced
 side road, owner 2026-11-13). Mockup [`mockups/tutorial.html`](mockups/tutorial.html), round 2: the chosen variants
@@ -2830,7 +2830,14 @@ three: a **gated HUD** (a top-bar piece or map mark of a concept not yet taught 
 style with its icon only, no price and no key, and a small lock at the icon's lower right; the chip at 40% with the
 lock at its corner); the **"Paused" plate** (a small stone plate at the bottom centre of the map, the pause glyph,
 "Paused" in the display caps and "until you continue" or "until you act" in italics; nothing under it is dimmed), with
-"Continue" at the foot of a card that waits for it.
+"Continue" at the foot of a card that waits for it. Round 5 (the owner's third review, 2026-11-13) adds three: the
+**entry popup** (the client's stone dialog over the main screen: "How to play", "New to the game?", one line, "Start
+the tutorial" in Lapis primary, "Not now" secondary, and the first checkbox of the client, "Don't show again": a native
+checkbox drawn as an engraved square, ink rule on the casing, filled ivory with a dark check when ticked, the focus
+ring of the buttons); **slides** of a card ("1 of 3" in the display caps and "Next" at its foot, the last slide with
+the action line); **marks in turn** (the places of one terrain ringed at a time, a plain, a dashed or a dotted ivory
+ring per terrain on a dark casing, the matching word of the card underlined with them, one pass, then all three stay
+ringed with their words as labels; with "Less motion" that last state at once).
 
 - **Hint card of a chapter: Leader.** A plate tied to its place by a ruled leader (the map tip language of section
   63): the chapter ("IV · Attack and fight", "Advanced I · Group orders") and its step lozenges in the head, the text,
@@ -2839,21 +2846,32 @@ lock at its corner); the **"Paused" plate** (a small stone plate at the bottom c
   on a road two rails with a chevron; on the HUD (the CP gauge, the VP rail, the stance chip) an outline with corner
   lozenges. A baked sprite of the effects layer on the map, an HTML outline on the HUD.
 - **Chapter intro: Sheet.** A stone sheet on the blurred main screen: "Tutorial · Chapter N of V" (or "Advanced · N of
-  II"), the name, one sentence, the row of chapters, the goal list, Start and "Skip the tutorial" (the first entry) or
-  "All chapters"; on the right a crop of the chapter map with the goals ringed and the length.
+  III"), the name, one sentence, the goal list, Start and "All chapters"; on the right a crop of the chapter map with
+  the goals ringed and the length. No row of chapters (round 5: the chapter select shows the way).
 - **Result: Seal.** A stone window over the chapter's last moment, the seal (a lozenge with the chapter numeral; the
-  Advanced seals read "ADV" over theirs), "Complete", three lessons, the next chapter, "Play your first match",
-  "Replay chapter".
-- **Chapter select: Road.** The main road I to V ending at the enemy capital (the first match, open at any time), the
-  Advanced side road forking off the main road after V to its two places ("Advanced · optional"), the walked part in
-  the own colour, a plinth with the selected place, Start, "Play your first match" and "Rules".
+  Advanced seals read "ADV" over theirs), "Complete", three lessons, two buttons: "All chapters" (primary) and
+  "Replay chapter" (secondary; round 4).
+- **Chapter select: Charter** (round 5, section 77.1; it replaces the Road). The client's top bar (the brand is the
+  way back to the main menu) over a stone sheet of seals: the main rule I to V ends in an ivory arrow at the first
+  match's seal (the enemy star in a minium rim, larger than the chapters', open at any time); the Advanced rule drops
+  from it after V and branches to three seals ("Advanced"). A seal is the result screen's seal with the chapter's menu
+  icon (`hud/icons.ts`; Advanced III takes the road sign) and numeral: an empty dashed seat with a lock while closed, a
+  dark seal while open, the Compass on the next one, pressed in ivory with the check lozenge when done; the chosen one
+  carries the plinth's way marker. Under the seals the detail: eyebrow, name, one line, Start (Replay, Play, Play again;
+  "Locked" for a closed one), "First match" (a secondary button with the star) and "Rules".
 - **Hint of the first match: Leader.** The chapter card without the step lozenges, with a close button and "Turn off
   hints".
 
 The marks are ivory ink on a dark casing, never a player or alert colour; motion stops by itself and "Less motion"
 holds it still. Dropped round 1 variants: Tablet, Banner, Lantern, Burin, Plinth, Page, Cards, Toast.
 
-### 77.1 The chapter select, round 1 of its own (#806) **[awaiting the owner's decision]**
+### 77.1 The chapter select, round 1 of its own (#806) **[decided: Charter; owner 2026-11-13]**
+
+The owner chose **Charter** in his third review of the tutorial (2026-11-13). The final version is drawn in
+[`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html) (R.1 to R.3) and specified in `tutorial.md`,
+section 3; section 77 above describes it. Round 1 named its weak point, "the way to the first match reads weaker":
+the final Charter ends the main rule in an arrow at the first match's seal and puts a "First match" button beside
+Start on every chapter. The text below is the record of round 1.
 
 The owner (2026-11-13): the Road is a fine skeleton, its quality must rise, and he wants to see different variants.
 Mockup [`mockups/tutorial-roadmap.html`](mockups/tutorial-roadmap.html): four finished directions and the Road as it

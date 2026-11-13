@@ -3,8 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tutorial chapter select, round 1 (#806)</title>
+<title>Tutorial chapter select, round 1: Charter decided (#806)</title>
 <!--
+  DECIDED (the owner, 2026-11-13, his third review): variant 4, Charter. The final Charter (a third Advanced chapter,
+  "Supply distribution"; the way to the first match made explicit: an arrow into its seal and a "First match" button
+  beside Start) is drawn in tutorial-walkthrough.html, R.1 to R.3, and specified in tutorial.md, section 3. This page
+  stays the record of round 1: the other variants keep its two Advanced chapters.
   The chapter select of the tutorial (#806, docs/design/tutorial.md, section 3 "Chapter select"), round 1: broad,
   clearly different directions, each finished, plus the accepted Road as it is today ("Current"). The explanations,
   the table of variants and the recommendation are in issue #806 and behind "Compare" on this page.
@@ -357,7 +361,7 @@ const VARIANTS = [
   {id: 'campaign', name: 'Campaign'}, {id: 'road', name: 'Road'}, {id: 'march', name: 'March'}, {id: 'charter', name: 'Charter'}, {id: 'current', name: 'Current'},
 ];
 const STAGES = [{id: 'first', name: 'First visit'}, {id: 'mid', name: 'Mid-way'}, {id: 'main', name: 'Main done'}, {id: 'all', name: 'All done'}];
-const state = {v: 'campaign', s: 'first', w: 'd', sel: null, rm: false, g: false, d: false, c: false};
+const state = {v: 'charter', s: 'first', w: 'd', sel: null, rm: false, g: false, d: false, c: false};
 
 const S = (k) => STATES[state.s][k];
 const sel = () => state.sel && ORDER.includes(state.sel) ? state.sel : SEL[state.s];
@@ -955,7 +959,8 @@ const CMP = `<p class="lab">Tutorial chapter select · round 1</p><h2 id="cmpTtl
 <tr><td>Charter</td><td>A sheet of seals: a chapter's seat is empty until it opens, and its seal is pressed in when it is done.</td><td>Ties to the Seal of the result screen; a collection that fills up; strong emblems.</td><td>The way to the first match reads weaker; the emblems must be learned.</td><td>S, about 1 day: the Seal piece and the client's menu icons.</td><td>None: the menu icons of the client.</td></tr>
 <tr><td>Current</td><td>The Road as accepted on 2026-11-13 (walkthrough R.1 to R.3).</td><td>Already specified.</td><td>Flat rings on a blurred screen; no phone layout.</td><td>S.</td><td>None.</td></tr>
 </tbody></table>
-<p class="rec"><b>Recommendation: Campaign.</b> It keeps the Road's skeleton (a road from your capital to theirs, a side road after V) and puts it on the map the player is about to play, so the select screen already teaches the map: your territory, the fog, the enemy capital. Every state is told by the game's own marks, never by colour alone (the check, the lock, the Compass, the dashed ring). The price is one still map view; the risk is legibility, which the plinth and the halo of the names handle at both widths. If a lighter build is wanted first, <b>March</b> is the safe second: the cheapest, the best on a phone and for assistive technology, and it can later take Campaign's map as its picture.</p>`;
+<p class="rec"><b>Decided (the owner, 2026-11-13): Charter.</b> Its weak point, the way to the first match, is made explicit in the final version (an arrow into the first match's seal, a "First match" button beside Start), drawn with the third Advanced chapter in <code>tutorial-walkthrough.html</code>, R.1 to R.3.</p>
+<p class="rec">Round 1 recommendation (not taken): <b>Campaign.</b> It keeps the Road's skeleton (a road from your capital to theirs, a side road after V) and puts it on the map the player is about to play, so the select screen already teaches the map: your territory, the fog, the enemy capital. Every state is told by the game's own marks, never by colour alone (the check, the lock, the Compass, the dashed ring). The price is one still map view; the risk is legibility, which the plinth and the halo of the names handle at both widths. If a lighter build is wanted first, <b>March</b> is the safe second: the cheapest, the best on a phone and for assistive technology, and it can later take Campaign's map as its picture.</p>`;
 
 // =============================================================================================
 // The shell.
@@ -982,7 +987,7 @@ function button(label, pressed, on) {
 }
 function buildBar() {
   const vs = document.getElementById('vs'); vs.innerHTML = '';
-  VARIANTS.forEach((v, i) => vs.append(button(`<span class="n">${i < 4 ? i + 1 : '·'}</span>${esc(v.name)}`, v.id === state.v, () => { state.v = v.id; update(); })));
+  VARIANTS.forEach((v, i) => vs.append(button(`<span class="n">${i < 4 ? i + 1 : '·'}</span>${esc(v.name)}${v.id === 'charter' ? ' · decided' : ''}`, v.id === state.v, () => { state.v = v.id; update(); })));
   const ss = document.getElementById('ss'); ss.innerHTML = '';
   STAGES.forEach((t) => ss.append(button(esc(t.name), t.id === state.s, () => { state.s = t.id; state.sel = null; update(); })));
   const ws = document.getElementById('ws'); ws.innerHTML = '';

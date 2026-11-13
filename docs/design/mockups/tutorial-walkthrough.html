@@ -10,15 +10,19 @@
   card Leader, goal mark Compass, chapter intro Sheet, result Seal, chapter select Road, first-match hint Leader).
   Every chapter frame is the chapter map of tutorial.md section 4 (baked like a pool map), played on the simulation
   (mvp-7, map tempo) by the script of section 4 and drawn by the client at the tick of its beat (temporary dev scenes,
-  not committed); the first-match frames are a narrows match (mvp-7) of a bot against smart_turtle@easy; menu-guest and
-  queue-search are dev screens of the client. Self-contained, no network: the fonts are the client's own (SIL OFL,
+  not committed); the first-match frames are a narrows match (mvp-7) of a bot against smart_turtle@easy; menu-guest is
+  a dev screen of the client. Self-contained, no network: the fonts are the client's own (SIL OFL,
   assets/out-of-game-style/fonts/), frames in assets/tutorial-walk/, the stone and the main screen in assets/tutorial/.
-  Round 3 (the owner's review): every frame shows only the HUD its beat unlocks (tutorial.md 4.8), locked controls in
+  Round 3 (the owner's review): every frame shows only the HUD its beat unlocks (tutorial.md 4.9), locked controls in
   the locked look, and a paused beat the "Paused" plate; the trigger notes give the pause, the allowed commands and the
   unlocks of each beat. Every screen has a stable id (E.1, II.3, IV.F, H4 ...). State in the address:
   #s=<id>&rv=<0|1>&rm=<0|1>.
   Round 4 (the owner's second review): no number the interface already shows or a newcomer does not need, no caption that
   repeats the card or the mark, short natural sentences; the Seal has two buttons, All chapters and Replay chapter.
+  Round 5 (the owner's third review): the chapter select is Charter (mockups/tutorial-roadmap.html, variant 4), with
+  an arrow and a "First match" button as the way to the first match; the Advanced chapter "Supply distribution" (A3,
+  frames drawn anew); the first entry is a popup with "Don't show again"; the intro has no row of chapters; IV.2 is
+  three slides; I.7 rings each terrain in turn; the texts of every chapter and hint after the owner's notes.
   Keys: left and right arrows, Page Up and Page Down.
 -->
 <style>
@@ -245,6 +249,83 @@ body.rv .review{display:grid}
 .paused svg{color:var(--ink)}
 svg.warn{display:inline-block;vertical-align:-1px;margin:0 1px}
 html.rm .modal{animation:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* ===== Round 5: the entry popup (the client's stone dialog, theme/StoneOverlay.svelte) ======= */
+.offer{width:560px}
+.offer p.body{margin-bottom:20px}
+.check{position:relative;display:inline-flex;align-items:center;gap:12px;min-height:44px;margin:0 0 18px;font:500 18px/1.2 var(--font-text);color:var(--ink-soft);cursor:pointer}
+.check input{position:absolute;left:0;top:50%;width:20px;height:20px;margin:-10px 0 0;opacity:0;cursor:pointer}
+.check .box{position:relative;flex:none;width:20px;height:20px;background:#0e0c09;box-shadow:inset 0 0 0 1px var(--ink-soft),inset 0 0 0 3px #0e0c09,inset 0 0 0 4px rgb(236 228 209/22%)}
+.check input:checked+.box{background:var(--ink);box-shadow:inset 0 0 0 1px var(--ink),0 0 0 1px #050403}
+.check input:checked+.box::after{content:'';position:absolute;left:6.5px;top:2.5px;width:5px;height:10px;border:solid var(--stone-bg);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.check input:focus-visible+.box{outline:2px solid var(--ink);outline-offset:3px}
+.check:hover{color:var(--ink)}
+/* ===== Round 5: the slides of a card (IV.2), the marks in turn (I.7) ========================== */
+.plate .row.slides{justify-content:space-between}
+.plate .of{font:500 10.5px/1 var(--font-display);letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim)}
+/* one pass, 2 s a terrain, then all three stay with their labels: the motion stops by itself within 6 s */
+.turn{opacity:0;animation:6s linear 1 both}
+.turn.k0{animation-name:turn0}.turn.k1{animation-name:turn1}.turn.k2{animation-name:turn2}
+@keyframes turn0{0%{opacity:0}2%{opacity:1}31%{opacity:1}33%{opacity:0}97%{opacity:0}100%{opacity:1}}
+@keyframes turn1{0%,33%{opacity:0}35%{opacity:1}64%{opacity:1}66%{opacity:0}97%{opacity:0}100%{opacity:1}}
+@keyframes turn2{0%,66%{opacity:0}68%{opacity:1}100%{opacity:1}}
+.tw{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px;text-decoration-color:var(--ink-dim);animation:6s linear 1 both}
+.tw.k0{animation-name:tw0}.tw.k1{animation-name:tw1}.tw.k2{animation-name:tw2}
+@keyframes tw0{0%{text-decoration-color:transparent}2%,31%{text-decoration-color:#ece4d1}33%,97%{text-decoration-color:transparent}100%{text-decoration-color:#ada38f}}
+@keyframes tw1{0%,33%{text-decoration-color:transparent}35%,64%{text-decoration-color:#ece4d1}66%,97%{text-decoration-color:transparent}100%{text-decoration-color:#ada38f}}
+@keyframes tw2{0%,66%{text-decoration-color:transparent}68%,97%{text-decoration-color:#ece4d1}100%{text-decoration-color:#ada38f}}
+.turnlab{opacity:0;animation:tl 6s linear 1 both;font:500 10.5px var(--font-display);letter-spacing:.2em;text-transform:uppercase;fill:var(--ink);paint-order:stroke;stroke:#060504;stroke-width:3.5px;stroke-linejoin:round}
+@keyframes tl{0%,97%{opacity:0}100%{opacity:1}}
+html.rm .turn,html.rm .tw,html.rm .turnlab{animation:none;opacity:1}
+/* ===== Round 5: the chapter select Charter (mockups/tutorial-roadmap.html, variant 4) ========== */
+.top{position:absolute;inset:0 0 auto;z-index:30;height:64px;display:flex;align-items:center;gap:18px;padding:0 36px;border-bottom:1px solid var(--cut);box-shadow:0 1px 0 var(--line);background:rgb(22 19 15/86%)}
+.top::after{content:'';position:absolute;left:0;right:0;bottom:-5px;height:1px;background:var(--lit-faint)}
+.brand{position:relative;display:inline-flex;align-items:center;gap:12px;border:0;background:none;padding:8px 0;color:var(--ink);font:500 15px/1 var(--font-display);letter-spacing:.34em;text-transform:uppercase;cursor:pointer}
+.brand .back{width:9px;height:9px;border-left:1.5px solid var(--ink-soft);border-bottom:1.5px solid var(--ink-soft);transform:rotate(45deg);margin-right:-2px}
+.brand:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.top h1{position:absolute;left:50%;transform:translateX(-50%);margin:0;font:500 12px/1 var(--font-display);letter-spacing:.36em;text-transform:uppercase;color:var(--ink-dim)}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:18px}
+.qm{width:36px;height:36px;display:grid;place-items:center;border:0;padding:0;background:rgb(236 228 209/7%);color:var(--ink);font:500 16px/1 var(--font-display);box-shadow:inset 0 0 0 1px var(--ink),inset 0 0 0 3px #13110d,inset 0 0 0 4px rgb(236 228 209/35%)}
+.who{display:flex;align-items:baseline;gap:10px;border:0;background:none;padding:6px 0;color:var(--ink)}
+.who b{font:500 13px/1 var(--font-display);letter-spacing:.2em;color:var(--ink)}
+.who i{font:italic 500 16px/1 var(--font-text);color:var(--ink-dim)}
+.charter{position:absolute;left:56px;right:56px;top:90px;bottom:30px;box-shadow:0 30px 60px rgb(0 0 0/50%);animation:charter-in .7s var(--ease-settle) both}
+@keyframes charter-in{from{opacity:0;transform:translateY(16px)}}
+.charter>svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.charter .dt{position:absolute;left:58px;width:660px;top:478px;margin:0;padding-top:22px}
+.charter .dt::before{content:'';position:absolute;left:0;right:0;top:0;height:5px;background:linear-gradient(var(--cut),var(--cut)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 1px/100% 1px no-repeat,linear-gradient(var(--lit-faint),var(--lit-faint)) 0 4px/100% 1px no-repeat}
+.charter .dt h2{margin:6px 0 4px;font:500 32px/1.05 var(--font-display);letter-spacing:.04em}
+.charter .dt .why{margin:0;font:italic 500 19px/1.35 var(--font-text);color:var(--ink-soft);max-width:640px}
+.charter .dt-acts{display:flex;align-items:center;gap:22px;margin-top:18px}
+.charter .btn.tab{height:58px;min-width:200px;font-size:18px}
+.btn.primary[aria-disabled=true]{background:transparent;color:var(--ink-dim);cursor:default;box-shadow:inset 0 0 0 1px var(--rule),inset 0 0 0 4px var(--rule-faint)}
+.btn.fm{height:50px;padding:0 20px 0 16px;gap:10px}
+.btn.fm svg{flex:none}
+.rtag{position:absolute;z-index:4;font:500 10.5px/1 var(--font-display);letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim);pointer-events:none}
+.place{position:absolute;z-index:5;width:var(--hit);height:var(--hit);margin:calc(var(--hit) / -2) 0 0 calc(var(--hit) / -2);padding:0;border:0;border-radius:50%;background:none;cursor:pointer}
+.place:focus-visible{outline:none}
+.place>svg{position:absolute;left:50%;top:50%;width:var(--box);height:var(--box);margin:calc(var(--box) / -2) 0 0 calc(var(--box) / -2);overflow:visible;pointer-events:none}
+.place .lbl{position:absolute;left:50%;top:calc(100% + 10px);transform:translateX(-50%);width:max-content;max-width:var(--lw,150px);text-align:center;pointer-events:none}
+.place.next .lbl{top:calc(100% + 12px)}
+.pl-name{display:block;font:500 12.5px/1.3 var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ink);text-wrap:balance}
+.pl-sub{display:block;margin-top:1px;font:italic 500 15.5px/1.2 var(--font-text);color:var(--ink-soft)}
+.place.locked .pl-name,.place.locked .pl-sub{color:var(--ink-dim)}
+.place:hover .pl-name{color:#fff8e9}
+.fr{opacity:0}
+.place:focus-visible .fr{opacity:1}
+.ring{transition:stroke .2s,stroke-opacity .2s}
+.place:hover .ring{stroke:#fff8e9;stroke-opacity:1}
+.hov{opacity:0;transform:translateY(4px);transition:opacity .25s var(--ease-settle),transform .25s var(--ease-settle);transform-box:fill-box}
+.place:hover .hov{opacity:1;transform:none}
+.place.sel .hov{opacity:0!important}
+.pin{opacity:0}
+.place.sel .pin{opacity:1;animation:pin-in .45s var(--ease-settle) both}
+@keyframes pin-in{from{opacity:0;transform:translateY(-8px)}}
+.seal-face{transition:transform .25s var(--ease-settle);transform-box:fill-box;transform-origin:center}
+.place:hover .seal-face{transform:translateY(-3px)}
+.stamp{animation:stamp .55s var(--ease-settle) both;transform-box:fill-box;transform-origin:center}
+@keyframes stamp{0%{opacity:0;transform:scale(1.28)}60%{opacity:1;transform:scale(.97)}100%{transform:scale(1)}}
+html.rm .charter{animation:none}
 </style>
 </head>
 <body>
@@ -264,6 +345,17 @@ html.rm .modal{animation:none}
   </div>
 </nav>
 <dl class="review" id="review" aria-live="polite"></dl>
+<!-- Shared paints of the Charter seals (mockups/tutorial-roadmap.html). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="gHole" cx=".6" cy=".66" r=".8"><stop offset="0" stop-color="#1c1813"/><stop offset=".8" stop-color="#0d0b09"/><stop offset="1" stop-color="#060504"/></radialGradient>
+    <linearGradient id="gRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#050403"/><stop offset=".55" stop-color="#050403" stop-opacity=".2"/><stop offset="1" stop-color="#d6c8ac" stop-opacity=".42"/></linearGradient>
+    <radialGradient id="gSeal" cx=".38" cy=".3" r=".85"><stop offset="0" stop-color="#2f2920"/><stop offset="1" stop-color="#13110d"/></radialGradient>
+    <linearGradient id="gIvory" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff8e9"/><stop offset=".55" stop-color="#ece4d1"/><stop offset="1" stop-color="#c9bea6"/></linearGradient>
+    <filter id="fSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="fGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+  </defs>
+</svg>
 <main class="view" id="view" aria-label="Screen"><div class="stage" id="stage"><div class="art" id="art"></div></div></main>
 
 <script>
@@ -304,8 +396,8 @@ const CH = {
       crop: [120, 110, 920, 620], marks: [[520, 320], [660, 150]]},
   III: {n: 'III', name: 'Building', road: 'main', beats: 6, len: 'About a minute', start: 'III2', end: 'IIIS',
       why: 'Build with your units’ own charges, recruit, and set the pace of your economy.',
-      goals: ['Build a factory in Millbrook', 'Build a barracks in Fernhill and recruit a unit', 'Switch to Economy'],
-      lesson: ['Units pay what the warehouse lacks.', 'A barracks lets a city recruit.', 'Stances set the pace.'],
+      goals: ['Build a factory in Millbrook', 'Build barracks in Fernhill and recruit a unit', 'Switch to Economy'],
+      lesson: ['Units pay what the warehouse lacks.', 'Barracks let a city recruit.', 'Stances set the pace.'],
       crop: [130, 120, 820, 640], marks: [[420, 220], [430, 500]]},
   IV: {n: 'IV', name: 'Attack and fight', road: 'main', beats: 9, len: 'About a minute and a half', start: 'IV1', end: 'IVS',
       why: 'Gather a bonus in the open, strike with it, then take their capital.', goals: ['Take Ashwood with a planned order', 'Take Stormcrown, their capital'],
@@ -323,8 +415,12 @@ const CH = {
       why: 'Recruits that walk to the front by themselves.', goals: ['Set a rally point on Highhold', 'Get two recruits to Fernhold'],
       lesson: ['Your capital has a barracks.', 'A rally point sends recruits on.', 'Each walk costs CP.'],
       crop: [150, 160, 880, 640], marks: [[170, 350], [620, 330]]},
+  A3: {n: 'III', name: 'Supply distribution', road: 'side', beats: 5, len: 'Under a minute', start: 'A31', end: 'A3S',
+      why: 'See how your charges find the front, then move the front yourself.', goals: ['Take Ashwood and refill its army'],
+      lesson: ['Charges go to the front first.', 'The nearest spare charges answer.', 'An empty army calls first.'],
+      crop: [130, 150, 980, 640], marks: [[610, 290], [840, 250]]},
 };
-const MAIN = ['I', 'II', 'III', 'IV', 'V'], SIDE = ['A1', 'A2'];
+const MAIN = ['I', 'II', 'III', 'IV', 'V'], SIDE = ['A1', 'A2', 'A3'];
 // The places of each map (world units), so a plate never covers a place or its name.
 const PLACES = {
   I: [[190,350],[370,270],[540,160],[560,410],[360,520],[780,290],[760,540],[760,90],[1010,330]],
@@ -334,14 +430,16 @@ const PLACES = {
   V: [[160,350],[410,180],[380,450],[600,560],[680,170],[860,540],[1060,330]],
   A1: [[170,330],[440,260],[230,600],[420,80],[680,330],[800,120],[840,580],[1040,350]],
   A2: [[170,350],[400,200],[620,330],[400,520],[860,260],[1060,380]],
+  A3: [[160,360],[380,220],[370,520],[610,290],[600,560],[840,250],[840,560],[1060,400]],
 };
 const NARROWS = [[100,465],[300,470],[190,300],[300,160],[200,660],[520,110],[420,310],[420,640],[420,800],[620,230],[620,700],[500,470],[640,850],[750,130],[750,465],[762,784],[843,68],[1007,458],[865,219],[898,689],[1062,135],[1069,295],[1097,625],[991,816],[1288,289],[1215,784],[1328,649],[1207,474],[1407,485]];
 const kick = (c) => CH[c].road === 'main' ? `${CH[c].n} · ${CH[c].name}` : `Advanced ${CH[c].n} · ${CH[c].name}`;
 // The tick of every frame (the simulation, tutorial.md section 4 "Verified", or the narrows match of section 5).
-const TICK = {I1: 1, I2: 1, I3: 1, I4: 65, I5: 86, I6: 161, IS: 271, II1: 1, II2: 30, II3: 124, II4: 267, IIS: 328,
+const TICK = {I1: 1, I2: 1, I3: 1, I4: 65, I5: 86, I6: 119, IS: 229, II1: 1, II2: 30, II3: 124, II4: 267, IIS: 328,
   III1: 1, III2: 1, III3: 66, III4: 166, III5: 170, III6: 200, IIIS: 201, IV1: 1, IV3: 1, IV4: 61, IV5: 20, IV6: 198,
   IV7: 258, IV8: 278, IV9: 502, IVF: 138, IVS: 641, V1: 10, V2: 119, V3: 159, V4: 200, V5: 202, V6: 384, VS: 475,
   A11: 1, A12: 1, A13: 2, A14: 141, A15: 221, A21: 1, A22: 1, A23: 32, A2S: 221,
+  A31: 1, A32: 31, A33: 83, A34: 188, A35: 320, A3S: 396,
   H1: 50, H2: 4621, H3: 7490, H4: 4560, H5: 5680};
 // What a chapter shows at its start (tutorial.md 4.8): the HUD of the chapters before it.
 const SHOWN = {
@@ -352,6 +450,7 @@ const SHOWN = {
   V: 'Chapter IV’s without the clock (VP shown; the stance chip, recruiting and planned orders locked).',
   A1: 'Chapter V’s (no clock), plus group selection.',
   A2: 'Chapter V’s (no clock), plus rally points.',
+  A3: 'Chapter V’s (no clock).',
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -364,47 +463,48 @@ const add = (o) => S.push(o);
 const FACT = {x: 256, y: 10, w: 66, h: 34}, CLOCK = {x: 1038, y: 6, w: 94, h: 40}, ALERT = {x: 556, y: 55, w: 168, h: 27};
 
 // ---- Entry and the Road ----
-add({id: 'E.1', g: 'Entry', title: 'Main screen, a new guest', kind: 'menu', img: 'menu-guest',
-  tr: 'A guest without <code>sbf.tutorial</code> presses the main button (Search, Start or Get the link): the intro of chapter I opens instead of the action. An account that already played a match never gets this.',
-  note: 'The main screen is unchanged. Click Search to go on, or “?” for the chapter select (“?” › Tutorial).'});
-add({id: 'E.2', g: 'Entry', title: 'Skip the tutorial', kind: 'skip', img: 'queue-search',
-  tr: '“Skip the tutorial” on the intro of chapter I: <code>skipped = true</code>, then the action the player pressed runs (here the queue). The tutorial stays under “?” › Tutorial.'});
+add({id: 'E.1', g: 'Entry', title: 'First entry: the tutorial offered', kind: 'menu', img: 'menu-guest', popup: true,
+  tr: 'The main screen of an entry, while no chapter is done, <code>firstMatch</code> is false, <code>offerOff</code> is not set and the player has played no match (a guest or an account). Start the tutorial opens the intro of chapter I; Not now (or Esc) closes it; with “Don’t show again” ticked either button sets <code>offerOff</code>.',
+  note: 'Nothing is forced: the main button is never taken over. Without the tick the popup comes back at the next entry.'});
+add({id: 'E.2', g: 'Entry', title: 'Not now: the main screen', kind: 'menu', img: 'menu-guest',
+  tr: 'After Not now: the main screen as it was. The tutorial stays under “?” › Tutorial (click “?”).'});
 add({id: 'R.1', g: 'Entry', title: 'Chapter select, first visit', kind: 'road', stage: 'first',
-  tr: '“?” › Tutorial on the main screen, or “All chapters” on an intro or a result. Main chapters open one after another; the first match is open from the start; the Advanced road opens after V.'});
+  tr: '“?” › Tutorial on the main screen, or “All chapters” on an intro or a result. Main chapters open one after another; the first match is open from the start (its seal, and “First match” beside Start); the Advanced seals open after V. Click a seal to choose it.'});
 add({id: 'R.2', g: 'Entry', title: 'Chapter select, in progress', kind: 'road', stage: 'progress',
-  tr: '<code>done: [units, economy, building]</code>: IV is next, V and the Advanced road are locked.'});
+  tr: '<code>done: [units, economy, building]</code>: IV is next, V and the Advanced seals are locked.'});
 add({id: 'R.3', g: 'Entry', title: 'Chapter select, finished', kind: 'road', stage: 'finished',
-  tr: 'All five chapters and the first match done (<code>firstMatch: true</code>), Advanced I done: Advanced II is next.'});
+  tr: 'All five chapters and the first match done (<code>firstMatch: true</code>), Advanced I done: Advanced II is next, Advanced III open.'});
 add({id: 'R.4', g: 'Entry', title: 'Rules reference', kind: 'rules',
   tr: '“Rules” on the chapter select. Every number from <code>GET /api/ruleset</code> (the main ruleset without map tempo, so the periods of a 49-node map).'});
 
 // ---- Chapter I: Units and movement (tut-move) ----
 const I = 'I';
 add({id: 'I.0', g: I, title: 'Intro (first entry)', kind: 'intro', ch: I,
-  tr: 'The first entry shows “Skip the tutorial”; from the chapter select the same sheet shows “All chapters”.',
+  tr: 'From the popup of the first entry or from the chapter select: the same sheet, Start and “All chapters”.',
   goal: 'Ashford, Elmstead and Fordham are yours (<code>NodeView.owner</code> of each).'});
 add({id: 'I.1', g: I, title: 'Your army', kind: 'card', ch: I, step: 1, img: 'I1', t: n(190, 350), w: 300, pause: 'action',
   say: 'This is your <b>army</b>. The number on the helmet is how many units it has.',
-  act: `${click} Click the helmet to select it`, tr: 'Chapter start.', allow: 'A move of the army from Highhold to Ashford.'});
+  act: `${click} Click on the helmet to select it`, tr: 'Chapter start.', allow: 'A move of the army from Highhold to Ashford.'});
 add({id: 'I.2', g: I, title: 'Order a march', kind: 'card', ch: I, step: 2, img: 'I2', t: n(370, 270), w: 310, pause: 'action',
   say: 'To march, click a <b>city</b> or a <b>province</b>.',
-  act: `${click} Click Ashford`, tr: 'The group is selected (UI, client only: the pause and the locks of I.1 stay).', allow: 'As I.1.'});
+  act: `${click} Click on Ashford`, tr: 'The group is selected (UI, client only: the pause and the locks of I.1 stay).', allow: 'As I.1.'});
 add({id: 'I.3', g: I, title: 'Capacity', kind: 'card', ch: I, step: 3, img: 'I3', t: n(370, 270, 30), w: 340, pause: 'continue',
-  say: 'A place holds only so many units: its <b>capacity</b>, one segment of its ring per unit.',
+  say: 'Each city or province has its own <b>capacity</b>: how many units fit there, shown by the segmented ring around it.',
   act: '', tr: 'The move to Ashford accepted (tick 1).', allow: 'None.'});
-add({id: 'I.4', g: I, title: 'A capture costs a charge', kind: 'card', ch: I, step: 4, img: 'I4', t: [n(370, 270), n(540, 160)], w: 320, pause: 'action',
+add({id: 'I.4', g: I, title: 'A capture costs a charge', kind: 'card', ch: I, step: 4, img: 'I4', t: n(370, 270), w: 320, pause: 'continue',
   say: 'Every capture costs a <b>charge</b>. The helmet’s fill shows your charges, and it just dropped.',
-  act: `${click} March on to Elmstead`, tr: '<code>node_captured</code> Ashford by you.', allow: 'A move from Ashford to Elmstead.'});
-add({id: 'I.5', g: I, title: 'Cancel an order', kind: 'card', ch: I, step: 5, img: 'I5', t: n(426, 234, 22), w: 320, pause: 'action',
-  say: `Changed your mind? Press ${k('X')} to cancel the order.`,
-  act: 'Then send the army to Elmstead again', tr: '2 s after the move to Elmstead was accepted (the army a third of the way). <code>X</code> is the player’s <code>cancel</code> key: with nothing selected it undoes the last order, with the marching group selected it cancels that order; both turn the army back.',
-  allow: 'Cancel that order (once), then a move from Ashford to Elmstead. The cancel resumes the simulation.'});
+  act: '', tr: '<code>node_captured</code> Ashford by you (tick 65).', allow: 'None.'});
+add({id: 'I.5', g: I, title: 'Next: Elmstead, and the cancel', kind: 'card', ch: I, step: 5, img: 'I4', t: n(540, 160), w: 330, pause: 'action',
+  say: `Next, take <b>Elmstead</b>. If you change your mind on the way, press ${k('X')}: the army turns back.`,
+  act: '', tr: 'Continue on I.4 (tick 65). The cancel is offered, never asked for (round 5). <code>X</code> is the player’s <code>cancel</code> key: with nothing selected it undoes the last order, with the marching group selected it cancels that order; both turn the army back. The card stays until Elmstead is taken.',
+  allow: 'A move from Ashford to Elmstead; the cancel of that order (once); after a cancel, the move again. The move resumes the simulation.'});
 add({id: 'I.6', g: I, title: 'What your groups see', kind: 'card', ch: I, step: 6, img: 'I6', t: n(780, 290), w: 330, pause: 'continue',
   say: 'You see only the places next to your groups. From this forest, Kestrel shows <b>a range</b> of units, Brackenfold only <b>that someone is there</b>.',
   act: '', tr: '<code>node_captured</code> Elmstead by you.', allow: 'None.'});
-add({id: 'I.7', g: I, title: 'Terrain and speed', kind: 'card', ch: I, step: 7, img: 'I6', t: n(560, 410), w: 320, pause: 'action',
-  say: '<b>Terrain</b> sets your speed: faster on plains, slower in mountains.',
-  act: `${click} Now take Fordham`, tr: 'Continue on I.6.', allow: 'A move from Elmstead to Fordham.', ui: `The terrain mode (${k('T')}).`});
+add({id: 'I.7', g: I, title: 'Terrain and speed', kind: 'card', ch: I, step: 7, img: 'I6', t: n(560, 410), w: 340, pause: 'action',
+  turns: [['plains', [[370, 270], [560, 410], [780, 290]]], ['forest', [[540, 160], [360, 520], [760, 540]]], ['mountains', [[190, 350], [760, 90], [1010, 330]]]],
+  say: '<b>Terrain</b> sets your speed: fast on <b class="tw k0">plains</b>, normal in <b class="tw k1">forest</b>, slow in <b class="tw k2">mountains</b>.',
+  act: `${click} Now take Fordham`, tr: 'Continue on I.6. The places of each terrain are ringed in turn (2 s each, one pass), the word of the card underlined with them; then all three stay, each with its label (the motion stops within 6 s). With Less motion all three at once.', allow: 'A move from Elmstead to Fordham.', ui: `The terrain mode (${k('T')}).`});
 add({id: 'I.L', g: I, title: 'Leave the chapter', kind: 'dialog', ch: I, img: 'I5',
   tr: 'The exit button of the HUD (or <code>Esc</code> twice) in a chapter. Leaving goes to the chapter select; nothing is lost, a chapter always restarts from its start.'});
 add({id: 'I.S', g: I, title: 'Result', kind: 'seal', ch: I, tr: 'The goal holds: the server ends the chapter (a <code>Forfeit</code> of the scripted side), the client shows the Seal over the last frame: All chapters (primary) and Replay chapter (secondary), nothing else; the player goes on from the chapter select.'});
@@ -413,13 +513,13 @@ add({id: 'I.S', g: I, title: 'Result', kind: 'seal', ch: I, tr: 'The goal holds:
 const II = 'II';
 add({id: 'II.0', g: II, title: 'Intro', kind: 'intro', ch: II, goal: '<code>node_captured</code> Coldwell by you after II.4.'});
 add({id: 'II.1', g: II, title: 'Command points', kind: 'card', ch: II, step: 1, img: 'II1', t: CP, w: 350, pause: 'continue',
-  say: 'These are your <b>command points</b>, CP. Every order costs some, and they refill on their own.',
+  say: 'These are your <b>command points</b> (CP). Every order costs some, and they refill over time.',
   act: '', tr: 'Chapter start.', allow: 'None.', ui: 'The CP gauge, the notices.'});
 add({id: 'II.2', g: II, title: 'The capital feeds the front', kind: 'card', ch: II, step: 2, img: 'II2', t: road(170, 360, 520, 320), w: 340, pause: 'continue',
-  say: 'Your capital makes <b>charges</b>, and your roads carry them to the front on their own.',
+  say: 'Your capital makes <b>charges</b>, and they are distributed along your roads automatically.',
   act: '', tr: '3 s after Continue on II.1 (the first charges on the roads).', allow: 'None.', ui: 'Charges on roads.'});
 add({id: 'II.3', g: II, title: 'Warehouses', kind: 'card', ch: II, step: 3, img: 'II3', t: n(660, 150), w: 340, pause: 'continue',
-  say: `Each place stores charges in its <b>warehouse</b>, the diamonds under it. Units there fill up from it; ${WARN} means they are still waiting.`,
+  say: `Each city or province stores <b>charges</b>, shown as the diamonds under it. Units there take them to recharge; when there are none to take, you see ${WARN}.`,
   act: '', tr: 'The first own <code>packet_delivered</code> at Westmarch.', allow: 'None.', ui: 'Warehouses (the diamonds, the amber sign).'});
 add({id: 'II.4', g: II, title: 'Cut off', kind: 'card', ch: II, step: 4, img: 'II4', t: [n(660, 150), n(520, 320)], w: 350, pause: 'action',
   say: 'The enemy took Coldwell, so <b>Westmarch is cut off</b>. No charges reach it, and soon it starts losing them.',
@@ -433,22 +533,22 @@ add({id: 'III.0', g: III, title: 'Intro', kind: 'intro', ch: III,
   goal: '<code>factory_built</code> Millbrook, <code>barracks_built</code> Fernhill, a <code>recruited</code> and a <code>stance_changed</code>.'});
 add({id: 'III.1', g: III, title: 'Build a factory', kind: 'card', ch: III, step: 1, img: 'III1', t: {x: 510, y: 317, r: 16}, w: 320, pause: 'action', avoid: [[378, 210, 172, 172]],
   say: 'A <b>factory</b> makes charges, like your capital.',
-  act: `${click} Click Millbrook, then Factory`, tr: 'Chapter start. The frame has Millbrook’s menu open: Factory allowed, Barracks and Fortify road locked.',
+  act: `${click} Click on Millbrook, then choose Factory`, tr: 'Chapter start. The frame has Millbrook’s menu open: Factory allowed, Barracks and Fortify road locked.',
   allow: 'A factory in Millbrook.', ui: 'Buildings (the marks, the menu’s Factory and Barracks).'});
 add({id: 'III.2', g: III, title: 'Units pay', kind: 'card', ch: III, step: 2, img: 'III2', t: n(420, 220), w: 340, pause: 'continue',
-  say: 'The warehouse was empty, so <b>the units there paid</b> with their own charges. Your roads will refill them.',
+  say: 'The warehouse was empty, so <b>the units there paid</b> with their own charges, which refill over time.',
   act: '', tr: 'The first own <code>build_paid</code> with <code>units &gt; 0</code> (tick 1).', allow: 'None.'});
 add({id: 'III.3', g: III, title: 'Build a barracks', kind: 'card', ch: III, step: 3, img: 'III3', t: {x: 474, y: 511, r: 16}, w: 330, pause: 'action', avoid: [[389, 488, 172, 172]],
-  say: 'A <b>barracks</b> lets a city recruit new units. It is paid the same way.',
-  act: `${click} Click Fernhill, then Barracks`, tr: 'The factory’s <code>build_paid</code> with <code>owed = 0</code> (tick 66).', allow: 'A barracks in Fernhill.'});
+  say: 'With <b>barracks</b>, a city can recruit new units.',
+  act: `${click} Click on Fernhill, then choose Barracks`, tr: 'The factory’s <code>build_paid</code> with <code>owed = 0</code> (tick 66).', allow: 'A barracks in Fernhill.'});
 add({id: 'III.4', g: III, title: 'The factory works', kind: 'card', ch: III, step: 4, img: 'III4', t: [n(420, 220), FACT], w: 340, pause: 'continue',
-  say: 'Your factory is working. This counter shows your factories and the limit.',
+  say: 'Nice job! Your <b>factory</b> is built and now makes charges. The counter here shows how many factories you have, and the maximum.',
   act: '', tr: '<code>factory_built</code> (tick 166).', allow: 'None.', ui: 'The factory counter.'});
 add({id: 'III.5', g: III, title: 'Recruit', kind: 'card', ch: III, step: 5, img: 'III5', t: {x: 473, y: 501, r: 16}, w: 330, pause: 'action', avoid: [[389, 488, 172, 172]],
-  say: 'Fernhill can recruit now. New units arrive empty and fill up.',
-  act: `Select Fernhill and press ${k('R')}`, tr: '<code>barracks_built</code> (tick 170).', allow: 'A recruit in Fernhill (once).', ui: 'Recruiting (the menu item, the key, the queue marks).'});
+  say: 'Fernhill can recruit now. New units start without charges and fill up over time.',
+  act: `${click} Click on Fernhill and press ${k('R')}`, tr: '<code>barracks_built</code> (tick 170).', allow: 'A recruit in Fernhill (once).', ui: 'Recruiting (the menu item, the key, the queue marks).'});
 add({id: 'III.6', g: III, title: 'Stances', kind: 'card', ch: III, step: 6, img: 'III6', t: STANCE, w: 360, pause: 'action',
-  say: 'Your <b>stance</b> sets the pace: <b>Economy</b> for more charges, <b>War</b> for more CP. You start in <b>Balance</b>.',
+  say: 'Your <b>stance</b> sets the pace: <b>Economy</b> for more charges, <b>War</b> for more CP, and you start each game in <b>Balance</b>.',
   act: `Press ${k('Q')} and pick Economy`, tr: '<code>recruited</code> (tick 200).', allow: 'The stance Economy.', ui: 'The stance chip and its menu.'});
 add({id: 'III.S', g: III, title: 'Result', kind: 'seal', ch: III});
 
@@ -456,36 +556,42 @@ add({id: 'III.S', g: III, title: 'Result', kind: 'seal', ch: III});
 const IV = 'IV';
 add({id: 'IV.0', g: IV, title: 'Intro', kind: 'intro', ch: IV, goal: '<code>match_ended</code>, winner you, <code>reason = capital</code> (the chapter ends by itself).'});
 add({id: 'IV.1', g: IV, title: 'A charge is a shot', kind: 'card', ch: IV, step: 1, img: 'IV1', t: n(420, 350), w: 330, pause: 'continue',
-  say: 'In a fight, every charge is a <b>shot</b>. Two shots cancel out; a shot that meets none kills a unit.',
+  say: 'In a fight, every charge your units hold is a <b>shot</b>. Two shots from opposite sides cancel out; a shot that meets none kills a unit.',
   act: '', tr: 'Chapter start.', allow: 'None.'});
-add({id: 'IV.2', g: IV, title: 'Not enough', kind: 'card', ch: IV, step: 2, img: 'IV1', t: n(680, 350), w: 330, pause: 'action',
-  say: 'Your charges are not enough to take <b>Ashwood</b> with an ordinary attack.',
-  act: `${click} Select your group in Fernhold`, tr: 'Continue on IV.1. Ashwood shows the range “1-2” from Fernhold’s forest.',
+add({id: 'IV.2', g: IV, title: 'The math, 1 of 3', kind: 'card', ch: IV, step: 2, slide: [1, 3, 'IV.2b'], img: 'IV1', t: n(680, 350), w: 330, pause: 'action',
+  say: 'Ashwood shows <b>1-2</b>: the enemy may have up to two units there. Count on two.',
+  act: '', tr: 'Continue on IV.1. Ashwood shows the range “1-2” from Fernhold’s forest. Three slides (round 5): Next pages them in the client; the pause and the allowed commands hold for all three.',
   allow: 'A move from Fernhold to Ashwood, ordinary or planned (an ordinary one leads to IV.F, the failure kept as a lesson).'});
+add({id: 'IV.2b', g: IV, title: 'The math, 2 of 3', kind: 'card', ch: IV, step: 2, slide: [2, 3, 'IV.2c'], img: 'IV1', t: [n(420, 350), n(680, 350)], w: 340, pause: 'action',
+  say: 'Your 3 units hold 3 charges. Attack now, and two of your shots cancel their two; your last shot kills one unit.',
+  act: '', tr: 'Slide 2 of IV.2 (DEC-07 rules 1 to 3: two rounds cancel, the third shot kills).', allow: 'As IV.2.'});
+add({id: 'IV.2c', g: IV, title: 'The math, 3 of 3', kind: 'card', ch: IV, step: 2, slide: [3, 3, null], img: 'IV1', t: n(680, 350), w: 340, pause: 'action',
+  say: 'One defender is left, and you have <b>no charge left</b> to take the city. Don’t worry if this takes a while to sink in: it gets easier with every match.',
+  act: `${click} Click on your group in Fernhold`, tr: 'Slide 3 of IV.2. Against one defender the ordinary attack would win (one shot cancels, one kills, the third pays the capture), so the math is done for the most the range allows (Q15).', allow: 'As IV.2.'});
 add({id: 'IV.3', g: IV, title: 'Plan an attack', kind: 'card', ch: IV, step: 3, img: 'IV3', t: n(680, 350), w: 350, pause: 'action',
-  say: 'A <b>planned order</b> waits and gathers <b>bonus shots</b>, and they fire first.',
+  say: 'To solve this, use a <b>planned order</b>: it gathers <b>bonus shots</b>, which fight like extra charges.',
   act: `Hold ${k('E')} over Ashwood, turn the wheel to +3, then ${click} click`, tr: 'The group is selected (UI). The frame holds <code>E</code> over Ashwood.', allow: 'As IV.2.', ui: 'Planned orders (E, the wheel, the bonus pill).'});
 add({id: 'IV.4', g: IV, title: 'Gathering the bonus', kind: 'card', ch: IV, step: 4, img: 'IV4', t: n(420, 350), w: 330,
   say: 'Your group gathers its bonus from the warehouse here, then sets off on its own.',
   act: '', tr: 'Your planned order accepted (tick 1; the frame at 61, +1 gathered). No pause: the bonus grows.', allow: 'None.'});
 add({id: 'IV.5', g: IV, title: 'An enemy plan', kind: 'card', ch: IV, step: 5, img: 'IV5', t: road(790, 140, 560, 110), w: 340, pause: 'continue',
-  say: 'That arrow is an enemy <b>plan</b>. You see where it goes, never how strong it is, and they see yours the same way.',
+  say: 'That arrow is an enemy <b>plan</b>. You see where it goes, but never how strong it is, and they see yours the same way.',
   act: '', tr: 'The enemy’s planned intent appears (sent at tick 20).', allow: 'None.'});
 add({id: 'IV.6', g: IV, title: 'Rounds', kind: 'card', ch: IV, step: 6, img: 'IV6', t: n(680, 350, 30), w: 330, pause: 'continue',
   say: 'A fight runs in <b>rounds</b>: each side fires one shot a round, <b>bonus shots first</b>.',
   act: '', tr: '<code>fight_started</code> at Ashwood (contact at tick 198).', allow: 'None.'});
 add({id: 'IV.7', g: IV, title: 'No retreat', kind: 'card', ch: IV, step: 7, img: 'IV7', t: n(680, 350, 30), w: 320, pause: 'continue',
-  say: '<b>No retreat</b>: a group in a fight stays until it ends. Others can still join it.',
+  say: 'Be careful: once in a fight, you <b>cannot leave</b> until it ends, but reinforcements can join to help.',
   act: '', tr: 'The first <code>fight_round</code> at Ashwood with a loss (tick 258: a bonus shot kills).', allow: 'None.'});
-add({id: 'IV.8', g: IV, title: 'How to win', kind: 'card', ch: IV, step: 8, img: 'IV8', t: [VPRAIL, CLOCK, n(1010, 360)], w: 360, pause: 'continue',
-  say: 'Ashwood is yours. <b>Take their capital</b> and you win. If time runs out, the most <b>VP</b> wins. Your cities earn them.',
+add({id: 'IV.8', g: IV, title: 'How to win', kind: 'card', ch: IV, step: 8, img: 'IV8', t: [VPRAIL, CLOCK, n(1010, 360), {x: 727, y: 398, w: 20, h: 20}], w: 380, pause: 'continue',
+  say: 'Ashwood is yours, but one battle does not win the war. Take their <b>capital</b>, or hold the most <b>victory points</b> (VP) when time runs out. Each city earns VP, shown by the gold number at its upper right.',
   act: 'Let your group refill', tr: '<code>node_captured</code> Ashwood by you (tick 278; the group 3/1). The only beat of the tutorial with the match clock.',
   allow: 'None.', ui: 'VP (the rail, the badges of cities); the match clock, for this beat only.'});
 add({id: 'IV.9', g: IV, title: 'Take their capital', kind: 'card', ch: IV, step: 9, img: 'IV9', t: n(1010, 360), w: 300, pause: 'action',
   say: 'Your group is full again. Take <b>Stormcrown</b>, their capital.',
   act: '', tr: 'Your group in Ashwood is full (<code>charged = units</code>, tick 502).', allow: 'A move from Ashwood to Stormcrown.', ui: 'The clock is hidden again.'});
 add({id: 'IV.F', g: IV, title: 'Failure: an ordinary attack', kind: 'card', ch: IV, step: 0, fail: true, img: 'IVF', t: n(420, 350), w: 340, pause: 'continue',
-  say: 'Your charges ran out before Ashwood fell, so the group turned back. Let it refill, then <b>plan</b> the attack.',
+  say: 'As the math showed, your charges ran out before Ashwood fell, so the group turned back. Let it refill, then use a <b>planned order</b>.',
   act: '', tr: '<code>fight_ended</code> at Ashwood lost by you: the ordinary order of IV.2 (contact at 78, lost at 138; one defender died). The one failure kept: the bounce is the lesson of the plan.',
   allow: 'A planned move from Fernhold to Ashwood only (its acceptance leads to IV.4).'});
 add({id: 'IV.S', g: IV, title: 'Result', kind: 'seal', ch: IV});
@@ -498,20 +604,20 @@ add({id: 'V.1', g: V, title: 'An attack on Highcrag', kind: 'card', ch: V, step:
   say: 'The enemy is coming for <b>Highcrag</b>, up in the <b>mountains</b>.',
   act: '', tr: 'An enemy group on the road toward Highcrag (the view; it left Ridgeway at tick 10).', allow: 'None.'});
 add({id: 'V.2', g: V, title: 'Terrain in a fight', kind: 'card', ch: V, step: 2, img: 'V2', t: n(410, 180, 30), w: 350, pause: 'continue',
-  say: '<b>Mountains</b> give the defender a bonus shot. <b>Plains</b> cost the defender a charge as the fight starts. The chevron by a helmet shows which.',
+  say: '<b>Mountains</b> give the defender a bonus shot; <b>plains</b> take a charge from the defender when the fight starts. The chevron on the helmet shows it: up helps, down hurts.',
   act: '', tr: '<code>fight_round</code> at Highcrag with <code>virtual_0 &gt; 0</code> (tick 119).', allow: 'None.', ui: 'The terrain chevrons of defenders.'});
 add({id: 'V.3', g: V, title: 'Held', kind: 'card', ch: V, step: 3, img: 'V3', t: n(410, 180), w: 310,
   say: 'Highcrag held against a bigger army, and nobody died.',
   act: '', tr: '<code>fight_ended</code> at Highcrag, not captured (tick 159).', allow: 'None.'});
 add({id: 'V.4', g: V, title: 'A road fort', kind: 'card', ch: V, step: 4, img: 'V4', t: [{x: 596, y: 637, r: 16}, ALERT], w: 360, pause: 'action', avoid: [[566, 558, 148, 148]],
-  say: 'A planned attack is coming for <b>Flatford</b>, on the plains. A <b>road fort</b> makes enemies crossing it lose charges.',
-  act: `Select Flatford, press ${k('B')}, and fortify the road from Eastfield`, tr: 'The enemy’s planned intent to Flatford appears (tick 200). The frame has Flatford’s menu open: Fortify road allowed, the rest locked.',
+  say: 'A planned attack is coming for <b>Flatford</b>, on the plains. A <b>road fort</b> takes charges from enemies crossing it.',
+  act: `${click} Click on Flatford, choose Fortify road, then click on the road to Eastfield`, tr: 'The enemy’s planned intent to Flatford appears (tick 200). The frame has Flatford’s menu open: Fortify road allowed, the rest locked.',
   allow: 'A fort on Flatford’s road to Eastfield.', ui: 'The warnings at the top; road forts (B, the menu item, the marks).'});
 add({id: 'V.5', g: V, title: 'Send help', kind: 'card', ch: V, step: 5, img: 'V5', t: n(380, 450), w: 330, pause: 'action',
   say: 'Now send Millbrook’s group to help Flatford.',
   act: '', tr: 'Your <code>FortifyRoad</code> on that road accepted (tick 202).', allow: 'A move from Millbrook to Flatford.'});
 add({id: 'V.6', g: V, title: 'The toll', kind: 'card', ch: V, step: 6, img: 'V6', t: n(600, 560), w: 330,
-  say: 'The fort took its toll. With help in Flatford, the charge the plains take hardly matters.',
+  say: 'The fort took its toll. With Millbrook’s group there, Flatford can afford the charge the plains take.',
   act: '', tr: 'Your <code>toll_taken</code> (tick 384: 2 charges from 4 units).', allow: 'None.'});
 add({id: 'V.S', g: V, title: 'Result', kind: 'seal', ch: V});
 
@@ -527,21 +633,21 @@ add({id: 'H3', g: FM, title: 'Full warehouses', kind: 'hint', img: 'H3', t: STAN
   say: 'Your warehouses are full, so new charges are lost. Spend them, or switch to <b>War</b>.',
   key: '', tr: 'The first own <code>charge_burned</code> (this frame) or <code>cp_burned</code>; the CP version: “Your CP are at the cap, so new ones are lost. Spend them, or switch to Economy.”, pointing at the CP gauge.'});
 add({id: 'H4', g: FM, title: 'Strike together', kind: 'hint', img: 'H4', t: nn(1328, 649, 30), w: 300,
-  say: 'Your groups arrived one by one. A <b>group order</b> brings them in together (Advanced chapter I).',
-  key: `${k('Shift')} click to select several`, tr: 'Advanced I not done, and an own group joins a fight that already had a round (<code>PlayerView.fights[].groups</code> grows while <code>last_round</code> is set).'});
+  say: 'Your groups arrived one by one. A <b>group order</b> brings them in together (Advanced I).',
+  key: `${k('Shift')}-click to select several`, tr: 'Advanced I not done, and an own group joins a fight that already had a round (<code>PlayerView.fights[].groups</code> grows while <code>last_round</code> is set).'});
 add({id: 'H5', g: FM, title: 'Rally point', kind: 'hint', img: 'H5', t: nn(750, 465, 30), w: 320,
-  say: 'A <b>rally point</b> sends recruits to the front by themselves (Advanced chapter II).',
+  say: 'A <b>rally point</b> sends recruits to the front by themselves (Advanced II).',
   key: `Rally point ${k('P')}`, tr: 'Advanced II not done, and the third own <code>recruited</code> in a city without <code>rally_point</code>.'});
 
 // ---- Advanced I: Group orders (tut-group) ----
 const A1 = 'A1';
 add({id: 'A1.0', g: 'Advanced I', title: 'Intro', kind: 'intro', ch: A1, goal: '<code>node_captured</code> Ashwood by you.'});
 add({id: 'A1.1', g: 'Advanced I', title: 'Two groups', kind: 'card', ch: A1, step: 1, img: 'A11', t: [n(440, 260), n(230, 600)], w: 330, pause: 'action',
-  say: 'Sent one by one, these groups would arrive one by one and fight alone.',
-  act: `${click} Click one of them`, tr: 'Chapter start.', allow: 'One group order of both groups to Ashwood (single moves are locked, so they never arrive one by one).', ui: 'Group selection (Shift).'});
+  say: 'Sent one at a time, these groups would arrive apart and fight alone.',
+  act: `${click} Click on one of them`, tr: 'Chapter start.', allow: 'One group order of both groups to Ashwood (single moves are locked, so they never arrive one by one).', ui: 'Group selection (Shift).'});
 add({id: 'A1.2', g: 'Advanced I', title: 'Select both', kind: 'card', ch: A1, step: 2, img: 'A12', t: n(680, 330), w: 350, pause: 'action',
   say: 'One <b>group order</b> sends both, and they arrive together.',
-  act: `${k('Shift')}-click the other group, then ${click} click Ashwood`, tr: 'A group is selected (UI).', allow: 'As A1.1.'});
+  act: `${k('Shift')}-click the other group, then ${click} click on Ashwood`, tr: 'A group is selected (UI).', allow: 'As A1.1.'});
 add({id: 'A1.3', g: 'Advanced I', title: 'One arrival', kind: 'card', ch: A1, step: 3, img: 'A13', t: n(440, 260), w: 330,
   say: '<b>Fernhold waits</b> so both arrive together. The hourglass shows the wait.',
   act: '', tr: 'Your <code>GroupMove</code> accepted (<code>kind = attack</code>, tick 1).', allow: 'None.'});
@@ -557,7 +663,7 @@ const A2 = 'A2';
 add({id: 'A2.0', g: 'Advanced II', title: 'Intro', kind: 'intro', ch: A2, goal: 'Two own groups of <code>rally_walk_paid</code> arrived at Fernhold (<code>group_arrived</code>, then <code>groups_merged</code> there).'});
 add({id: 'A2.1', g: 'Advanced II', title: 'Set a rally point', kind: 'card', ch: A2, step: 1, img: 'A21', t: {x: 268, y: 435, r: 16}, w: 340, pause: 'action', avoid: [[131, 340, 172, 172]],
   say: 'Give your capital a <b>rally point</b>, and its recruits walk to the front by themselves.',
-  act: `Select Highhold, press ${k('P')}, then ${click} click Fernhold`, tr: 'Chapter start. The frame has Highhold’s menu open: Rally point allowed, the rest locked.',
+  act: `${click} Click on Highhold, choose Rally point, then click on Fernhold`, tr: 'Chapter start. The frame has Highhold’s menu open: Rally point allowed, the rest locked.',
   allow: 'A rally point of Highhold on Fernhold.', ui: 'Rally points (P, the menu item).'});
 add({id: 'A2.2', g: 'Advanced II', title: 'Recruit two', kind: 'card', ch: A2, step: 2, img: 'A22', t: n(170, 350), w: 340, pause: 'action',
   say: 'Highhold’s new units will now walk to Fernhold. Each walk costs a little CP.',
@@ -566,6 +672,26 @@ add({id: 'A2.3', g: 'Advanced II', title: 'On their way', kind: 'card', ch: A2, 
   say: 'Your first recruit is walking to Fernhold. The second will follow.',
   act: '', tr: 'The first own <code>rally_walk_paid</code> (ticks 32 and 62).', allow: 'None.'});
 add({id: 'A2.S', g: 'Advanced II', title: 'Result', kind: 'seal', ch: A2});
+
+// ---- Advanced III: Supply distribution (tut-flow, round 5) ----
+const A3 = 'A3', G3 = 'Advanced III';
+add({id: 'A3.0', g: G3, title: 'Intro', kind: 'intro', ch: A3, goal: 'Your group in Ashwood is full (<code>charged = units</code>, tick 396).'});
+add({id: 'A3.1', g: G3, title: 'The front', kind: 'card', ch: A3, step: 1, img: 'A31', t: [n(610, 290), n(600, 560)], w: 330, pause: 'continue',
+  say: 'Your charges go to the <b>front</b> first: your places that touch the enemy.',
+  act: '', tr: 'Chapter start. Every warehouse but the capital’s starts empty.', allow: 'None.'});
+add({id: 'A3.2', g: G3, title: 'The nearest answers', kind: 'card', ch: A3, step: 2, img: 'A32', t: road(160, 360, 380, 220), w: 340, pause: 'continue',
+  say: 'Each place with room calls the <b>nearest spare charges</b> behind it. A road carries one at a time.',
+  act: '', tr: '3 s after Continue on A3.1 (tick 31): the capital answered Fernhold’s and Lowfield’s calls at 10, 20 and 30, one charge per road each time; the amber signs mark the empty front.', allow: 'None.'});
+add({id: 'A3.3', g: G3, title: 'A road lost', kind: 'card', ch: A3, step: 3, img: 'A33', t: [n(600, 560), n(370, 520)], w: 340, pause: 'continue',
+  say: 'The enemy took <b>Lowfield</b>, and the charge on its road was lost. <b>Coldwell</b> touches the enemy now, so it is your front there.',
+  act: '', tr: 'Your <code>packet_lost</code> (tick 83: the raid from Gullmoor, sent at 20, took Lowfield while Coldwell’s charge was on the way).', allow: 'None.'});
+add({id: 'A3.4', g: G3, title: 'Move the front', kind: 'card', ch: A3, step: 4, img: 'A34', t: n(840, 250), w: 310, pause: 'action',
+  say: 'Fernhold is full. Now move the front: take <b>Ashwood</b>.',
+  act: '', tr: 'Fernhold’s warehouse is full (tick 188).', allow: 'A move from Fernhold to Ashwood.'});
+add({id: 'A3.5', g: G3, title: 'An empty army calls first', kind: 'card', ch: A3, step: 5, img: 'A35', t: [n(840, 250), road(610, 290, 840, 250)], w: 340,
+  say: 'Ashwood is your new front. Its <b>empty army calls first</b>, and Fernhold passes its charges on.',
+  act: '', tr: 'Your first <code>packet_sent</code> to Ashwood (tick 300; Ashwood taken at 298, the group 3/0). No pause: the charges it talks about move while it shows (the frame at 320: two on the road from Fernhold, one from Millbrook refilling Fernhold).', allow: 'None.'});
+add({id: 'A3.S', g: G3, title: 'Result', kind: 'seal', ch: A3});
 // ---------------------------------------------------------------------------------------------
 // Drawing helpers (from mockups/tutorial.html).
 // ---------------------------------------------------------------------------------------------
@@ -587,6 +713,20 @@ function markSvg(ts) {
   let s = '<svg class="marks" viewBox="0 0 1280 800" aria-hidden="true"><defs>' +
     '<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter></defs>';
   for (const t of [].concat(ts)) s += 'x1' in t ? roadMark(t) : 'w' in t ? boxMark(t) : compass(t);
+  return s + '</svg>';
+}
+// Marks in turn (round 5, I.7): the places of one terrain ringed at a time, each group for 2 s, twice.
+function turnsSvg(turns) {
+  let s = '<svg class="marks" viewBox="0 0 1280 800" aria-hidden="true">';
+  turns.forEach(([word, pts], i) => {
+    s += `<g class="turn k${i}">`;
+    for (const [x0, y0] of pts) {
+      const x = W(x0), y = H(y0);
+      s += `<circle cx="${x}" cy="${y}" r="31" fill="none" stroke="#060504" stroke-width="4.5"/><circle cx="${x}" cy="${y}" r="31" fill="none" stroke="#ece4d1" stroke-width="1.8" stroke-dasharray="${i === 0 ? 'none' : i === 1 ? '7 4' : '2 4'}"/>`;
+    }
+    const [lx, ly] = pts[0];
+    s += `<text class="turnlab" x="${W(lx)}" y="${H(ly) - 40}" text-anchor="middle">${word}</text></g>`;
+  });
   return s + '</svg>';
 }
 function compass(t) {
@@ -708,13 +848,6 @@ function cropHtml(c, w, h) {
   }
   return s + '</svg>';
 }
-function chapterRow(now) {
-  const one = (c) => `<span class="k ${c === now ? 'now' : ''}"><span class="lz ${c === now ? 'now' : ''}"></span>${CH[c].road === 'main' ? CH[c].n : 'Adv. ' + CH[c].n}</span>`;
-  const list = CH[now].road === 'main' ? MAIN : SIDE;
-  let s = '<div class="chrow" aria-label="Chapters">' + list.map(one).join('<span class="rl"></span>');
-  if (CH[now].road === 'main') s += '<span class="rl"></span><span class="k"><span class="lz"></span>First match</span>';
-  return s + '</div>';
-}
 function sealSvg(c) {
   const main = CH[c].road === 'main', nn2 = CH[c].n;
   const text = main
@@ -744,74 +877,142 @@ function lockIcon(x, y) {
 const go = (id) => `data-go="${id}"`;
 
 // ---------------------------------------------------------------------------------------------
-// The Road: the main road I to V to the enemy capital (the first match), the Advanced side road after V.
+// The chapter select: Charter (round 5, the owner's choice of mockups/tutorial-roadmap.html). A stone sheet of seals
+// under the client's top bar: the main rule I to V ends in an arrow at the first match's seal, the Advanced rule drops
+// from it after V to its three seals. The way to the first match is also a button beside Start on every chapter.
 // ---------------------------------------------------------------------------------------------
-const ROAD = {I: [150, 150], II: [330, 108], III: [510, 158], IV: [690, 112], V: [870, 156], M: [1130, 118], A1: [1010, 312], A2: [1180, 300]};
-const FORK = [959, 148];
-function curve(pts, from) {
-  let d = from;
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], mx = (ax + bx) / 2;
-    d += ` C${mx} ${ay} ${mx} ${by} ${bx} ${by}`;
-  }
-  return d;
-}
-const ROADS = {
-  first: {st: {I: 'next', II: 'locked', III: 'locked', IV: 'locked', V: 'locked', M: 'open', A1: 'locked', A2: 'locked'}, sel: 'I'},
-  progress: {st: {I: 'done', II: 'done', III: 'done', IV: 'next', V: 'locked', M: 'open', A1: 'locked', A2: 'locked'}, sel: 'IV'},
-  finished: {st: {I: 'done', II: 'done', III: 'done', IV: 'done', V: 'done', M: 'done', A1: 'done', A2: 'next'}, sel: 'A2'},
+const f1 = (v) => (Math.round(v * 10) / 10).toString();
+const loz = (x, y, r) => `M${f1(x)} ${f1(y - r)}L${f1(x + r)} ${f1(y)}L${f1(x)} ${f1(y + r)}L${f1(x - r)} ${f1(y)}Z`;
+const ORDER = ['I', 'II', 'III', 'IV', 'V', 'M', 'A1', 'A2', 'A3'];
+const SEAT = {I: [150, 172], II: [322, 172], III: [494, 172], IV: [666, 172], V: [838, 172], M: [1020, 172],
+  A1: [761, 394], A2: [916, 394], A3: [1071, 394], F: [916, 172]};
+const SIDE_Y = 296;
+// The client's menu icons (hud/icons.ts, MENU_ICONS: 24 x 24, 2 px stroke); A3 takes the road sign.
+const ICON = {
+  I: '<path d="M3.6 15.6C3 9.4 6.6 5.2 11.8 5.2c4.4 0 7.2 2.9 7.8 6.2.2.9.8 1.5 1.9 2-3.4.3-5.6.9-6.8 1.9-1.1 1-1.9 2.3-3.7 2.3z"/><path d="M3.3 18.4c3.4.5 6.4.6 8.8.4 2.4-.3 3.6-2 4.8-3"/><path d="M11.8 18.9l1.6 3.3"/>',
+  II: '<rect x="4" y="15" width="16" height="5" rx="1.5"/><rect x="6" y="9.5" width="12" height="4.5" rx="1.5"/><rect x="8" y="4.5" width="8" height="4" rx="1.5"/>',
+  III: '<path d="M3.5 20.5V11l5 3.2V11l5 3.2V4.5h4.5v16z"/><path d="M7 17.5h2.5"/><path d="M12 17.5h2.5"/>',
+  IV: '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5"/><path d="M12 16.5v5"/><path d="M2.5 12h5"/><path d="M16.5 12h5"/><circle cx="12" cy="12" r="1.2"/>',
+  V: '<path d="M12 2.8 19.5 5.4v6c0 4.6-3 7.9-7.5 9.8C7.5 19.3 4.5 16 4.5 11.4v-6z"/><path d="M12 7.6v7.6"/><path d="M8.8 10.6h6.4"/>',
+  A1: '<path d="M6 4l6 7 6-7"/><path d="M12 11v9"/><path d="M8.5 17 12 20.5 15.5 17"/>',
+  A2: '<path d="M8 20.5V3.5"/><path d="M8 4.5l10 3.8L8 12.1z"/><path d="M4 20.5h8"/>',
+  A3: '<path d="M12 13v8"/><path d="M12 3v3"/><path d="M4 6a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h13a2 2 0 0 0 1.6-.8l1.8-2.4a1 1 0 0 0 0-1.6l-1.8-2.4A2 2 0 0 0 17 6z"/>',
 };
-function roadSelect(stage) {
-  const {st, sel} = ROADS[stage];
-  const mainPts = ['I', 'II', 'III', 'IV', 'V', 'M'].map((kk) => ROAD[kk]);
-  const sidePts = [FORK, ROAD.A1, ROAD.A2];
-  const start = `M${ROAD.I[0] - 150} ${ROAD.I[1] + 40} C${ROAD.I[0] - 80} ${ROAD.I[1] + 30} ${ROAD.I[0] - 50} ${ROAD.I[1]} ${ROAD.I[0]} ${ROAD.I[1]}`;
-  const dMain = curve(mainPts, start), dSide = curve(sidePts, `M${FORK[0]} ${FORK[1]}`);
-  const walkedMain = ['I', 'II', 'III', 'IV', 'V', 'M'].filter((kk, i, a) => st[kk] === 'done' && (i === 0 || st[a[i - 1]] === 'done'));
-  const walkedSide = st.A1 === 'done' ? [FORK, ROAD.A1].concat(st.A2 === 'done' ? [ROAD.A2] : []) : [];
-  let s = `<section class="selpage" aria-labelledby="ttl"><p class="lab">How to play</p><h1 id="ttl">Tutorial</h1><p class="why">Five short chapters, then your first match against an easy bot. You can start the match at any time.</p></section>`;
-  s += '<div class="road"><svg viewBox="0 0 1280 430" role="group" aria-label="Chapters">';
-  s += `<path d="${dMain}" fill="none" stroke="#060504" stroke-width="13" stroke-linecap="round"/><path d="${dMain}" fill="none" stroke="#7d7363" stroke-width="4" stroke-dasharray="12 10" stroke-linecap="round"/>`;
-  s += `<path d="${dSide}" fill="none" stroke="#060504" stroke-width="9" stroke-linecap="round"/><path d="${dSide}" fill="none" stroke="#7d7363" stroke-width="2.6" stroke-dasharray="7 8" stroke-linecap="round"/>`;
-  if (walkedMain.length) s += `<path d="${curve(walkedMain.map((kk) => ROAD[kk]), start)}" fill="none" stroke="#86a6ea" stroke-opacity=".9" stroke-width="4" stroke-linecap="round"/>`;
-  if (walkedSide.length > 1) s += `<path d="${curve(walkedSide, `M${FORK[0]} ${FORK[1]}`)}" fill="none" stroke="#86a6ea" stroke-opacity=".9" stroke-width="2.6" stroke-linecap="round"/>`;
-  s += `<path d="${lozengePath(FORK[0], FORK[1], 6)}" fill="#cfc4ab" stroke="#060504" stroke-width="1.4"/><text class="rfork" x="1006" y="238">Advanced · optional</text>`;
-  const info = {I: 'I · Units and movement', II: 'II · Map and economy', III: 'III · Building', IV: 'IV · Attack and fight', V: 'V · Defence', M: 'First match', A1: 'Group orders', A2: 'Rally points'};
-  const subOf = (kk) => {
-    const x = st[kk];
-    if (kk === 'M') return x === 'done' ? 'Played' : 'Easy bot · Narrows';
-    if (x === 'done') return 'Done';
-    if (x === 'next') return 'Next';
-    if (x === 'locked') return kk === 'A1' || kk === 'A2' ? 'After V' : 'After ' + MAIN[MAIN.indexOf(kk) - 1];
-    return kk === 'A1' || kk === 'A2' ? 'Optional' : 'About a minute';
-  };
-  const target = (kk) => kk === 'M' ? 'H1' : kk + '.0';
-  for (const kk of ['I', 'II', 'III', 'IV', 'V', 'M', 'A1', 'A2']) {
-    const [x, y] = ROAD[kk], status = st[kk], capital = kk === 'M', small = kk === 'A1' || kk === 'A2', locked = status === 'locked';
-    const R = small ? 0.82 : 1, sub = subOf(kk);
-    s += `<g class="rnode ${locked ? 'rlock' : ''}" tabindex="0" role="button" ${locked ? 'aria-disabled="true"' : go(target(kk))} aria-label="${info[kk]}, ${sub}">`;
-    if (status === 'next') s += `<circle cx="${x}" cy="${y}" r="${40 * R}" fill="none" stroke="#ece4d1" stroke-width="2" class="pulse"/>`;
-    s += `<circle class="focusring" cx="${x}" cy="${y}" r="${48 * R}" fill="none" stroke="#ece4d1" stroke-width="2"/>`;
-    s += `<circle cx="${x}" cy="${y}" r="${36 * R}" fill="#060504"/>`;
-    const hot = status === 'next' || kk === sel;
-    s += `<circle cx="${x}" cy="${y}" r="${32 * R}" fill="none" stroke="${hot ? '#ece4d1' : '#cfc4ab'}" stroke-opacity="${hot ? 1 : .7}" stroke-width="${hot ? 2.4 : 2}" ${locked ? 'stroke-dasharray="4 5"' : ''}/>`;
-    s += `<circle cx="${x}" cy="${y}" r="${29 * R}" fill="none" stroke="rgb(214 200 172/.2)" stroke-width="1"/>`;
-    const fill = status === 'done' ? '#86a6ea' : capital ? '#e5785e' : '#221e18';
-    s += `<circle cx="${x}" cy="${y}" r="${25 * R}" fill="${fill}" ${status === 'next' ? 'stroke="#7d7363" stroke-width="1.5"' : ''}/>`;
-    if (capital) s += `<path d="${star(x, y, 13, 5.4)}" fill="#060504"/>`;
-    else {
-      const label = small ? CH[kk].n : kk;
-      s += `<text x="${x}" y="${y + (small ? 6 : 7)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${small ? 15 : label.length > 2 ? 17 : 19}" fill="${status === 'done' ? '#0b0d14' : locked ? '#ada38f' : '#ece4d1'}">${label}</text>`;
+// The progress states of R.1 to R.3 (tutorial.md section 3, Q8) and the seal chosen at the start of each.
+const CHARTER = {
+  first: {st: {I: 'next', II: 'locked', III: 'locked', IV: 'locked', V: 'locked', M: 'open', A1: 'locked', A2: 'locked', A3: 'locked'}, sel: 'I'},
+  progress: {st: {I: 'done', II: 'done', III: 'done', IV: 'next', V: 'locked', M: 'open', A1: 'locked', A2: 'locked', A3: 'locked'}, sel: 'IV'},
+  finished: {st: {I: 'done', II: 'done', III: 'done', IV: 'done', V: 'done', M: 'done', A1: 'done', A2: 'next', A3: 'open'}, sel: 'A2'},
+};
+const isAdv = (k) => k[0] === 'A';
+const nameOf = (k) => k === 'M' ? 'First match' : CH[k].name;
+const lineOf = (k) => k === 'M' ? 'Play it whenever you like.' : CH[k].why;
+const prevOf = (k) => isAdv(k) ? 'V' : MAIN[MAIN.indexOf(k) - 1];
+function subOf(k, x) {
+  if (x === 'done') return k === 'M' ? 'Played' : 'Done';
+  if (x === 'next') return 'Next';
+  if (x === 'open') return k === 'M' ? 'Any time' : 'Optional';
+  return 'After ' + prevOf(k);
+}
+const eyebrowOf = (k) => k === 'M' ? 'Easy bot · Narrows' : isAdv(k) ? 'Advanced ' + CH[k].n : 'Chapter ' + CH[k].n;
+const actionOf = (k, x) => x === 'done' ? (k === 'M' ? 'Play again' : 'Replay') : k === 'M' ? 'Play' : 'Start';
+function starPath(x, y, R, r) { return star(x, y, R, r); }
+function doneMark(x, y, r = 7) {
+  return `<path d="${loz(x, y, r)}" fill="url(#gIvory)" stroke="#060504" stroke-width="1.4"/><path d="M${f1(x - r * .5)} ${f1(y)}l${f1(r * .34)} ${f1(r * .37)} ${f1(r * .66)}-${f1(r * .72)}" fill="none" stroke="#060504" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+function lockMark(x, y, c = '#ada38f', kk = 1) {
+  return `<g transform="translate(${f1(x)} ${f1(y)}) scale(${kk})"><path d="M-6.5 -1.5h13v10.5h-13z" fill="#0b0a08" stroke="#060504" stroke-width="2.6" stroke-linejoin="round"/><path d="M-6.5 -1.5h13v10.5h-13z" fill="${c}"/>` +
+    `<path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="#060504" stroke-width="4.2"/><path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="${c}" stroke-width="2"/><circle cy="3.6" r="1.4" fill="#0b0a08"/></g>`;
+}
+const lockGlyph = () => '<svg width="14" height="16" viewBox="-8 -9 16 19" aria-hidden="true"><path d="M-6.5 -1.5h13v10.5h-13z" fill="currentColor"/><path d="M-3.6 -1.5v-3.6a3.6 3.6 0 0 1 7.2 0v3.6" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+const starGlyph = () => `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="${star(9, 9.6, 8.4, 3.6)}" fill="#e5785e" stroke="#060504" stroke-width="1"/></svg>`;
+function ccompass(x, y, r) {
+  const R1 = r + 8, R2 = r + 14;
+  let s = `<g><circle cx="${x}" cy="${y}" r="${R2 + 2}" fill="none" stroke="rgb(236 228 209/.5)" stroke-width="7" filter="url(#fSoft)" class="breathe"/>`;
+  s += `<circle cx="${x}" cy="${y}" r="${R1}" fill="none" stroke="#060504" stroke-width="4"/><circle cx="${x}" cy="${y}" r="${R1}" fill="none" stroke="#ece4d1" stroke-width="1.6"/>`;
+  s += `<circle cx="${x}" cy="${y}" r="${R2}" fill="none" stroke="#060504" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${R2}" fill="none" stroke="rgb(236 228 209/.55)" stroke-width="1" stroke-dasharray="3 5"/>`;
+  s += '<g class="spin">' + [0, 90, 180, 270].map((a) => {
+    const rad = a * Math.PI / 180, ux = Math.cos(rad), uy = Math.sin(rad), px = x + R2 * ux, py = y + R2 * uy, L = 7.5, Wd = 3.6;
+    const p = [[px - ux * L, py - uy * L], [px - uy * Wd, py + ux * Wd], [px + ux * L, py + uy * L], [px + uy * Wd, py - ux * Wd]];
+    return `<path d="M${p.map((q) => q.map(f1).join(' ')).join('L')}Z" fill="#ece4d1" stroke="#060504" stroke-width="1.2" stroke-linejoin="round"/>`;
+  }).join('') + `<circle cx="${x}" cy="${y}" r="${R2 + 8}" fill="none" stroke="none"/></g></g>`;
+  return s;
+}
+// The chosen seal: a lozenge on a short rule over it (the plinth's way marker, ui-style 69); hover: a hollow one.
+function pinAt(r, off) {
+  const y = -(r + off), stem = `M0 ${f1(y + 4)}L0 ${f1(y + 15)}`;
+  return `<g class="pin"><path d="${stem}" stroke="#060504" stroke-width="3.4"/><path d="${stem}" stroke="#ece4d1" stroke-width="1.3"/><path d="${loz(0, y, 6.5)}" fill="url(#gIvory)" stroke="#060504" stroke-width="1.5"/></g>` +
+    `<g class="hov"><path d="${loz(0, y + 6, 5.5)}" fill="#16130f" stroke="#ece4d1" stroke-width="1.4"/></g>`;
+}
+function emblem(k, y, size, color, sw) {
+  if (k === 'M') return `<path d="${star(0, y, size * .44, size * .19)}" fill="${color}"/>`;
+  const kk = size / 24;
+  return `<g transform="translate(${f1(-12 * kk)} ${f1(y - 12 * kk)}) scale(${f1(kk * 100) / 100})" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</g>`;
+}
+function sealNum(k, R, c) {
+  if (k === 'M') return '';
+  const n = (isAdv(k) ? 'A·' : '') + CH[k].n;
+  return `<text x="0" y="${f1(R * .5)}" text-anchor="middle" font-family="Cinzel" font-weight="600" font-size="${f1(Math.max(9, R * .2))}" letter-spacing="1" fill="${c}">${n}</text>`;
+}
+function seatSeal(k, R, x) {
+  const done = x === 'done', locked = x === 'locked', m = k === 'M';
+  let s = '';
+  if (x === 'next') s += ccompass(0, 0, R * .78);
+  s += `<path d="${loz(0, 1.5, R)}" fill="#d6c8ac" fill-opacity=".14"/><path d="${loz(0, 0, R)}" fill="url(#gHole)"/><path d="${loz(0, 0, R)}" fill="none" stroke="url(#gRim)" stroke-width="1.6"/>`;
+  if (locked) {
+    s += `<path class="ring" d="${loz(0, 0, R * .78)}" fill="none" stroke="#8f8573" stroke-opacity=".85" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+    s += emblem(k, -R * .1, R * .56, '#736a5a', 1.7) + sealNum(k, R, '#7d7363') + lockMark(R * .5, -R * .5, '#cfc4ab', .9);
+  } else {
+    const inset = R - 4;
+    s += `<g class="seal-face ${done && !state.rm ? 'stamp' : ''}" style="${done ? `animation-delay:${f1(.15 + ORDER.indexOf(k) * .12)}s` : ''}">`;
+    s += `<path d="${loz(0, 3, inset)}" fill="#000" fill-opacity=".45" filter="url(#fGlow)"/>`;
+    if (done) {
+      s += `<path d="${loz(0, 0, inset)}" fill="url(#gIvory)" stroke="#050403" stroke-width="2"/><path d="${loz(0, 0, inset - 4)}" fill="none" stroke="#7d7363" stroke-width="1"/>` +
+        `<path class="ring" d="${loz(0, 0, inset * .78)}" fill="none" stroke="#16130f" stroke-width="1.6"/><path d="${loz(0, 0, inset * .7)}" fill="none" stroke="#16130f" stroke-opacity=".35" stroke-width="1"/>`;
+      s += emblem(k, -R * .1, R * .56, '#16130f', 1.9) + sealNum(k, R, '#3d372d');
+    } else {
+      const rim = m ? '#e5785e' : '#ece4d1';
+      s += `<path d="${loz(0, 0, inset)}" fill="url(#gSeal)" stroke="#050403" stroke-width="2"/><path d="${loz(0, 0, inset - 3)}" fill="none" stroke="rgb(214 200 172/.38)" stroke-width="1"/>` +
+        `<path class="ring" d="${loz(0, 0, inset * .78)}" fill="none" stroke="${rim}" stroke-opacity="${x === 'next' ? 1 : .8}" stroke-width="1.6"/><path d="${loz(0, 0, inset * .7)}" fill="none" stroke="rgb(236 228 209/.22)" stroke-width="1"/>`;
+      s += emblem(k, -R * .1, R * .56, m ? '#e5785e' : '#ece4d1', 1.7) + sealNum(k, R, '#ada38f');
     }
-    if (status === 'done') s += `<path d="${lozengePath(x + 25 * R, y - 25 * R, 7)}" fill="#ece4d1" stroke="#060504" stroke-width="1.4"/><path d="M${x + 25 * R - 3.5} ${y - 25 * R}l2.4 2.6 4.6-5" fill="none" stroke="#060504" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`;
-    if (locked) s += lockIcon(x + 25, y - 26);
-    const below = small ? 58 : 70;
-    s += `<text class="rtitle" x="${x}" y="${y + below}" text-anchor="middle">${info[kk]}</text><text class="rsub" x="${x}" y="${y + below + 23}" text-anchor="middle">${sub}</text></g>`;
+    s += '</g>';
   }
-  s += '</svg></div>';
-  const c = sel;
-  s += `<section class="foot stone rule-frame" aria-label="${esc(kick(c))}"><div><p class="lab">${CH[c].road === 'main' ? `Chapter ${CH[c].n} of V` : `Advanced ${CH[c].n} of II · optional`} · ${esc(CH[c].len)}</p><h2>${esc(CH[c].name)}</h2><p class="why">${esc(CH[c].why)}</p></div>` +
-    `<div class="right"><button class="btn primary tab" ${go(c + '.0')}>Start</button><div class="quiets"><button class="quiet" ${go('H1')}>Play your first match</button><button class="quiet" ${go('R.4')}>Rules</button></div></div></section>`;
+  if (done) s += doneMark(R * .52, -R * .52, 7.5);
+  s += `<g class="fr"><path d="${loz(0, 0, R + 9)}" fill="none" stroke="#060504" stroke-width="5"/><path d="${loz(0, 0, R + 9)}" fill="none" stroke="#ece4d1" stroke-width="2"/></g>` + pinAt(R, 22);
+  return s;
+}
+function topBar() {
+  return `<header class="top"><button class="brand" ${go('E.2')} aria-label="Fines Imperii, back to the main menu"><span class="back" aria-hidden="true"></span>Fines Imperii</button>` +
+    `<h1>Tutorial</h1><div class="right"><span class="qm" aria-hidden="true">?</span><span class="who"><b>EMBER</b><i>Guest</i></span></div></header>`;
+}
+function charterSelect(stage) {
+  const {st, sel: sel0} = CHARTER[stage];
+  const sel = state.rsel && ORDER.includes(state.rsel) ? state.rsel : sel0;
+  let s = topBar() + '<section class="charter stone rule-frame" aria-labelledby="ttl"><h2 id="ttl" class="sr">Tutorial chapters</h2><svg viewBox="0 0 1168 680" aria-hidden="true"><g fill="none">';
+  const rule = (dd, faint) => `<path d="${dd}" stroke="#050403" stroke-width="3"/><path d="${dd}" stroke="${faint ? 'rgb(214 200 172/.2)' : 'rgb(214 200 172/.42)'}" stroke-width="1" ${faint ? 'stroke-dasharray="4 5"' : ''} transform="translate(0 1.6)"/>`;
+  const [ix, iy] = SEAT.I, [mx, my] = SEAT.M, [fx, fy] = SEAT.F;
+  const dMain = `M${ix - 92} ${iy}L${mx} ${my}`;
+  const dSide = `M${fx} ${fy}L${fx} ${SIDE_Y}M${SEAT.A1[0]} ${SIDE_Y}L${SEAT.A3[0]} ${SIDE_Y}` + ['A1', 'A2', 'A3'].map((k) => `M${SEAT[k][0]} ${SIDE_Y}L${SEAT[k][0]} ${SEAT[k][1]}`).join('');
+  s += rule(dSide, st.A1 === 'locked') + rule(dMain, false);
+  // the arrow into the first match: the main rule ends there (the weak point of round 1's Charter)
+  const ax = mx - 66 - 11;
+  s += `<path d="M${ax - 7} ${my - 8}L${ax + 1} ${my}L${ax - 7} ${my + 8}" stroke="#050403" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="M${ax - 7} ${my - 8}L${ax + 1} ${my}L${ax - 7} ${my + 8}" stroke="#ece4d1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  s += `<path d="${loz(fx, fy, 6)}" fill="#8f8573" stroke="#050403" stroke-width="1.3"/><path d="${loz(ix - 92, iy, 4.5)}" fill="#8f8573" stroke="#050403" stroke-width="1.2"/>`;
+  s += '</g></svg><div role="radiogroup" aria-label="Chapters">';
+  for (const k of ORDER) {
+    const [x, y] = SEAT[k], R = isAdv(k) ? 46 : k === 'M' ? 66 : 62, xs = st[k], hit = Math.round(2 * R + 6), box = Math.round(2 * R + 80);
+    s += `<button class="place ${xs} ${k === sel ? 'sel' : ''}" data-sel="${k}" role="radio" aria-checked="${k === sel}" tabindex="${k === sel ? 0 : -1}" aria-label="${esc((k === 'M' ? '' : eyebrowOf(k) + ': ') + nameOf(k) + ', ' + subOf(k, xs))}" style="left:${x}px;top:${y}px;--hit:${hit}px;--box:${box}px">` +
+      `<svg viewBox="${-box / 2} ${-box / 2} ${box} ${box}" aria-hidden="true">${seatSeal(k, R, xs)}</svg>` +
+      `<span class="lbl" aria-hidden="true"><span class="pl-name">${esc(nameOf(k))}</span><span class="pl-sub">${esc(subOf(k, xs))}</span></span></button>`;
+  }
+  s += `</div><span class="rtag" style="left:${SEAT.A1[0] - 150}px;top:${SEAT.A1[1] - 5}px">Advanced</span>`;
+  const xs = st[sel], locked = xs === 'locked', target = sel === 'M' ? 'H1' : sel + '.0';
+  s += `<div class="dt"><p class="lab">${esc(eyebrowOf(sel))}</p><h2>${esc(nameOf(sel))}</h2><p class="why">${esc(locked ? `Opens after ${nameOf(prevOf(sel))}.` : lineOf(sel))}</p>` +
+    `<div class="dt-acts"><button class="btn primary tab" ${locked ? 'aria-disabled="true"' : go(target)}>${locked ? lockGlyph() + 'Locked' : esc(actionOf(sel, xs))}</button>` +
+    (sel === 'M' ? '' : `<button class="btn secondary fm" ${go('H1')}>${starGlyph()}First match</button>`) +
+    `<button class="quiet" ${go('R.4')}>Rules</button></div></div></section>`;
   return s;
 }
 
@@ -842,29 +1043,36 @@ function rulesPage() {
 // ---------------------------------------------------------------------------------------------
 function render(sc) {
   if (sc.kind === 'menu') {
-    return bg(sc.img, 'The main screen of a new guest') + `<button class="hot" style="left:${MAIN_BTN.x}px;top:${MAIN_BTN.y}px;width:${MAIN_BTN.w}px;height:${MAIN_BTN.h}px" ${go('I.0')} aria-label="Search (the main button): opens the tutorial"></button>` +
-      `<button class="hot" style="left:${HELP_BTN.x}px;top:${HELP_BTN.y}px;width:${HELP_BTN.w}px;height:${HELP_BTN.h}px" ${go('R.1')} aria-label="Help: Tutorial opens the chapter select"></button>`;
+    const help = `<button class="hot" style="left:${HELP_BTN.x}px;top:${HELP_BTN.y}px;width:${HELP_BTN.w}px;height:${HELP_BTN.h}px" ${go('R.1')} aria-label="Help: Tutorial opens the chapter select"></button>`;
+    if (!sc.popup) return bg(sc.img, 'The main screen of a new guest') + help;
+    // The entry popup (round 5): the client's stone dialog over the main screen.
+    return bg(sc.img, 'The main screen of a new guest') + '<div class="dim"></div>' +
+      `<section class="modal offer stone rule-frame" role="dialog" aria-modal="true" aria-labelledby="ttl" aria-describedby="offerBody"><p class="lab">How to play</p><h2 id="ttl">New to the game?</h2>` +
+      `<p class="body" id="offerBody">A short tutorial teaches the basics, one chapter at a time.</p>` +
+      `<label class="check"><input type="checkbox" id="offerOff"><span class="box" aria-hidden="true"></span>Don’t show again</label>` +
+      `<div class="acts"><button class="btn secondary" ${go('E.2')}>Not now</button><button class="btn primary" ${go('I.0')}>Start the tutorial</button></div></section>`;
   }
-  if (sc.kind === 'skip') return bg(sc.img, 'The queue search started by the main button');
-  if (sc.kind === 'road') return bg('menu') + '<div class="blurstone"></div>' + roadSelect(sc.stage);
+  if (sc.kind === 'road') return '<div class="blurstone" style="backdrop-filter:none"></div>' + charterSelect(sc.stage);
   if (sc.kind === 'rules') return bg('menu') + '<div class="blurstone"></div>' + rulesPage();
   const c = sc.ch;
   if (sc.kind === 'intro') {
-    const main = CH[c].road === 'main', first = sc.id === 'I.0';
+    const main = CH[c].road === 'main';
     return bg('menu') + '<div class="blurstone"></div>' +
-      `<section class="sheet stone rule-frame" aria-labelledby="ttl"><div><p class="lab">${main ? `Tutorial · Chapter ${CH[c].n} of V` : `Advanced · ${CH[c].n} of II`}</p><h1 id="ttl">${esc(CH[c].name)}</h1><p class="why">${esc(CH[c].why)}</p>` +
-      chapterRow(c) +
+      `<section class="sheet stone rule-frame" aria-labelledby="ttl"><div><p class="lab">${main ? `Tutorial · Chapter ${CH[c].n} of V` : `Advanced · ${CH[c].n} of III`}</p><h1 id="ttl">${esc(CH[c].name)}</h1><p class="why">${esc(CH[c].why)}</p>` +
       `<p class="lab sec" style="margin-bottom:12px">Goal</p><ul class="goals">${CH[c].goals.map((gl) => `<li><span class="lz"></span>${esc(gl)}</li>`).join('')}</ul>` +
-      `<div class="acts"><button class="btn primary" ${go(c + '.1')}>Start</button><button class="quiet" ${go(first ? 'E.2' : 'R.2')}>${first ? 'Skip the tutorial' : 'All chapters'}</button></div></div>` +
+      `<div class="acts"><button class="btn primary" ${go(c + '.1')}>Start</button><button class="quiet" ${go(main ? 'R.2' : 'R.3')}>All chapters</button></div></div>` +
       `<div class="mapcard">${cropHtml(c, 420, 300)}<span class="lab cap">${esc(CH[c].len)}</span></div></section>`;
   }
   if (sc.kind === 'card') {
     const head = sc.fail ? `<span class="lab">${esc(kick(c))}</span><span class="lab" style="color:var(--ink-soft)">Try again</span>` : `<span class="lab">${esc(kick(c))}</span>${stepsHtml(sc.step, CH[c].beats)}`;
     const act = sc.act ? `<div class="act">${sc.act}</div>` : '';
     const target = sc.cont ?? (sc.pause === 'continue' ? nextCard(sc) : null);
-    const cont = target ? `<div class="row cont"><button class="btn primary small" ${go(target)}>Continue</button></div>` : '';
+    let cont = target ? `<div class="row cont"><button class="btn primary small" ${go(target)}>Continue</button></div>` : '';
+    // Slides (round 5, IV.2): "Next" pages them in the client; the last one carries the action line.
+    if (sc.slide && sc.slide[2]) cont = `<div class="row slides"><span class="of">${sc.slide[0]} of ${sc.slide[1]}</span><button class="btn primary small" ${go(sc.slide[2])}>Next</button></div>`;
+    else if (sc.slide) cont = `<div class="row slides" style="border:0;padding-top:0;margin-top:4px"><span class="of">${sc.slide[0]} of ${sc.slide[1]}</span></div>`;
     const paused = sc.pause ? `<div class="paused" role="status">${PAUSE}Paused</div>` : '';
-    return bg(sc.img, `The match screen of chapter ${CH[c].n}: ${sc.title}`) + markSvg(sc.t) + paused + leaderHtml(sc.t, `<div class="head">${head}</div><p class="say">${sc.say}</p>${act}${cont}`, sc.w, sc.at) + exitHot();
+    return bg(sc.img, `The match screen of chapter ${CH[c].n}: ${sc.title}`) + markSvg(sc.t) + (sc.turns ? turnsSvg(sc.turns) : '') + paused + leaderHtml(sc.t, `<div class="head">${head}</div><p class="say">${sc.say}</p>${act}${cont}`, sc.w, sc.at) + exitHot();
   }
   if (sc.kind === 'dialog') {
     return bg(sc.img) + '<div class="dim"></div>' +
@@ -947,6 +1155,7 @@ function fit() {
 }
 function update() {
   const sc = S[state.i];
+  if (state.lastI !== state.i) { state.rsel = null; state.lastI = state.i; }
   document.documentElement.classList.toggle('rm', state.rm);
   document.body.classList.toggle('rv', state.rv);
   document.getElementById('sid').textContent = sc.id;
@@ -969,6 +1178,9 @@ document.getElementById('next').onclick = () => step(1);
 document.getElementById('rvBtn').onclick = () => { state.rv = !state.rv; update(); };
 document.getElementById('rmBtn').onclick = () => { state.rm = !state.rm; update(); };
 document.getElementById('art').addEventListener('click', (e) => {
+  // Charter: a click on a seal chooses it (the radio group "Chapters"); its buttons go where they go.
+  const pick = e.target.closest('[data-sel]');
+  if (pick) { state.rsel = pick.dataset.sel; update(); focusSel(); return; }
   const el = e.target.closest('[data-go]');
   if (el) { state.i = byId(el.dataset.go); update(); focusArt(); }
 });
@@ -978,12 +1190,15 @@ function focusArt() {
   const first = art.querySelector('button,[tabindex="0"]');
   if (first) first.focus({preventScroll: true}); else { art.tabIndex = -1; art.focus({preventScroll: true}); }
 }
+function focusSel() { const el = document.querySelector('#art [data-sel][aria-checked="true"]'); if (el) el.focus({preventScroll: true}); }
 document.getElementById('art').addEventListener('keydown', (e) => {
+  const seal = e.target.closest('[data-sel]'), mv = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1}[e.key];
+  if (seal && mv) { e.preventDefault(); e.stopPropagation(); const i = ORDER.indexOf(seal.dataset.sel); state.rsel = ORDER[(i + mv + ORDER.length) % ORDER.length]; update(); focusSel(); return; }
   const el = e.target.closest('[data-go]');
   if (el && (e.key === 'Enter' || e.key === ' ') && el.tagName !== 'BUTTON') { e.preventDefault(); state.i = byId(el.dataset.go); update(); focusArt(); }
 });
 addEventListener('keydown', (e) => {
-  if (e.target.closest('select')) return;
+  if (e.target.closest('select') || e.target.closest('[data-sel]')) return;
   if (e.key === 'ArrowRight' || e.key === 'PageDown') step(1);
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') step(-1);
 });
