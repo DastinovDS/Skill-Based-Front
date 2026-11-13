@@ -69,7 +69,15 @@ RECORDED_TICKS: Final = 4500
 POOL: Final = sorted(p.stem for p in (ROOT / "maps").glob("*.json"))
 BOT_NAMES: Final = ("smart_rusher", "smart_expander")
 BOT_BUDGET_MS: Final = 1.0
-"""``MatchRunner``'s bot budget (``Settings.bot_budget_s``) and the section 12 decision budget."""
+"""The section 12 decision budget, a figure of a warm core (``Settings.bot_budget_s`` only counts
+the decisions over it, #1033)."""
+BOT_CALL_SHARE_MS: Final = 10.0
+"""What a call of the server's bot loop earns the bot (``gow_server.matches.BOT_SHARE``, 2 % of the
+500 ms between two calls): a bot that spends more on average is thinned out."""
+PACED_FROM: Final = WARM_TICKS - 100
+PACE_S: Final = 0.1
+"""The last 100 ticks of the warm-up are decided one call per ``PACE_S`` of sleep, like the live
+tick loop: an idle core runs a decision several times longer than a hot loop does (#1033)."""
 
 
 class _Stats(Protocol):
@@ -158,6 +166,8 @@ class _Game:
         self.checkpoints = {c.tick: c.hash for c in replay.checkpoints}
         self.decisions: list[float] = []
         """Seconds of ``view`` plus ``decide`` per call, from tick 300 (the server's bot loop)."""
+        self.paced: list[float] = []
+        """The same from tick ``PACED_FROM``, each call after ``PACE_S`` of sleep (a cold core)."""
         self.match = Match(mapdef, rules, KEY)
         bots: list[Controller] = [
             BOTS[n](mapdef, self.match.rules, seed=7, player=p) for p, n in enumerate(BOT_NAMES)
@@ -166,10 +176,15 @@ class _Game:
         while match.tick < WARM_TICKS:
             if match.tick % DECIDE_EVERY == 0:
                 for p in PLAYERS:
+                    paced = match.tick >= PACED_FROM
+                    if paced:
+                        time.sleep(PACE_S)
                     t0 = time.perf_counter()
                     bots[p].decide(match.view(p, reuse=True), match.tick)
                     if match.tick >= 300:
                         self.decisions.append(time.perf_counter() - t0)
+                    if paced:
+                        self.paced.append(time.perf_counter() - t0)
             match.step(self.log.get(match.tick + 1, ()))
         assert not match.finished
         assert match.state_hash() == self.checkpoints[WARM_TICKS], (
@@ -391,3 +406,21 @@ def test_pool_decision(speed_factor: float, game: _Game) -> None:
         f"p95 {data[len(data) * 95 // 100] / MS:.3f}, over 1 ms {over:.1%} (x{speed_factor:.2f})"
     )
     _check(mean * speed_factor, speed_factor, "decision", game)
+
+
+def test_pool_decision_paced(speed_factor: float, game: _Game) -> None:
+    """#1033: the same decisions after ``PACE_S`` of idle time each, as the live tick loop calls
+    them. This is what the server's bot account is charged (``BOT_SHARE``): on the reference
+    machine it is 3 to 6 times the hot figure of ``test_pool_decision``, over the 1 ms budget on
+    most calls (the live hard bot overran 84 % of its calls in Docker on it), and it must stay
+    well inside what a call earns (``BOT_CALL_SHARE_MS``), or the live bot is thinned out."""
+    data = sorted(t / speed_factor for t in game.paced)
+    assert len(data) >= 30
+    mean = sum(data) / len(data)
+    print(
+        f"\nDECISION PACED {game.name}: mean {mean / MS:.3f} ms, "
+        f"p50 {data[len(data) // 2] / MS:.3f}, "
+        f"p95 {data[len(data) * 95 // 100] / MS:.3f}, max {data[-1] / MS:.3f} "
+        f"(of {BOT_CALL_SHARE_MS:.0f} ms earned a call, x{speed_factor:.2f})"
+    )
+    assert mean * speed_factor <= BOT_CALL_SHARE_MS / 2 * MS * speed_factor * REGRESSION

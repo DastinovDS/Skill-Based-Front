@@ -59,8 +59,8 @@ def bot_settings(maps_dir: Path, tmp_path: Path) -> Settings:
         replays_dir=tmp_path / "replays",
         rulesets_dir=ROOT / "rulesets" / "archive",
         ruleset_path=ROOT / "rulesets" / "test-short.toml",
-        # The real-time budget of a decision (1 ms) depends on the machine load: with it a busy
-        # runner makes the bot skip decisions. Overruns are tested below with bot_budget_s=0.001.
+        # The real-time budget of a decision (1 ms) is only counted (#1033); the tests that
+        # need a skip ask for it below with bot_share.
         bot_budget_s=60.0,
     )
 
@@ -239,16 +239,70 @@ def test_the_bot_is_made_from_the_rules_the_match_plays() -> None:
     assert runner.match.rules.map_tempo is None
 
 
-def test_slow_bot_skips_the_next_call_and_it_is_counted() -> None:
+def test_a_decision_over_the_budget_is_counted_and_keeps_its_cadence() -> None:
+    """#1033: 1 ms of wall time is a figure of a warm core (a cold one runs a healthy bot 3 to 6
+    times longer), so a decision over ``bot_budget_s`` is counted but skips nothing while the bot
+    stays within its share of the time."""
+
     async def scenario() -> None:
         slow = _Slow()
         runner = _runner(slow, bot_budget_s=0.001)
         while not runner.finished:
             runner.step()
-        assert slow.ticks == [0, 10]  # tick 5 was skipped after the slow decision at tick 0
-        assert (runner.bot_overruns, runner.bot_skipped) == (2, 1)
+        assert slow.ticks == [0, 5, 10]  # 3 ms against 10 ms earned a call: never skipped
+        assert (runner.bot_overruns, runner.bot_skipped) == (3, 0)
         assert runner.finished, "the bot's Forfeit at tick 10 went through resolve like any command"
         assert runner.match.outcome is not None and runner.match.outcome.winner == 0
+
+    asyncio.run(scenario())
+
+
+def test_a_bot_over_its_share_of_the_time_is_thinned_out() -> None:
+    """#1033: a decision is charged to the account of ``bot_share`` (at most ``BOT_BURST_S``); with
+    nothing earned (share 0) two 30 ms decisions empty the account of 25 ms and the calls after
+    them are skipped and counted."""
+
+    class _Stall:
+        def __init__(self) -> None:
+            self.ticks: list[int] = []
+
+        def decide(self, view: PlayerView, tick: int) -> list[Command]:
+            self.ticks.append(tick)
+            time.sleep(0.03)
+            return []
+
+    async def scenario() -> None:
+        stall = _Stall()
+        runner = _runner(stall, bot_share=0.0)
+        while runner.match.tick < 40:
+            runner.step()
+        assert stall.ticks == [0, 5]
+        assert (runner.bot_decisions, runner.bot_skipped) == (2, 6)  # ticks 10, 15 .. 35
+
+    asyncio.run(scenario())
+
+
+def test_the_share_refills_the_account_with_the_time_between_calls() -> None:
+    """The default share earns 10 ms a call (2 % of 500 ms): a 30 ms stall every call is thinned
+    out to about two calls in five, a 3 ms bot is not touched."""
+
+    class _Stall:
+        def __init__(self) -> None:
+            self.ticks: list[int] = []
+
+        def decide(self, view: PlayerView, tick: int) -> list[Command]:
+            self.ticks.append(tick)
+            time.sleep(0.03)
+            return []
+
+    async def scenario() -> None:
+        stall = _Stall()
+        runner = _runner(stall)
+        while runner.match.tick < 200:
+            runner.step()
+        # 40 calls earn 400 ms plus the 25 ms start: each decision costs 25 (capped)
+        assert 14 <= runner.bot_decisions <= 18
+        assert runner.bot_decisions + runner.bot_skipped == 40
 
     asyncio.run(scenario())
 

@@ -210,7 +210,8 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
 | `GOW_MAX_MATCHES` | `30` | #412: at most this many matches run at once (the AGENTS.md section 12 budget for one core); past it a new match is refused with `503` |
 | `GOW_MAX_BOT_MATCHES` | `10` | #412: of them at most this many against a bot; `0` turns bot matches off; `503` when full |
-| `GOW_BOT_BUDGET_S` | `0.001` | SRV-06: a bot decision longer than this makes the bot skip its next call (seconds) |
+| `GOW_BOT_BUDGET_S` | `0.001` | SRV-06: a bot decision longer than this (seconds) is counted as an overrun, nothing more (#1033) |
+| `GOW_BOT_SHARE` | `0.02` | #1033: the share of the wall time a bot may spend deciding; over it the bot skips calls |
 | `GOW_BOT_CONNECT_TIMEOUT_S` | `15` | #412: a bot match nobody connected to within this time is dropped as never started (no replay, saved `aborted`) |
 | `GOW_MAPGEN_ENABLED` | `true` | #884: a private invite and a bot match without a map choice get a map made for them; `false`: a random pool map |
 | `GOW_MAPGEN_WORKERS` | `1` | #884: worker processes that make maps (each about 5 s and up to 0.65 GB per map) |

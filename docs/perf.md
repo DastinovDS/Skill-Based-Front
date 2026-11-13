@@ -202,11 +202,42 @@ What holds and what does not (findings, nothing here changes a budget or the cod
   for the two players) and before a bot's decision. 30 such matches are 45 ms of a 100 ms tick, 54 ms with deflate. There
   is no pool-map version of `test_match_load.py` (it plays `web`), so the "30 matches, tick lag below 10%" budget has no
   measurement on the shipped maps yet.
-- **A hard smart bot overruns the server's 1 ms bot budget** (`Settings.bot_budget_s`) in 6 to 8% of its calls on the
-  49 to 51 node maps on the reference machine, and the live bot skips its next decision after an overrun. Between
-  tournament and server this is a difference of tempo that grows on a slower host (the CI runners are about 2.5 times
-  slower than the reference). The number counts `view(reuse=True)` plus `decide` like `MatchRunner._bot_commands` does
-  (reused vision already in; ARP-04).
+- **A hard smart bot overruns the 1 ms bot budget** (`Settings.bot_budget_s`) in 6 to 8% of its calls on the
+  49 to 51 node maps on the reference machine in a hot loop. Since #1033 an overrun is only counted; what protects the
+  tick loop is the bot's share of the time (`BOT_SHARE`, below). The number counts `view(reuse=True)` plus `decide` like
+  `MatchRunner._bot_commands` does (reused vision already in; ARP-04).
+- **A decision on an idle core takes 3 to 6 times longer than in a hot loop** (#1033). The live `hard` bot of an owner
+  match on the Docker stack of the reference machine overran the 1 ms wall-clock budget in 84% of its calls
+  (`bot_decisions 978, bot_overruns 823, bot_skipped 822`), and each overrun skipped the next call, so it played at about
+  half its designed cadence. The recorded match (`crossroads`, `smart_strangler@hard`, 1800 calls) replayed bot side only,
+  `decide` timed:
+
+  | setup | median | p99 | over 1 ms |
+  |---|---|---|---|
+  | reference machine, hot loop | 0.32 ms | 0.57 ms | 0% |
+  | Docker (arm64 Linux VM) on it, hot loop | 0.34 ms | 0.76 ms | 0.4% |
+  | reference machine, one call per 100 ms tick | 1.08 ms | 3.7 ms | 78% |
+  | reference machine, one call per 500 ms | 1.12 ms | 2.2 ms | 83% |
+  | Docker on it, one call per 500 ms | 2.0 ms | 3.8 ms | 95% |
+
+  The bot is not slow: a burst of 0.3 ms every half second on a core that idles in between runs several times slower
+  (the clock and the caches are cold). CPU time (`thread_time`) is inflated as much as wall time, so timing the CPU
+  would not help. A per-call wall-clock budget is therefore a figure of a warm machine only, and the benchmarks above
+  are all warm. On a busy host (30 matches, or other agents running) the effect fades. The live check on the agents'
+  stack with a random-walk client against a `hard` bot (150 s, 300 calls): before 155 decisions, 147 overruns, 146 calls
+  skipped (`crossroads`, a `hard` bot with a fresh seed each time); after the change 301 decisions, 284 overruns (counted only), 0 calls skipped ("The bot's share of the time" below).
+
+### The bot's share of the time (#1033)
+
+`MatchRunner` charges every bot decision (its measured wall time, at most `BOT_BURST_S` = 25 ms) to an account that
+every due call refills with `BOT_SHARE` (2%) of the time between two calls (10 ms per call of 500 ms), capped at
+`BOT_BURST_S`; a call with a negative account is skipped (`bot_skipped`). A bot that stays within the share keeps its
+5-tick cadence however cold the core is; one that does not is thinned out in proportion; one outlier (a GC pause, a
+suspended VM) costs at most 25 ms and skips nothing by itself. The decisions over the 1 ms budget are still counted
+(`bot_overruns`) as information: on a cold core most are. `test_pool_decision_paced` measures the decision the way the
+live loop calls it (a call after 100 ms of sleep, the last 100 ticks of the warm-up) and holds its mean under half of
+what a call earns. It has not shown the cold effect when run on a busy machine, so the mean is the safety net and the
+table above is the evidence. The 1 ms line of AGENTS.md section 12 stays the budget of a warm decision.
 - Side note: `apps/bots/tests/conftest.py` loads **`mvp-5`** as its `mvp_rules`, so the existing bot benchmarks of
   this file's neighbour (`test_benchmarks.py`) measure the decision on a ruleset that is not played; the pool
   benchmarks load `rulesets/mvp-7.toml` themselves.
