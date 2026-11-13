@@ -25,6 +25,9 @@
   import GameCanvas from '../render/GameCanvas.svelte';
   import { otherPlayer } from '../render/style.ts';
   import { colourVar } from '../theme/tokens.ts';
+  import { GatedSource } from '../render/renderGate.ts';
+  import { FULL_GATE, UI_FLAGS } from '../tutorial/gate.ts';
+  import type { UiFlag } from '../protocol.gen.ts';
 
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
   // or a live match against the dev server). The lobby replaces it.
@@ -97,6 +100,13 @@
   // `?retreat=none` plays the rules of DEC-40 (`combat.retreat = "none"`): a group in a fight has
   // no cancel in its menu and sends no move.
   const retreatNone = params.get('retreat') === 'none';
+  // `?gate=cp,notices` (`none`: nothing): a frozen scene shown as a tutorial beat shows it (#806):
+  // only those pieces of the HUD and the map; without it everything, as in a match.
+  const gateParam = params.get('gate');
+  const gate: ReadonlySet<UiFlag> | null =
+    gateParam === null
+      ? null
+      : new Set(UI_FLAGS.filter((flag) => gateParam.split(',').includes(flag)));
   const rules = {
     ...DEV_RULES,
     ...(capturePinned === null ? {} : { capture: { charge_cost: 1 } }),
@@ -164,13 +174,15 @@
         )
       : null,
   );
-  const source = $derived(
-    match === null
-      ? fixture === undefined
-        ? null
-        : frozenSource(fixture, at, floodPinned)
-      : match.session,
-  );
+  const source = $derived.by(() => {
+    const plain =
+      match === null
+        ? fixture === undefined
+          ? null
+          : frozenSource(fixture, at, floodPinned)
+        : match.session;
+    return plain === null || gate === null ? plain : new GatedSource(plain, gate);
+  });
 
   $effect(() => {
     const current = match;
@@ -407,6 +419,7 @@
     {hud}
     {orders}
     {chrome}
+    gate={gate ?? FULL_GATE}
     colour={colours?.[DEV_PLAYER] ?? null}
     paused={statusId === 'paused-you' || statusId === 'paused-enemy'}
     onreload={() => undefined}

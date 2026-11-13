@@ -13,9 +13,11 @@
     helpHere?: boolean;
     /** A waiting room or a search: leaving would drop it, the bar shows the player but opens nothing. */
     locked?: boolean;
+    /** The name of the page in the middle of the bar (the tutorial's chapter select, #806). */
+    title?: string;
   }
 
-  let { player, onhelp, helpHere = false, locked = false }: Props = $props();
+  let { player, onhelp, helpHere = false, locked = false, title }: Props = $props();
 
   // The brand is always the same control (#945, owner 2026-11-11): it goes to the main screen where
   // the app allows leaving for it, and does nothing on the main screen, in a locked bar and in the
@@ -41,6 +43,9 @@
       onclick={goHome}>{t('app.title')}</button
     >
   </h1>
+  {#if title !== undefined}
+    <p class="page-title">{title}</p>
+  {/if}
   {#if player !== undefined || onhelp !== undefined}
     <div class="corner">
       {#if onhelp !== undefined}

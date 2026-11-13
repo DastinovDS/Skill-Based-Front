@@ -24,6 +24,10 @@
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
   import { BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
   import { RESULT_SCENES, RESULT_SUMMARY, isMenuScene, isPlayScene } from './menuScenes.ts';
+  import Charter from '../app/tutorial/Charter.svelte';
+  import ChapterSheet from '../app/tutorial/ChapterSheet.svelte';
+  import TutorialOffer from '../app/tutorial/TutorialOffer.svelte';
+  import { EMPTY_PROGRESS, type CharterSeat } from '../tutorial/progress.ts';
 
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
   const params = new URLSearchParams(window.location.search);
@@ -59,6 +63,26 @@
   const resultSummary: MatchSummary =
     id === 'result-rated' ? { ...RESULT_SUMMARY, colours: ['shell', 'violet'] } : RESULT_SUMMARY;
   const result = RESULT_SCENES[id];
+  // The chapter select at the walkthrough's three moments (R.1 to R.3) and a locked seal chosen.
+  const charter = {
+    'tutorial-charter-first': { progress: EMPTY_PROGRESS, sel: undefined },
+    'tutorial-charter-progress': {
+      progress: { ...EMPTY_PROGRESS, done: ['units', 'economy', 'building'] as const },
+      sel: undefined,
+    },
+    'tutorial-charter-finished': {
+      progress: {
+        ...EMPTY_PROGRESS,
+        done: ['units', 'economy', 'building', 'attack', 'defence', 'group-orders'] as const,
+        firstMatch: true,
+      },
+      sel: undefined,
+    },
+    'tutorial-charter-locked': {
+      progress: { ...EMPTY_PROGRESS, done: ['units', 'economy', 'building'] as const },
+      sel: 'defence' as CharterSeat,
+    },
+  }[id as string];
 </script>
 
 {#if id === 'style'}
@@ -79,6 +103,28 @@
   />
 {:else if isPlayScene(id)}
   <DevPlay {id} {map} />
+{:else if id === 'tutorial-offer'}
+  <DevPlay id="menu-guest" {map} />
+  <TutorialOffer onanswer={nothing} />
+{:else if id === 'tutorial-sheet' || id === 'tutorial-sheet-advanced'}
+  <ChapterSheet
+    chapter={id === 'tutorial-sheet' ? 'units' : 'group-orders'}
+    {map}
+    onstart={() => Promise.resolve(null)}
+    onchapters={nothing}
+  />
+{:else if charter !== undefined}
+  <Charter
+    progress={charter.progress}
+    initial={charter.sel}
+    nick="Ember"
+    hasPassword={false}
+    {map}
+    onchapter={nothing}
+    onmatch={() => Promise.resolve(null)}
+    onrules={nothing}
+    onprofile={nothing}
+  />
 {:else if id === 'howto'}
   <HowToScreen nick="Ember" hasPassword={false} {map} onprofile={nothing} onback={nothing} />
 {:else if id === 'password-set' || id === 'password-change'}

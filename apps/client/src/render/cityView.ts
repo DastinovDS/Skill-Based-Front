@@ -290,6 +290,8 @@ export class CityView {
   /** The camera scale the names were measured for, rounded down to a quarter octave. */
   private captionScale = 1;
   private readonly badges: (Container | null)[];
+  /** The VP badges are shown (`setVpBadges`). */
+  private vpBadgesOn = true;
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
   /** The last state of every city: a change of the selection redraws from it. */
@@ -467,6 +469,13 @@ export class CityView {
   }
 
   /** Owners before the first snapshot (the map's start owners); capacity is not known yet. */
+  /** The VP badges of the cities are shown (a tutorial chapter hides them until VP are explained). */
+  setVpBadges(visible: boolean): void {
+    if (visible === this.vpBadgesOn) return;
+    this.vpBadgesOn = visible;
+    for (const badge of this.badges) if (badge !== null) badge.visible = visible;
+  }
+
   setOwners(owners: readonly (PlayerId | null)[]): void {
     const none: BuildingState = { built: false, build: null, known: false };
     owners.forEach((owner, id) => {

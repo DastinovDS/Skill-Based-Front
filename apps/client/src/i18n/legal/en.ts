@@ -67,13 +67,14 @@ export const en = {
       {
         heading: 'Data in your browser',
         body: [
-          'The game saves up to five entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
+          'The game saves up to six entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
         ],
         items: [
           'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
           'sbf.sound: whether you muted the sound and the volume you chose, saved when you change either.',
           'sbf.settings: the interface scale, the motion and the opening scene you chose in the settings, saved when you change one.',
           'sbf.keys: the keys of a match you chose in the settings, saved when you change one.',
+          'sbf.tutorial: your progress in the tutorial (the chapters you completed, whether you played the first match, and whether you chose not to be offered the tutorial again), saved when one of them changes. It holds no personal data.',
           'sbf.locale: the interface language, saved only when you choose one yourself. The game is English only for now and has no language selector, so this entry normally does not appear.',
           'sbf.introSeen (sessionStorage, not localStorage): a mark that the opening scene of the start screen already played in this tab, so that it does not play again on a reload. It holds no personal data and is removed when you close the tab.',
         ],

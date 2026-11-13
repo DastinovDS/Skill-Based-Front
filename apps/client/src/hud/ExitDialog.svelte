@@ -11,9 +11,14 @@
     /** The player confirmed: forfeit the match. */
     onforfeit: () => void;
     onstay: () => void;
+    /**
+     * A tutorial chapter (#806): its kicker ("I · Units and movement"); the dialog then asks to
+     * leave the chapter, which loses nothing (a chapter always starts over).
+     */
+    chapter?: string | null;
   }
 
-  let { open, onforfeit, onstay }: Props = $props();
+  let { open, onforfeit, onstay, chapter = null }: Props = $props();
 
   let stay: HTMLButtonElement | undefined = $state();
 
@@ -28,10 +33,14 @@
   <Dialog
     id="exit"
     role="alertdialog"
-    eyebrow={t('exit.eyebrow')}
-    title={t('exit.title')}
+    eyebrow={chapter ?? t('exit.eyebrow')}
+    title={chapter === null ? t('exit.title') : t('tutorial.exit.title')}
+    describedby={chapter === null ? undefined : 'exit-body'}
     onclose={onstay}
   >
+    {#if chapter !== null}
+      <p class="dlg-lead" id="exit-body">{t('tutorial.exit.body')}</p>
+    {/if}
     {#snippet actions()}
       <!-- Esc still keeps playing (Hud); the key is not printed on the button (#919). -->
       <button
@@ -43,10 +52,16 @@
       >
         {t('exit.stay')}
       </button>
-      <!-- Danger A (#919): minium rules, the enemy hatch inks in on hover; the icon and words. -->
-      <button type="button" class="dlg-btn leave danger lapis-danger" onclick={onforfeit}>
-        <Icon name="logout" size={18} />{t('exit.confirm')}
-      </button>
+      {#if chapter !== null}
+        <!-- Leaving a chapter loses nothing: a plain secondary button, not danger. -->
+        <button type="button" class="dlg-btn" onclick={onforfeit}>{t('tutorial.exit.leave')}</button
+        >
+      {:else}
+        <!-- Danger A (#919): minium rules, the enemy hatch inks in on hover; the icon and words. -->
+        <button type="button" class="dlg-btn leave danger lapis-danger" onclick={onforfeit}>
+          <Icon name="logout" size={18} />{t('exit.confirm')}
+        </button>
+      {/if}
     {/snippet}
   </Dialog>
 {/if}

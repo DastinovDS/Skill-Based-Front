@@ -3,7 +3,7 @@
   import { t } from '../i18n/index.ts';
   import { loadMatchMap } from '../map/art.ts';
   import type { GeoFile } from '../map/geography.ts';
-  import type { MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
+  import type { ChapterId, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import type { MatchSummary } from './matchSummary.ts';
   import FailurePanel from './FailurePanel.svelte';
   import LiveMatch from './LiveMatch.svelte';
@@ -16,9 +16,25 @@
     mapId: string;
     onend: (me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => void;
     onexit: () => void;
+    /** A tutorial chapter (#806): see `LiveMatch`. */
+    chapter?: ChapterId | null;
+    onchapters?: () => void;
+    onreplay?: () => void;
+    onchapterdone?: (chapter: ChapterId) => void;
   }
 
-  let { api, token, matchId, mapId, onend, onexit }: Props = $props();
+  let {
+    api,
+    token,
+    matchId,
+    mapId,
+    onend,
+    onexit,
+    chapter = null,
+    onchapters,
+    onreplay,
+    onchapterdone,
+  }: Props = $props();
 
   let map = $state.raw<MapFile | null>(null);
   let backgroundUrl = $state.raw<string | null>(null);
@@ -56,7 +72,19 @@
 </script>
 
 {#if map !== null}
-  <LiveMatch {matchId} {token} {map} {backgroundUrl} {geo} {onend} {onexit} />
+  <LiveMatch
+    {matchId}
+    {token}
+    {map}
+    {backgroundUrl}
+    {geo}
+    {onend}
+    {onexit}
+    {chapter}
+    {onchapters}
+    {onreplay}
+    {onchapterdone}
+  />
 {:else if failed}
   <FailurePanel
     title={t('match.error.map.title')}

@@ -159,7 +159,13 @@
               };
       }
     };
-    return choices.map((choice, i) => ({ ...sector(choice), angle: angles[i] ?? 0 }));
+    // A tutorial beat (#806): an item whose concept is hidden or whose command it does not allow.
+    const target = menu.target;
+    return choices.map((choice, i) => ({
+      ...sector(choice),
+      angle: angles[i] ?? 0,
+      ...(target !== null && orders.cityChoiceLocked(choice, target) ? { locked: true } : {}),
+    }));
   });
 
   /** The ring is this wide, CSS px (a bit narrower than before: 64). */

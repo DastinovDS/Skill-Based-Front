@@ -19,6 +19,10 @@
   import type { PlayContext, Way } from './play.ts';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
+  import Charter from './tutorial/Charter.svelte';
+  import ChapterSheet from './tutorial/ChapterSheet.svelte';
+  import TutorialOffer from './tutorial/TutorialOffer.svelte';
+  import type { ChapterId } from '../protocol.gen.ts';
 
   interface Props {
     /** Tests pass their own state (fake API and storage). */
@@ -64,6 +68,7 @@
   // The brand of the bar goes back to the main screen from the pages, the result and the replay
   // (#945); on the main screen, the boot and the entry it does nothing, and a match has no bar.
   const HOME_FROM: ReadonlySet<string> = new Set([
+    'tutorial',
     'profile',
     'settings',
     'howto',
@@ -84,6 +89,8 @@
     if (app.screen.name === 'menu') {
       void app.refreshActiveMatch();
       void app.refreshProfile();
+      // The first main screen of an entry may offer the tutorial (#806).
+      void app.askOffer();
     }
   });
   const guest = $derived(app.guest);
@@ -98,7 +105,14 @@
   // The main-screen motion (#919, item 8) plays when the main screen comes in from the entry, a
   // match, the result or a replay; coming back from a page over the map (the profile, the settings,
   // How to play, the password) it is already there.
-  const PAGES: ReadonlySet<string> = new Set(['profile', 'settings', 'howto', 'password']);
+  const PAGES: ReadonlySet<string> = new Set([
+    'profile',
+    'settings',
+    'howto',
+    'password',
+    'tutorial',
+    'chapter',
+  ]);
   const PLAY: ReadonlySet<string> = new Set(['menu', 'queue', 'invite']);
   let entrance = $state(true);
   $effect(() => {
@@ -145,12 +159,22 @@
         app.menu(notice, way);
       },
       onhelp: () => {
-        app.openPage('howto');
+        app.openTutorial();
       },
       onprofile: () => {
         app.openAccountPage('profile');
       },
     };
+  }
+
+  /** "Replay chapter" on a chapter's result: the chapter again, or the chapter select if it fails. */
+  function replay(chapter: ChapterId): void {
+    void app.startChapter(chapter).then((failed) => {
+      if (failed !== null) {
+        app.openTutorial();
+        app.notice = failed;
+      }
+    });
   }
 </script>
 
@@ -168,6 +192,40 @@
   />
 {:else if screen.name === 'menu' || screen.name === 'queue' || screen.name === 'invite'}
   <PlayScreen ctx={playOf(guest)} view={screen} notice={app.notice} {entrance} />
+  {#if app.offer && screen.name === 'menu'}
+    <TutorialOffer
+      onanswer={(start: boolean, off: boolean) => {
+        app.answerOffer(start, off);
+      }}
+    />
+  {/if}
+{:else if screen.name === 'tutorial'}
+  <Charter
+    progress={app.tutorial.current}
+    initial={screen.sel}
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    map={app.backdrop}
+    onchapter={(chapter: ChapterId) => {
+      app.openChapter(chapter);
+    }}
+    onmatch={() => app.playFirstMatch()}
+    onrules={() => {
+      app.openPage('howto');
+    }}
+    onprofile={() => {
+      app.openAccountPage('profile');
+    }}
+  />
+{:else if screen.name === 'chapter'}
+  <ChapterSheet
+    chapter={screen.chapter}
+    map={app.backdrop}
+    onstart={() => app.startChapter(screen.chapter)}
+    onchapters={() => {
+      app.openTutorial();
+    }}
+  />
 {:else if screen.name === 'howto'}
   <HowToScreen
     nick={guest.nick}
@@ -200,7 +258,7 @@
       app.openAccountPage('settings');
     }}
     onhelp={() => {
-      app.openPage('howto');
+      app.openTutorial();
     }}
     onback={() => {
       app.closeAccountPage();
@@ -215,7 +273,7 @@
       app.openAccountPage('profile');
     }}
     onhowto={() => {
-      app.openPage('howto');
+      app.openTutorial();
     }}
     onpassword={() => {
       app.openPage('password');
@@ -237,7 +295,7 @@
       app.openAccountPage('profile');
     }}
     onhowto={() => {
-      app.openPage('howto');
+      app.openTutorial();
     }}
     onback={() => {
       app.closePage();
@@ -258,11 +316,23 @@
           token={guest.token}
           matchId={screen.matchId}
           mapId={screen.mapId}
+          chapter={screen.chapter ?? null}
           onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
             app.finishMatch(screen.matchId, screen.mapId, me, end, summary);
           }}
           onexit={() => {
-            app.menu();
+            if (screen.chapter === undefined) app.menu();
+            else app.openTutorial();
+          }}
+          onchapters={() => {
+            app.activeMatch = null;
+            app.openTutorial();
+          }}
+          onreplay={() => {
+            if (screen.chapter !== undefined) replay(screen.chapter);
+          }}
+          onchapterdone={(chapter: ChapterId) => {
+            app.tutorial.complete(chapter);
           }}
         />
       {/await}

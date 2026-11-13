@@ -104,6 +104,14 @@ export const MENU_SCENES = [
   'settings-guest',
   'style',
   'style-overlay',
+  // The tutorial (#806): the entry popup, the intro (Sheet) and the chapter select (Charter).
+  'tutorial-offer',
+  'tutorial-sheet',
+  'tutorial-sheet-advanced',
+  'tutorial-charter-first',
+  'tutorial-charter-progress',
+  'tutorial-charter-finished',
+  'tutorial-charter-locked',
 ] as const;
 
 /**
@@ -132,3 +140,34 @@ export const STATUS_SCENES = [
   'paused-enemy',
   'renderer',
 ] as const;
+
+/**
+ * A tutorial beat's gate on a frozen scene (#806, docs/design/tutorial.md 4.9; `/?scene=<id>&gate=`):
+ * `mise run shots` takes `gate-<name>.png` with only the pieces of that beat shown, on the HUD and
+ * the map. No `visual` references (the same scenes without a gate are the references).
+ */
+export const GATE_SHOTS: readonly { name: string; scene: string; tick: number; gate: string }[] = [
+  // Chapter I: the map alone (no CP, no warehouses, no charges on the roads, no buildings, no VP).
+  { name: 'chapter-1', scene: 'economy', tick: 2400, gate: 'none' },
+  // II.3: the CP, the notices, the charges on the roads and the warehouses.
+  {
+    name: 'chapter-2',
+    scene: 'economy',
+    tick: 2400,
+    gate: 'terrainMode,cp,notices,supply,warehouse',
+  },
+  // Chapter IV's start: the buildings, the factory counter and the stance chip (locked by its beat).
+  {
+    name: 'chapter-4',
+    scene: 'economy',
+    tick: 2400,
+    gate: 'terrainMode,cp,notices,supply,warehouse,buildings,factories,recruit,stance,planned',
+  },
+  // Chapter V before V.4: the VP, no road forts, no terrain chevrons.
+  {
+    name: 'chapter-5',
+    scene: 'forts',
+    tick: 2400,
+    gate: 'terrainMode,cp,notices,supply,warehouse,buildings,factories,recruit,stance,planned,vp',
+  },
+];

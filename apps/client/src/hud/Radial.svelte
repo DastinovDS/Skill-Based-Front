@@ -145,7 +145,7 @@
   function onmove(event: PointerEvent): void {
     if (items.length === 0) return;
     const found = sectorAtPoint(event.clientX, event.clientY);
-    const id = found === null || found.disabled === true ? null : found.id;
+    const id = found === null || found.disabled === true || found.locked === true ? null : found.id;
     if (id !== hover) onhover(id);
   }
 
@@ -187,6 +187,9 @@
   function rows(item: RadialItem): Row[] {
     const list: { kind: Row['kind']; text: string; h: number }[] = [];
     if (item.icon !== undefined) list.push({ kind: 'icon', text: item.icon, h: iconSize + 4 });
+    // A locked sector (a tutorial beat, #806) shows its icon only.
+    const icon = list[0];
+    if (item.locked === true && icon !== undefined) return [{ ...icon, dy: 5 }];
     if (item.compact !== true) {
       list.push({
         kind: 'name',
@@ -233,7 +236,10 @@
   }
 
   // The hovered sector's name in the hub over the ring (Cut and ring, ui-style 54g).
-  const hubName = $derived(items.find((item) => item.id === hover)?.label ?? null);
+  const hubName = $derived(
+    items.find((item) => item.id === hover && item.locked !== true)?.label ?? null,
+  );
+  const lockedTip = $derived(t('tutorial.locked'));
   const perMinute = $derived(t('radial.perMinute'));
 </script>
 
@@ -278,10 +284,12 @@
         class="sector"
         class:hover={hover === item.id}
         class:current={item.current === true}
-        class:disabled={item.disabled === true}
+        class:disabled={item.disabled === true && item.locked !== true}
+        class:locked={item.locked === true}
+        data-coach-menu={item.id}
         role={item.current === undefined ? 'menuitem' : 'menuitemradio'}
         aria-label={item.aria ?? (item.compact === true ? item.label : undefined)}
-        aria-disabled={item.disabled === true}
+        aria-disabled={item.disabled === true || item.locked === true}
         aria-checked={item.current === undefined ? undefined : item.current}
         tabindex={item.disabled === true ? -1 : 0}
         onclick={() => {
@@ -296,6 +304,9 @@
       >
         <path class="plate" d={sectorPath(item.angle, half, ring)} />
         <path class="edge" d={sectorPath(item.angle, half, ring)} />
+        {#if item.locked === true}
+          <title>{lockedTip}</title>
+        {/if}
         {#each rows(item) as row, i (i)}
           {#if row.kind === 'icon' && item.icon !== undefined}
             <!-- The icon is centred on the row (dy is the baseline of a text row: 5 below its middle). -->
@@ -306,6 +317,22 @@
             >
               <Icon name={item.icon} size={iconSize} cut />
             </g>
+            {#if item.locked === true}
+              <!-- The lock of a tutorial beat (#806): a small padlock at the icon's upper right. -->
+              <g
+                class="lock"
+                transform="translate({spot.x + iconSize / 2 - 1} {spot.y +
+                  row.dy -
+                  5 -
+                  iconSize / 2 +
+                  3})"
+              >
+                <path class="lock-case" d="M-5 -1h10v8.5h-10z" />
+                <path class="lock-shackle-case" d="M-3 -1v-3a3 3 0 0 1 6 0v3" />
+                <path class="lock-body" d="M-5 -1h10v8.5h-10z" />
+                <path class="lock-shackle" d="M-3 -1v-3a3 3 0 0 1 6 0v3" />
+              </g>
+            {/if}
             {#if item.current === true && item.compact === true}
               <!-- The current choice: a lozenge over its icon (a shape, not a colour). -->
               <path
@@ -517,6 +544,43 @@
 
   .sector.disabled .glyph {
     opacity: 0.35;
+  }
+
+  /* Locked by a tutorial beat (#806): the radial's disabled look, the icon only, and a padlock. */
+  .interactive .sector.locked {
+    pointer-events: auto;
+    cursor: default;
+  }
+
+  .sector.locked .edge {
+    stroke-dasharray: 4 3;
+  }
+
+  .sector.locked .glyph {
+    opacity: 0.35;
+  }
+
+  .lock-case {
+    fill: var(--casing);
+    stroke: var(--casing);
+    stroke-width: 2.6;
+    stroke-linejoin: round;
+  }
+
+  .lock-shackle-case {
+    fill: none;
+    stroke: var(--casing);
+    stroke-width: 4;
+  }
+
+  .lock-body {
+    fill: var(--rule, #7d7363);
+  }
+
+  .lock-shackle {
+    fill: none;
+    stroke: var(--rule, #7d7363);
+    stroke-width: 1.8;
   }
 
   .disc {

@@ -67,6 +67,14 @@ export const MENU_SCENE_IDS = [
   // The style foundation (#841): the specimen of the tokens and primitives, the stone overlay.
   'style',
   'style-overlay',
+  // The tutorial (#806): the entry popup, the intro (Sheet) and the chapter select (Charter).
+  'tutorial-offer',
+  'tutorial-sheet',
+  'tutorial-sheet-advanced',
+  'tutorial-charter-first',
+  'tutorial-charter-progress',
+  'tutorial-charter-finished',
+  'tutorial-charter-locked',
 ] as const;
 
 export type MenuSceneId = (typeof MENU_SCENE_IDS)[number];

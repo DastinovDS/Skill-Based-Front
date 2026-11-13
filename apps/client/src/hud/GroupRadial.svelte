@@ -37,8 +37,16 @@
     disabled: group?.gathering == null,
   });
   // Cut and ring (ui-style 54g): icons, the gathered bonus and the keys; the name is in the hub.
+  // A tutorial beat (#806): split, merge and release are never in a chapter, a cancel only where
+  // the beat allows it.
   const items = $derived.by<RadialItem[]>(() =>
-    sectors.map((item) => ({ ...item, compact: true })),
+    sectors.map((item) => ({
+      ...item,
+      compact: true,
+      ...(group !== null && orders.groupChoiceLocked(item.id as GroupChoice, group.id)
+        ? { locked: true }
+        : {}),
+    })),
   );
   const sectors = $derived<RadialItem[]>([
     {

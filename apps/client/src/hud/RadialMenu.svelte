@@ -49,6 +49,8 @@
             }),
         key: sector.key,
         current: stance === sector.stance,
+        // A tutorial beat (#806) allows one stance: the others are locked (the current one stays).
+        ...(stance !== sector.stance && orders.stanceLocked(sector.stance) ? { locked: true } : {}),
       };
     }),
   );

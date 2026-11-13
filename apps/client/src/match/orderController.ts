@@ -9,6 +9,7 @@ import type {
   ReachMsg,
   RulesetPublic,
   Stance,
+  UiFlag,
 } from '../protocol.gen.ts';
 import { MAX_MERGE_GROUPS } from '../protocol.gen.ts';
 
@@ -38,6 +39,7 @@ import { chargedOfSplit, SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { actionOf, type KeyAction, type KeyMap } from '../app/keyBindings.ts';
 import { keyBindings } from '../app/keyBindingsState.svelte.ts';
+import type { CommandFacts } from '../tutorial/allow.ts';
 
 /**
  * A sector of the menu of a city (`fortify`: a road fortification, DEC-43, item D, which then asks
@@ -115,6 +117,25 @@ export interface OrderControllerOptions {
   queryReach?: (group: string) => void;
   /** The key of each rebindable action (#966); the page's bindings when absent (a test passes its own). */
   keys?: () => KeyMap;
+  /** A tutorial chapter (#806): what the beat shows and allows; absent: everything. */
+  locks?: OrderLocks | null;
+}
+
+/**
+ * The locks of a tutorial chapter (#806, `docs/design/tutorial.md`, section 7.7): what the beat
+ * shows and allows. A control whose concept is hidden, or whose command the beat does not allow, does
+ * nothing but tell the coach (the card's action line pulses); the server refuses such a command
+ * anyway. Without locks (a normal match) everything is allowed.
+ */
+export interface OrderLocks {
+  /** The piece (a `ui` flag) is shown. */
+  shows(flag: UiFlag): boolean;
+  /** The command is allowed now. */
+  allows(cmd: Command): boolean;
+  /** A command of these facts (unknown fields match any) is allowed now: a menu item's probe. */
+  allowsFacts(facts: CommandFacts): boolean;
+  /** A locked control or command was used. */
+  refused(): void;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -360,6 +381,7 @@ export class OrderController implements MapInteraction {
 
   setPlanned(planned: boolean): void {
     this.#input(() => {
+      if (planned && !this.shows('planned')) return;
       this.ui.patch({ planned, planning: planned || this.#eHeld });
     });
   }
@@ -877,9 +899,18 @@ export class OrderController implements MapInteraction {
           }
           return;
         }
+        const move: Command = {
+          type: 'move',
+          group: group.id,
+          dest: hit.id,
+          planned: this.planned,
+          bonus,
+        };
+        // A tutorial beat that does not allow this order: nothing happens, the group stays selected.
+        if (!this.#allowed(move)) return;
         this.#closeTargetMenus();
         this.#sendCommand(
-          { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus },
+          move,
           group.node,
           // The ghost follows the route the server gave for this target (`ReachNode.path`) until the
           // `ack` brings the order's own (#851): the client finds no path.
@@ -1011,7 +1042,7 @@ export class OrderController implements MapInteraction {
    * here (no group order in the rules, or the hit is no own group): the click goes on as a plain one.
    */
   #shiftClick(hit: PickHit): boolean {
-    if (this.groupOrder === null) return false;
+    if (this.groupOrder === null || !this.shows('groupSelect')) return false;
     const ids = hit.kind === 'group' ? [hit.id] : hit.kind === 'stack' ? hit.ids : [];
     const own = ids.filter((id) => this.#isOwnGroup(id));
     if (own.length === 0) return false;
@@ -1030,7 +1061,7 @@ export class OrderController implements MapInteraction {
    */
   selectBox(ids: readonly string[]): void {
     this.#input(() => {
-      if (this.groupOrder === null) return;
+      if (this.groupOrder === null || !this.shows('groupSelect')) return;
       const own = ids.filter((id) => this.#isOwnGroup(id));
       if (own.length === 0) return;
       const base = this.#selection();
@@ -1406,6 +1437,11 @@ export class OrderController implements MapInteraction {
   /** A sector of the menu of a city: the same as its key. */
   chooseCity(choice: CityChoice): void {
     this.#input(() => {
+      const node = this.recruitNode();
+      if (node !== null && this.cityChoiceLocked(choice, node)) {
+        this.#refuse();
+        return;
+      }
       switch (choice) {
         case 'recruit':
           this.recruit();
@@ -1436,6 +1472,10 @@ export class OrderController implements MapInteraction {
     this.#input(() => {
       const node = this.recruitNode();
       if (node === null || this.#o.send === null) return;
+      if (this.cityChoiceLocked('fortify', node)) {
+        this.#refuse();
+        return;
+      }
       // Every road of the node has a line already (built or being built): there is nothing to pick.
       if (!this.fortifiable(node)) return;
       this.closeCityMenu();
@@ -1498,6 +1538,11 @@ export class OrderController implements MapInteraction {
   /** A sector of the menu of a group: the same as its key. */
   chooseGroup(choice: GroupChoice): void {
     this.#input(() => {
+      const group = this.#selectedGroup();
+      if (group !== null && this.groupChoiceLocked(choice, group.id)) {
+        this.#refuse();
+        return;
+      }
       this.groupMenu.close();
       switch (choice) {
         case 'split':
@@ -1606,6 +1651,10 @@ export class OrderController implements MapInteraction {
   openRadial(sticky: boolean): boolean {
     return this.#input(() => {
       if (this.#o.send === null) return false;
+      if (this.stanceChipLocked) {
+        this.#refuse();
+        return false;
+      }
       this.#closeMenus();
       this.radial.open(sticky);
       return true;
@@ -1622,6 +1671,10 @@ export class OrderController implements MapInteraction {
   /** A sector was chosen: close the menu and send the stance unless it is the current one. */
   chooseStance(stance: Stance): void {
     this.#input(() => {
+      if (this.stanceLocked(stance)) {
+        this.#refuse();
+        return;
+      }
       this.closeRadial();
       if (this.#o.hud.current?.stance !== stance) this.setStance(stance);
     });
@@ -1644,6 +1697,7 @@ export class OrderController implements MapInteraction {
    */
   toggleTerrainMode(): void {
     this.#input(() => {
+      if (!this.shows('terrainMode')) return;
       const on = !this.ui.current.terrainMode;
       if (on) {
         this.#closeMenus();
@@ -1669,8 +1723,16 @@ export class OrderController implements MapInteraction {
    */
   key(input: KeyInput): boolean {
     return this.#input(() => {
-      const action: KeyAction | null = actionOf(this.keys, input.code);
+      const found: KeyAction | null = actionOf(this.keys, input.code);
       this.#shiftHeld = input.shiftKey;
+      // A tutorial beat that has not shown the piece, or does not allow its command: the key does
+      // nothing but tell the coach (the planned key is simply not held).
+      const locked = this.#keyLocked(found);
+      if (locked && input.type === 'keydown' && input.repeat !== true && found !== 'planned') {
+        this.#refuse();
+      }
+      const action: KeyAction | null = locked ? null : found;
+      if (locked && found !== 'planned') return true;
       // The planned order key held (`E`, DEC-48, item K2); its keyup or a lost focus (`code` empty)
       // lets it go, so a later click never becomes a planned order by accident.
       if (action === 'planned' || (input.type === 'keyup' && input.code === '')) {
@@ -1955,6 +2017,102 @@ export class OrderController implements MapInteraction {
     return true;
   }
 
+  // --- The locks of a tutorial chapter (#806) -----------------------------------------------------
+
+  /** In a tutorial chapter: its locks; `null` in a normal match. */
+  get locks(): OrderLocks | null {
+    return this.#o.locks ?? null;
+  }
+
+  /** The piece is shown (always outside a chapter). */
+  shows(flag: UiFlag): boolean {
+    return this.#o.locks?.shows(flag) ?? true;
+  }
+
+  /** The command may be sent; a locked one tells the coach and is not. */
+  #allowed(cmd: Command): boolean {
+    const locks = this.#o.locks;
+    if (locks === null || locks === undefined || locks.allows(cmd)) return true;
+    locks.refused();
+    return false;
+  }
+
+  /** A probe of a control: allowed outside a chapter; in one, the piece shown and the command allowed. */
+  #probe(flag: UiFlag | null, facts: CommandFacts): boolean {
+    const locks = this.#o.locks;
+    if (locks === null || locks === undefined) return true;
+    return (flag === null || locks.shows(flag)) && locks.allowsFacts(facts);
+  }
+
+  /** A locked control was used: tell the coach. */
+  #refuse(): void {
+    this.#o.locks?.refused();
+  }
+
+  /** The item of a city's menu is locked (shown dimmed with a lock, does nothing). */
+  cityChoiceLocked(choice: CityChoice, node: number): boolean {
+    switch (choice) {
+      case 'recruit':
+        return !this.#probe('recruit', { command: 'recruit', node });
+      case 'barracks':
+        return !this.#probe('buildings', { command: 'build_barracks', node });
+      case 'factory':
+        return !this.#probe('buildings', { command: 'build_factory', node });
+      case 'fortify':
+        return !this.#probe('fort', { command: 'fortify_road', node });
+      case 'rally':
+        return !this.#probe('rally', { command: 'set_rally_point', node });
+    }
+  }
+
+  /** The item of a group's menu is locked: split, merge and release are never in a chapter. */
+  groupChoiceLocked(choice: GroupChoice, group: string): boolean {
+    if (this.#o.locks === null || this.#o.locks === undefined) return false;
+    if (choice !== 'cancel') return true;
+    const node = this.#o.hud.ownGroup(group)?.location;
+    return !this.#probe(null, {
+      command: 'cancel_order',
+      origin: node?.kind === 'node' ? node.node : null,
+    });
+  }
+
+  /** The stance `stance` is locked (the stance menu dims it). */
+  stanceLocked(stance: Stance): boolean {
+    return !this.#probe('stance', { command: 'set_stance', stance });
+  }
+
+  /** No stance is allowed now: the chip of the top bar is shown locked. */
+  get stanceChipLocked(): boolean {
+    return !this.#probe('stance', { command: 'set_stance' });
+  }
+
+  /** The key of `action` is locked in this chapter beat. */
+  #keyLocked(action: KeyAction | null): boolean {
+    if (this.#o.locks === null || this.#o.locks === undefined || action === null) return false;
+    switch (action) {
+      case 'planned':
+        return !this.shows('planned');
+      case 'terrain':
+        return !this.shows('terrainMode');
+      case 'stance':
+        return this.stanceChipLocked;
+      case 'release':
+      case 'split':
+      case 'merge':
+        return true;
+      case 'rally':
+        return !this.shows('rally');
+      case 'recruit':
+        return !this.shows('recruit');
+      case 'fortify':
+        return !this.shows('fort');
+      case 'alert':
+        return !this.shows('alerts');
+      default:
+        return false;
+    }
+  }
+
   /** Sends an intent and starts waiting for its `ack`; a new command clears the old notice. */
   #sendCommand(
     cmd: Command,
@@ -1965,6 +2123,7 @@ export class OrderController implements MapInteraction {
   ): number | null {
     const send = this.#o.send;
     if (send === null) return null;
+    if (!this.#allowed(cmd)) return null;
     this.#clearNotice();
     const seq = send(cmd);
     this.#o.book.track(seq, cmd, from, route, members, memberRoutes);
@@ -1994,6 +2153,8 @@ export class OrderController implements MapInteraction {
     const mark = this.#undoMarkOf(entry);
     const seq = this.#sendCommand(undoCommand(entry), null);
     if (seq !== null) this.#undoSent = { seq, mark };
+    // A tutorial beat that allows no cancel: the press is spent.
+    else this.#undoWanted = 0;
   }
 
   /** Where the cue of `entry` goes: read now, while the snapshot still shows the order. */
@@ -2352,6 +2513,10 @@ export class OrderController implements MapInteraction {
     this.#input(() => {
       const node = this.selectedOwnCity();
       if (node === null || this.#isProvince(node) || !this.rallyPoints || this.#o.send === null) {
+        return;
+      }
+      if (this.cityChoiceLocked('rally', node)) {
+        this.#refuse();
         return;
       }
       const point = this.#o.hud.current?.node?.rallyPoint ?? null;

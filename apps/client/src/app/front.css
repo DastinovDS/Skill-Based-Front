@@ -116,6 +116,18 @@
   pointer-events: none;
 }
 
+.front .top .page-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font: 500 12px / 1 var(--font-display);
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  pointer-events: none;
+}
+
 .front .mark {
   flex: none;
   margin: 0;

@@ -10,6 +10,7 @@ type Schemas = components['schemas'];
 export type Invite = Schemas['InviteOut'];
 export type ActiveMatch = Schemas['ActiveMatch'];
 export type BotMatch = Schemas['BotMatchOut'];
+export type TutorialMatch = Schemas['TutorialMatchOut'];
 export type LobbyEntry = Schemas['LobbyEntry'];
 export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
@@ -294,6 +295,11 @@ export class Api {
     signal?: AbortSignal,
   ): Promise<BotMatch> {
     return this.#request('POST', '/api/bot-matches', token, { level, ...mapChoice(pick) }, signal);
+  }
+
+  /** A tutorial chapter (#806): a scripted match on its map; 503 when the server has no tutorial. */
+  createTutorialMatch(token: string, chapter: Schemas['ChapterId']): Promise<TutorialMatch> {
+    return this.#request('POST', '/api/tutorial-matches', token, { chapter });
   }
 
   /**

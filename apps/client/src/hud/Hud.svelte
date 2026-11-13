@@ -28,6 +28,7 @@
   import StatusBar from '../app/StatusBar.svelte';
   import StatusButton from '../app/StatusButton.svelte';
   import TopBar from './TopBar.svelte';
+  import { FULL_GATE, type Gate } from '../tutorial/gate.ts';
 
   interface Props {
     rendererFailed: boolean;
@@ -51,6 +52,13 @@
     paused?: boolean;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
+    /**
+     * A tutorial chapter (#806): the pieces its beat shows (a hidden one is not drawn: the top-bar
+     * pieces, the warnings at the top, the notices). A normal match shows everything.
+     */
+    gate?: Gate;
+    /** A tutorial chapter: its kicker, for the exit dialog ("Leave the chapter?"); no start banner. */
+    chapter?: string | null;
   }
 
   let {
@@ -65,6 +73,8 @@
     onpause,
     paused = false,
     oninsets,
+    gate = FULL_GATE,
+    chapter = null,
   }: Props = $props();
 
   let root: HTMLElement | undefined = $state();
@@ -167,15 +177,24 @@
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
 <div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
-    <TopBar {data} {orders} {chrome} {onpause} {paused} {anchors} names={hud.nodeName} />
+    <TopBar {data} {orders} {chrome} {onpause} {paused} {anchors} names={hud.nodeName} {gate} />
   </div>
   {#if dev !== undefined}
     <DevPanel {dev} />
   {/if}
-  <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
-  <AlertStack alerts={hud.alerts} names={hud.nodeName} onshow={showPlace} />
-  <ToastStack toasts={hud.toasts} names={hud.nodeName} onshow={showPlace} />
-  <StartBanner {data} visible={hud.banner} {colour} />
+  {#if gate.has('alerts')}
+    <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
+    <div class="alerts" data-coach="alerts">
+      <AlertStack alerts={hud.alerts} names={hud.nodeName} onshow={showPlace} />
+    </div>
+  {/if}
+  {#if gate.has('notices')}
+    <ToastStack toasts={hud.toasts} names={hud.nodeName} onshow={showPlace} />
+  {/if}
+  <!-- A chapter has no start banner: its first card takes its place (#806). -->
+  {#if chapter === null}
+    <StartBanner {data} visible={hud.banner} {colour} />
+  {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SplitMenu {orders} {anchors} names={hud.nodeName} />
   <CityRadial
@@ -200,6 +219,7 @@
     }}
   />
   <ExitDialog
+    {chapter}
     open={chrome.exitOpen}
     onforfeit={() => {
       chrome.exitOpen = false;
@@ -234,6 +254,11 @@
 
   .top {
     align-self: stretch;
+  }
+
+  /* The warnings of the top keep their own place; the wrapper only names them for the coach. */
+  .alerts {
+    display: contents;
   }
 
   /* Bottom centre like the match status bar, which stands above it when both show. */

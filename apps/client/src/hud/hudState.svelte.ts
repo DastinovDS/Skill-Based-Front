@@ -78,8 +78,15 @@ export class HudState {
   /** Told after each change of `current` (the order controller steps on them, ARC-C01). */
   #listeners: (() => void)[] = [];
 
-  constructor(ctx: HudContext) {
+  /** The start banner (and the ring of the own capital) opens on a fresh match. */
+  readonly #startBanner: boolean;
+
+  /**
+   * `startBanner: false`: a tutorial chapter (#806), whose first card takes the banner's place.
+   */
+  constructor(ctx: HudContext, options: { readonly startBanner?: boolean } = {}) {
     this.#ctx = ctx;
+    this.#startBanner = options.startBanner ?? true;
     this.nodeName = nodeNamer(ctx.map);
     this.alerts = new AlertState(ctx.me, ctx.rules);
     this.threats = new ThreatLog(ctx.me);
@@ -286,6 +293,7 @@ export class HudState {
   #startOnce(snapshot: SnapshotMsg): void {
     if (this.#started) return;
     this.#started = true;
+    if (!this.#startBanner) return;
     if (snapshot.tick > FRESH_SECONDS * this.#ctx.rules.tick_hz) return; // a rejoin, not a start
     this.banner = true;
     this.#bannerTimer = setTimeout(() => {
