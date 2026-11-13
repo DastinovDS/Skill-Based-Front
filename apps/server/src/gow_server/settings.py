@@ -220,7 +220,10 @@ class Settings(BaseSettings):
     """At most ``opponent_limit`` rated matches between the same two accounts within the rolling
     window; the later ones are unrated (DEC-34, item 4)."""
     bot_budget_s: float = 0.001
-    """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""
+    """A bot decision longer than this is counted as an overrun (``gow_bot_overruns_total``);
+    nothing is skipped for it (SRV-06, AGENTS.md, 8 and 12)."""
+    bot_share: float = Field(default=0.02, ge=0, le=1)
+    """Share of the wall time a bot may spend deciding; a bot over it skips calls (#1033)."""
 
     monitor_interval_s: float = 30.0
     """How often the tick lag of running matches is checked against the 10 % alert (OPS-04)."""

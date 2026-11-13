@@ -26,8 +26,15 @@ tournaments use too (#994): made from ``Match.rules`` (the periods of ``[map_tem
 every ``DECIDE_EVERY`` ticks inside ``step`` on the same ``PlayerView`` a human gets (a smart bot
 that will not think on a call gets the figure ids of its view alone, ``Glancer``), its commands
 resolved and numbered by the seat, applied like the humans' ones and logged. A decision
-(``decide`` alone, not the projection) longer than ``bot_budget_s`` (1 ms) is kept, but the next
-call is skipped and counted (``bot_overruns``). The snapshots, the bot's view and the frames
+(``decide`` alone, not the projection) longer than ``bot_budget_s`` (1 ms, the section 12 budget
+of a decision) is only counted (``bot_overruns``): the budget is a figure of a warm CPU, and an
+idle core wakes up slow (a call every 500 ms ran 3 to 6 times longer than in a hot loop on the
+reference machine and in Docker on it, #1033), so most calls of a healthy bot overrun it. What
+protects the tick loop is a share of the wall time (``bot_share``, 2 %): every due call earns
+``bot_share`` times the time between two calls, a decision spends its measured time (at most
+``BOT_BURST_S``), and a call with an empty account is skipped and counted (``bot_skipped``).
+A bot that decides within the share keeps its cadence, a slower one is thinned out in
+proportion. The snapshots, the bot's view and the frames
 reuse the vision of the step (``Match.view(reuse=True)``): nothing but ``Match.step`` changes the
 state. The bot has no connection, so no reconnect window runs for it; its slot holds
 ``BOT_ACCOUNT``, which no account has.
@@ -86,7 +93,7 @@ if TYPE_CHECKING:
 from gow_sim.analysis import ResultTally
 from gow_sim.commands import Command, PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
-from gow_sim.match import Controller, ControllerFactory, Match, Seat
+from gow_sim.match import DECIDE_EVERY, Controller, ControllerFactory, Match, Seat
 from gow_sim.replay import ReplayWriter
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import PlayerView
@@ -108,7 +115,17 @@ BOT_ACCOUNT: Final = 0
 """Account id in ``players`` of the slot a bot plays: account ids start at 1."""
 
 BOT_BUDGET_S: Final = 0.001
-"""Time a bot decision should take; a longer one makes the bot skip its next call."""
+"""Time a bot decision should take (AGENTS.md, section 12); a longer one is counted as an overrun
+(``bot_overruns``), nothing more: a cold core makes most healthy decisions longer."""
+
+BOT_SHARE: Final = 0.02
+"""Share of the wall time a bot may spend deciding: 10 ms per call of 500 ms. A healthy hard bot
+on a big pool map takes 0.3 to 0.9 ms warm and up to 6 times that on a cold core (#1033), so
+about 1 % at worst; a bot over this share is thinned out."""
+
+BOT_BURST_S: Final = 0.025
+"""Most time a bot may save up, and most one decision is charged: a single stall (a GC pause, a
+suspended VM) costs at most this, so one outlier never skips a call by itself."""
 
 _EPS: Final = 1e-9
 """Float slack of the schedule: ten steps of 0.1 s are due at exactly 1.0 s."""
@@ -221,6 +238,7 @@ class MatchRunner:
         pause_max_s: float = DEFAULT_WINDOW_S,
         bot: BotSeat | None = None,
         bot_budget_s: float = BOT_BUDGET_S,
+        bot_share: float = BOT_SHARE,
         metrics: ServerMetrics | None = None,
         rating_plan: RatingPlan | None = None,
         validate_snapshots: bool = False,
@@ -263,9 +281,13 @@ class MatchRunner:
         """Calls of ``decide`` that returned (a ``Glancer`` that does not think is not called)."""
         self.bot_commands = 0
         self.bot_overruns = 0
-        """Decisions slower than ``bot_budget_s``; each made the bot skip its next call."""
+        """Decisions slower than ``bot_budget_s`` (counted only)."""
         self.bot_skipped = 0
-        self._bot_skip_next = False
+        self.bot_share: Final = bot_share
+        self._bot_earn_s: Final = bot_share * DECIDE_EVERY * self.dt
+        """What a due call adds to the account: the share of the time between two calls."""
+        self._bot_account_s = BOT_BURST_S
+        """Time the bot may still spend; a call with a negative account is skipped."""
         self.connect_timeout_s: Final = connect_timeout_s
         """A bot match is dropped when no player connects within this many seconds of its start;
         ``None``: never (#412)."""
@@ -613,13 +635,14 @@ class MatchRunner:
         return "disconnect" if defeated & self._seen else "no_show"
 
     def _bot_commands(self) -> list[PlayerCommand]:
-        """Commands of the bot for this tick (``Seat``: every ``DECIDE_EVERY`` ticks); the call
-        after a decision over ``bot_budget_s`` is skipped."""
+        """Commands of the bot for this tick (``Seat``: every ``DECIDE_EVERY`` ticks); a call is
+        skipped while the bot has spent more than its ``bot_share`` of the time (module
+        docstring)."""
         seat = self._bot_seat
         if seat is None or not seat.due():
             return []
-        if self._bot_skip_next:
-            self._bot_skip_next = False
+        self._bot_account_s = min(BOT_BURST_S, self._bot_account_s + self._bot_earn_s)
+        if self._bot_account_s < 0:
             self.bot_skipped += 1
             self.metrics.bot_skipped += 1
             return []
@@ -632,14 +655,15 @@ class MatchRunner:
         return out
 
     def _decide_bot(self, controller: Controller, view: PlayerView, tick: int) -> list[Command]:
-        """``decide`` of the bot, timed against ``bot_budget_s`` (the decision's budget, not the
-        projection's)."""
+        """``decide`` of the bot, timed (the decision's time, not the projection's): counted
+        against ``bot_budget_s`` and charged to the account of ``bot_share``."""
         started = time.perf_counter()
         decided = controller.decide(view, tick)
-        if time.perf_counter() - started > self.bot_budget_s:
+        spent = time.perf_counter() - started
+        if spent > self.bot_budget_s:
             self.bot_overruns += 1
             self.metrics.bot_overruns += 1
-            self._bot_skip_next = True
+        self._bot_account_s -= min(spent, BOT_BURST_S)
         self.bot_decisions += 1
         return decided
 
@@ -707,6 +731,7 @@ class MatchManager:
         reconnect_window_s: float = DEFAULT_WINDOW_S,
         pause_max_s: float = DEFAULT_WINDOW_S,
         bot_budget_s: float = BOT_BUDGET_S,
+        bot_share: float = BOT_SHARE,
         alerter: Alerter | None = None,
         validate_snapshots: bool = False,
         max_matches: int | None = None,
@@ -717,6 +742,7 @@ class MatchManager:
         self.metrics = ServerMetrics()
         self.alerter = alerter or Alerter()
         self._bot_budget_s = bot_budget_s
+        self._bot_share = bot_share
         self._validate_snapshots = validate_snapshots
         self._reconnect_window_s = reconnect_window_s
         self._pause_max_s = pause_max_s
@@ -817,6 +843,7 @@ class MatchManager:
             pause_max_s=self._pause_max_s,
             bot=bot,
             bot_budget_s=self._bot_budget_s,
+            bot_share=self._bot_share,
             rating_plan=rating_plan,
             validate_snapshots=self._validate_snapshots,
             connect_timeout_s=self._bot_connect_timeout_s if bot is not None else None,

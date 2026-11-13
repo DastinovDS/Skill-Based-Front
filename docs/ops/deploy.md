@@ -251,7 +251,7 @@ docker compose exec app python -c "import urllib.request as u; print(u.urlopen('
 | `gow_matches_never_started_total` | bot matches dropped because nobody connected within `GOW_BOT_CONNECT_TIMEOUT_S` (#412) |
 | `gow_tick_lag_seconds` (histogram) | how much later than scheduled a tick started; the alert threshold is 10% of the tick period = 10 ms at 10 Hz |
 | `gow_step_seconds` (histogram) | the duration of one tick; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
-| `gow_bot_overruns_total`, `gow_bot_skipped_total` | bot decisions longer than the budget and the calls skipped because of them (per match the same is written to the `match finished` log) |
+| `gow_bot_overruns_total`, `gow_bot_skipped_total` | bot decisions longer than the 1 ms budget (counted only: a cold core makes most of them longer, #1033) and the calls skipped because a bot spent more than `GOW_BOT_SHARE` of the time (per match the same is written to the `match finished` log) |
 | `gow_ws_connections` | open match WebSocket connections |
 | `gow_ws_refused_unauth_total` | match WebSockets closed with 1013 because of the cap on connections before `hello` (#199) |
 | `gow_outbox_backlog_max` | the longest unsent queue of a connection (the client is not reading) |
