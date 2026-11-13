@@ -33,7 +33,8 @@ from gow_bots.bots import BOTS
 from gow_protocol.convert import snapshot_frame
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
-from gow_sim.match import Controller, Match
+from gow_sim.match import DECIDE_EVERY, Controller, Match
+from gow_sim.replay import read_replay
 from gow_sim.ruleset import Ruleset, load_ruleset
 from gow_sim.state import GameState
 from gow_sim.systems.flow import supply_flow
@@ -43,13 +44,16 @@ from gow_sim.view import project
 pytestmark = pytest.mark.perf  # serial only: timings are meaningless under xdist
 
 ROOT: Final = Path(__file__).resolve().parents[3]
+LOGS: Final = Path(__file__).resolve().parent / "bench_pool"
+RECORD: Final = "record them again with `mise run bench:record` (scripts/bench_pool_record.py)"
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
 REFERENCE_WORKLOAD_S: Final = 1.29e-3
 """``_workload()`` on the reference machine; equal to the one of the simulation benchmarks."""
 KEY: Final = bytes(range(32))
-WARM_TICKS: Final = 1500
-DECIDE_EVERY: Final = 5
+WARM_TICKS: Final = 3000
+RECORDED_TICKS: Final = 4500
+"""The ticks of the logs: ``WARM_TICKS`` plus the 1500 steps of ``test_pool_step``."""
 POOL: Final = sorted(p.stem for p in (ROOT / "maps").glob("*.json"))
 BOT_NAMES: Final = ("smart_rusher", "smart_expander")
 BOT_BUDGET_MS: Final = 1.0
@@ -111,53 +115,54 @@ def rules7() -> Ruleset:
 
 
 class _Game:
-    """A seeded smart-bot match on a pool map; restarts when it ends."""
+    """The warmed match of a pool map: the recorded commands of ``bench_pool/<map>.jsonl.gz``
+    replayed to tick ``WARM_TICKS``, with the bots deciding on the views of every
+    ``DECIDE_EVERY``-th tick (timed for ``test_pool_decision``; their commands are not played).
+
+    The simulation benchmarks measure a copy of ``match`` (``fresh()``), so neither the bots of
+    the day nor the order or selection of the tests changes the state they measure (#1029)."""
 
     def __init__(self, name: str, mapdef: MapDef, rules: Ruleset) -> None:
-        self.name, self.map, self.source = name, mapdef, rules
+        self.name, self.map = name, mapdef
+        replay = read_replay(LOGS / f"{name}.jsonl.gz")
+        self.log: dict[int, list[PlayerCommand]] = {}
+        for tick, cmd in replay.commands:
+            self.log.setdefault(tick, []).append(cmd)
+        self.checkpoints = {c.tick: c.hash for c in replay.checkpoints}
         self.decisions: list[float] = []
         """Seconds of ``view`` plus ``decide`` per call, from tick 300 (the server's bot loop)."""
-        self.match = self._new()
-
-    def _new(self) -> Match:
-        match = Match(self.map, self.source, KEY)
-        self.bots: list[Controller] = [
-            BOTS[name](self.map, match.rules, seed=7, player=p) for p, name in enumerate(BOT_NAMES)
+        self.match = Match(mapdef, rules, KEY)
+        bots: list[Controller] = [
+            BOTS[n](mapdef, self.match.rules, seed=7, player=p) for p, n in enumerate(BOT_NAMES)
         ]
-        self.seq = 0
-        return match
-
-    def commands(self) -> list[PlayerCommand]:
-        """The commands of the bots for the next step, decided on the reused vision (untimed
-        by the benchmarks; ``decisions`` keeps what each call took)."""
-        if self.match.finished:
-            self.match = self._new()
         match = self.match
-        if match.tick % DECIDE_EVERY:
-            return []
-        cmds: list[PlayerCommand] = []
-        for p in PLAYERS:
-            t0 = time.perf_counter()
-            decided = self.bots[p].decide(match.view(p, reuse=True), match.tick)
-            if match.tick >= 300:
-                self.decisions.append(time.perf_counter() - t0)
-            for cmd in decided:
-                cmds.append(PlayerCommand(p, self.seq, match.resolve(p, cmd)))
-                self.seq += 1
-        return cmds
+        while match.tick < WARM_TICKS:
+            if match.tick % DECIDE_EVERY == 0:
+                for p in PLAYERS:
+                    t0 = time.perf_counter()
+                    bots[p].decide(match.view(p, reuse=True), match.tick)
+                    if match.tick >= 300:
+                        self.decisions.append(time.perf_counter() - t0)
+            match.step(self.log.get(match.tick + 1, ()))
+        assert not match.finished
+        assert match.state_hash() == self.checkpoints[WARM_TICKS], (
+            f"{name}: the recorded commands no longer give the recorded state: {RECORD}"
+        )
 
-    def warm(self, ticks: int) -> None:
-        while self.match.tick < ticks:
-            self.match.step(self.commands())
-        assert not self.match.finished
+    def fresh(self) -> Match:
+        """A copy of the warmed match (the memos and the vision of the last step travel with it)."""
+        return copy.deepcopy(self.match)
+
+    def commands(self, match: Match) -> list[PlayerCommand]:
+        """The recorded commands of the next step of ``match``."""
+        assert match.tick < RECORDED_TICKS, f"{self.name}: the log ends at tick {RECORDED_TICKS}"
+        return self.log.get(match.tick + 1, [])
 
 
 @pytest.fixture(scope="module", params=POOL)
 def game(request: pytest.FixtureRequest, rules7: Ruleset) -> _Game:
     name: str = request.param
-    g = _Game(name, load_map(ROOT / "maps" / f"{name}.json"), rules7)
-    g.warm(WARM_TICKS)
-    return g
+    return _Game(name, load_map(ROOT / "maps" / f"{name}.json"), rules7)
 
 
 def _budget(mapdef: MapDef, kind: str) -> float:
@@ -254,27 +259,31 @@ def _run(
 
 
 def test_pool_step(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
-    """``Match.step`` alone (the bots decide in the untimed setup)."""
+    """``Match.step`` alone, ticks ``WARM_TICKS + 1`` to ``RECORDED_TICKS`` of the log (the
+    recorded commands are taken in the untimed setup)."""
+    match = game.fresh()
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (game.commands(),), {}
+        return (game.commands(match),), {}
 
     def step(cmds: list[PlayerCommand]) -> None:
-        game.match.step(cmds)
+        match.step(cmds)
 
-    _run(benchmark, speed_factor, "step", game, step, setup)
+    _run(benchmark, speed_factor, "step", game, step, setup, RECORDED_TICKS - WARM_TICKS)
 
 
 def test_pool_project(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """One ``project()`` of the warmed state, vision not reused (like the section 12 budget)."""
-    state, rules = game.match.state, game.match.rules
+    match = game.fresh()
+    state, rules = match.state, match.rules
     _run(benchmark, speed_factor, "project", game, lambda: project(state, rules, 0, KEY))
 
 
 def test_pool_vision_cold(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """``compute_vision`` for one player with an empty ``GameState.memo`` (ARP-02): the cost of a
     tick whose vision inputs changed. Warm, the memo answers in microseconds."""
-    cold, rules = copy.deepcopy(game.match.state), game.match.rules
+    match = game.fresh()
+    cold, rules = match.state, match.rules
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
         cold.memo.clear()
@@ -324,14 +333,15 @@ def test_pool_supply_flow_replanned(
 
 def test_pool_snapshot_frame(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """The encoded snapshot of one player from the view of the tick (the cost on top of it)."""
-    view = game.match.view(0)
+    view = game.fresh().view(0)
     _run(benchmark, speed_factor, "snapshot", game, lambda: snapshot_frame(view))
 
 
 def test_pool_server_tick(benchmark: BenchmarkFixture, speed_factor: float, game: _Game) -> None:
     """What ``MatchRunner.step`` does per tick without the bot and the sockets: the step, a view
-    with the reused vision and the encoded snapshot for each player."""
-    match = game.match
+    with the reused vision and the encoded snapshot for each player; ticks ``WARM_TICKS + 1``
+    on of the log."""
+    match = game.fresh()
 
     def tick(cmds: list[PlayerCommand]) -> None:
         match.step(cmds)
@@ -339,9 +349,8 @@ def test_pool_server_tick(benchmark: BenchmarkFixture, speed_factor: float, game
             snapshot_frame(match.view(p, reuse=True))
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
-        return (game.commands(),), {}
+        return (game.commands(match),), {}
 
-    game.match.step(game.commands())  # a fresh state if the match restarted
     _run(benchmark, speed_factor, "server_tick", game, tick, setup, 1000)
 
 
