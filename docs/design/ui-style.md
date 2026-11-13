@@ -2824,7 +2824,13 @@ only, on frames of the real client (the seven chapter maps of `tutorial.md` play
 scenes, the main screen). The whole tutorial in this look, screen by screen with the final copy, is the walkthrough
 [`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html) (`tutorial.md`, section 8). Two pieces it adds:
 a failure card shows "Try again" in its head instead of the step lozenges, and a locked chapter on the Road is a dashed
-ring with a small lock, its name dimmed and "After <chapter>" under it.
+ring with a small lock, its name dimmed and "After <chapter>" under it. Round 3 (the owner's review, 2026-11-13) adds
+three: a **gated HUD** (a top-bar piece or map mark of a concept not yet taught is hidden, `tutorial.md` 4.8); a
+**locked control** (a menu item of the radial, or the stance chip, that the beat does not allow: the radial's disabled
+style with its icon only, no price and no key, and a small lock at the icon's lower right; the chip at 40% with the
+lock at its corner); the **"Paused" plate** (a small stone plate at the bottom centre of the map, the pause glyph,
+"Paused" in the display caps and "until you continue" or "until you act" in italics; nothing under it is dimmed), with
+"Continue" at the foot of a card that waits for it.
 
 - **Hint card of a chapter: Leader.** A plate tied to its place by a ruled leader (the map tip language of section
   63): the chapter ("IV · Attack and fight", "Advanced I · Group orders") and its step lozenges in the head, the text,
