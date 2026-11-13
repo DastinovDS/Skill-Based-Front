@@ -2821,7 +2821,10 @@ The style-fit list, the variants dropped before the page, the table with estimat
 The look of the playable tutorial (`docs/design/tutorial.md`: the five main chapters, the first match and the Advanced
 side road, owner 2026-11-13). Mockup [`mockups/tutorial.html`](mockups/tutorial.html), round 2: the chosen variants
 only, on frames of the real client (the seven chapter maps of `tutorial.md` played on the simulation, the artery dev
-scenes, the main screen).
+scenes, the main screen). The whole tutorial in this look, screen by screen with the final copy, is the walkthrough
+[`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html) (`tutorial.md`, section 8). Two pieces it adds:
+a failure card shows "Try again" in its head instead of the step lozenges, and a locked chapter on the Road is a dashed
+ring with a small lock, its name dimmed and "After <chapter>" under it.
 
 - **Hint card of a chapter: Leader.** A plate tied to its place by a ruled leader (the map tip language of section
   63): the chapter ("IV · Attack and fight", "Advanced I · Group orders") and its step lozenges in the head, the text,
