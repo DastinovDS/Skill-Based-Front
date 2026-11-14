@@ -17,7 +17,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 54,
+    "PROTOCOL_VERSION": 55,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -388,7 +388,7 @@
     },
     "Beat": {
       "additionalProperties": false,
-      "description": "One hint card (section 4.0): it shows when its trigger fires and stays until the next.",
+      "description": "One hint card (section 4.0): it shows when its trigger fires (``on.after`` ticks later)\nand stays until the next, or until the player did what it asks (review 4, P2). A ``focus``\nbeat has no card: for that many ticks the game runs with no text and its marks light the\nplaces to watch (P5).",
       "properties": {
         "id": {
           "pattern": "^[A-Z0-9]{1,8}$",
@@ -471,6 +471,27 @@
           "default": false,
           "description": "The beat after it may begin first, and this one is then passed over (IV.5: the enemy plan\nis seen only on the planned path; on the failure path it is over before the plan).",
           "type": "boolean"
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A focus phase (review 4, P5): no card and no text for this many ticks, the game runs and\nthe marks light what makes or carries charges; the beat after it begins when its trigger has\nfired and the focus is over."
+        },
+        "acts": {
+          "default": 1,
+          "description": "Client only: the commands of ``allow`` the card asks for; once that many stand (a cancel\ntakes one back), the card goes until the next beat (review 4, P2; A2.2: two recruits).",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
@@ -2326,7 +2347,7 @@
     },
     "Mark": {
       "additionalProperties": false,
-      "description": "The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item\nof a node or the VP badge of a city.",
+      "description": "The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item\nof a node or the VP badge of a city; or the element of a place the card names, lit itself\n(review 4, P3): its capacity ring, its warehouse row, the count under its group.",
       "properties": {
         "node": {
           "anyOf": [
@@ -2426,6 +2447,48 @@
             }
           ],
           "default": null
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "maxLength": 24,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The segments of the place's capacity ring."
+        },
+        "warehouse": {
+          "anyOf": [
+            {
+              "maxLength": 24,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The row of lozenges under the place (its warehouse)."
+        },
+        "count": {
+          "anyOf": [
+            {
+              "maxLength": 24,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The number or range under the group in the place (an enemy's ``1-2``)."
         }
       },
       "title": "Mark",
@@ -4604,7 +4667,7 @@
     },
     "Trigger": {
       "additionalProperties": false,
-      "description": "When a beat begins, or a condition of the goal (section 7.3, ``on``).\n\nExactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,\nwith filters), ``accepted`` (an own command the server accepted, by its pattern; the places\nare those at the moment it was sent), ``view`` (a fact of the own view), ``continued``\n(Continue on that beat, ``after`` ticks later), ``ui`` (client only: a selection) or ``any``\n(the first of several that fires).",
+      "description": "When a beat begins, or a condition of the goal (section 7.3, ``on``).\n\nExactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,\nwith filters), ``accepted`` (an own command the server accepted, by its pattern; the places\nare those at the moment it was sent), ``view`` (a fact of the own view), ``continued``\n(Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several\nthat fires).\n\n``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal\ncondition): the beat begins that many ticks after its trigger fired, so the map has drawn\nwhat the card names (a capture's flood, the shots of a round) before the card shows (review\n4, P1).",
       "properties": {
         "start": {
           "anyOf": [
@@ -4789,7 +4852,7 @@
         },
         "after": {
           "default": 0,
-          "description": "With ``continued``: ticks after the Continue.",
+          "description": "Ticks from the trigger to the beginning of the beat (with ``continued``: after the\nContinue).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -4923,6 +4986,12 @@
         "done": {
           "description": "The goal holds: the chapter ends with the next tick (``match_end``).",
           "type": "boolean"
+        },
+        "tick": {
+          "description": "The tick the beat began (0 before the first one): the client shows its card once the map\nit draws has reached this tick (review 4, P1: the card speaks only about what is seen).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -4931,7 +5000,8 @@
         "beat",
         "paused",
         "used",
-        "done"
+        "done",
+        "tick"
       ],
       "title": "TutorialMsg",
       "type": "object"

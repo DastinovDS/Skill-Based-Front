@@ -127,6 +127,16 @@
     }
   }
 
+  /* The buttons stand at the foot of the sheet on every chapter, whatever the length of the line and
+     of the goals above them (review 4, P6). */
+  .text {
+    display: flex;
+    flex-direction: column;
+    /* Room for the longest chapter (two lines of title, two of line, three goals): the sheet keeps
+       one height, so its centred box and the buttons at its foot stand still. */
+    min-height: 380px;
+  }
+
   .kicker {
     margin: 0;
     font: 500 11.5px/1.3 var(--font-display);
@@ -142,6 +152,7 @@
   }
 
   .why {
+    min-height: calc(2 * 1.38em);
     margin: 0 0 22px;
     font: italic 500 20px/1.38 var(--font-text);
     color: var(--ink-soft);
@@ -184,6 +195,11 @@
     display: flex;
     align-items: center;
     gap: 28px;
+  }
+
+  /* At the foot of the column (over the `.front .acts` margin of the pages). */
+  .text .acts {
+    margin-top: auto;
   }
 
   .quiet {

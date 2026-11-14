@@ -11,18 +11,29 @@
   "beats": [
     {"id": "1", "on": {"start": true}, "pause": "continue", "allow": [],
      "mark": [{"node": "Fernhold"}, {"node": "Lowfield"}]},
-    {"id": "2", "on": {"continued": "1", "after": 30}, "pause": "continue", "allow": [],
+    {"id": "1W", "on": {"continued": "1"}, "focus": 30,
+     "mark": [{"node": "Highhold"}, {"road": ["Highhold", "Millbrook"]}, {"road": ["Highhold", "Coldwell"]},
+              {"node": "Fernhold"}, {"node": "Lowfield"}]},
+    {"id": "2", "on": {"continued": "1"}, "pause": "continue", "allow": [],
      "mark": [{"road": ["Highhold", "Millbrook"]}]},
+    {"id": "2W", "on": {"continued": "2"}, "focus": 40,
+     "mark": [{"node": "Highhold"}, {"road": ["Highhold", "Millbrook"]}, {"node": "Millbrook"}]},
     {"id": "3", "on": {"any": [
        {"event": "packet_lost", "by": "you"},
-       {"event": "node_captured", "node": "Lowfield", "by": "enemy"}]},
+       {"event": "node_captured", "node": "Lowfield", "by": "enemy"}], "after": 12},
      "pause": "continue", "allow": [],
      "mark": [{"node": "Lowfield"}, {"node": "Coldwell"}]},
+    {"id": "3W", "on": {"continued": "3"}, "focus": 50,
+     "mark": [{"node": "Coldwell"}, {"road": ["Millbrook", "Fernhold"]}, {"node": "Fernhold"}]},
     {"id": "4", "on": {"view": {"warehouse_full": "Fernhold"}}, "pause": "action",
      "allow": [{"move": {"from": "Fernhold", "to": "Ashwood", "planned": false}}],
      "mark": [{"node": "Ashwood"}]},
-    {"id": "5", "on": {"event": "packet_sent", "to": "Ashwood", "by": "you"}, "allow": [],
-     "mark": [{"node": "Ashwood"}, {"road": ["Fernhold", "Ashwood"]}]}
+    {"id": "5", "on": {"event": "packet_sent", "to": "Ashwood", "by": "you"}, "pause": "continue",
+     "allow": [],
+     "mark": [{"node": "Ashwood"}, {"road": ["Fernhold", "Ashwood"]}]},
+    {"id": "5W", "on": {"continued": "5"}, "focus": 100,
+     "mark": [{"node": "Ashwood"}, {"road": ["Fernhold", "Ashwood"]}, {"node": "Fernhold"},
+              {"road": ["Millbrook", "Fernhold"]}]}
   ],
   "fails": [],
   "goal": {"all": [{"view": {"group_full": "Ashwood"}}]}

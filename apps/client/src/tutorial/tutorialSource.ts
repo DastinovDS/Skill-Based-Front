@@ -49,8 +49,11 @@ export class TutorialSource implements RenderSource {
   }
 
   frame(): RenderFrame | null {
+    const frame = this.#session.frame();
+    // A beat shows once the map has drawn its tick (review 4, P1).
+    if (frame !== null) this.#coach.onRender(frame.base.tick);
     this.#gate.setGate(this.#coach.current.gate);
-    return this.#gate.frame(this.#session.frame());
+    return this.#gate.frame(frame);
   }
 
   events(): readonly EventMsg[] {
@@ -65,8 +68,10 @@ export class TutorialSource implements RenderSource {
   coachMarks(): CoachMarks | null {
     const view = this.#coach.current;
     const card = view.card;
-    // The result (Seal) stands over the last frame: no marks under it.
-    if (card === null || this.#coach.sealed) return null;
+    const marks = card?.marks ?? view.focus;
+    // The result (Seal) stands over the last frame: no marks under it; a card that went (the
+    // player did what it asks) takes its marks with it.
+    if (marks === null || this.#coach.sealed) return null;
     const menuAt = this.#menuAt();
     const key = `${String(view.seq)}:${String(menuAt)}`;
     if (key === this.#marksKey) return this.#marks;
@@ -78,13 +83,21 @@ export class TutorialSource implements RenderSource {
     const groupsAt: number[] = [];
     const roads: (readonly [number, number])[] = [];
     const vpBadges: number[] = [];
-    for (const mark of card.marks) {
+    const capacities: number[] = [];
+    const warehouses: number[] = [];
+    const counts: number[] = [];
+    const add = (into: number[], name: string | null | undefined): void => {
+      const node = id(name);
+      if (node !== undefined) into.push(node);
+    };
+    for (const mark of marks) {
       const node = id(mark.node);
       if (node !== undefined) nodes.push({ id: node, ring: mark.ring === true });
-      const group = id(mark.group);
-      if (group !== undefined) groupsAt.push(group);
-      const badge = id(mark.vp_badge);
-      if (badge !== undefined) vpBadges.push(badge);
+      add(groupsAt, mark.group);
+      add(vpBadges, mark.vp_badge);
+      add(capacities, mark.capacity);
+      add(warehouses, mark.warehouse);
+      add(counts, mark.count);
       if (mark.road != null) {
         const a = id(mark.road[0]);
         const b = id(mark.road[1]);
@@ -96,7 +109,7 @@ export class TutorialSource implements RenderSource {
         nodes.push({ id: at, ring: false });
     }
     const turns =
-      card.turns?.map((turn) => ({
+      card?.turns?.map((turn) => ({
         label: TERRAINS.some((x) => x === turn.word)
           ? t(`terrain.${turn.word as Terrain}`)
           : turn.word,
@@ -110,7 +123,11 @@ export class TutorialSource implements RenderSource {
       groupsAt,
       roads,
       vpBadges,
+      capacities,
+      warehouses,
+      counts,
       turns,
+      focus: card === null,
     };
     return this.#marks;
   }

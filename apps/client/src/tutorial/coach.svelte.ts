@@ -7,6 +7,11 @@
  *
  * `current` is replaced on a change only (a beat, a pause, a selection that starts a UI beat), not
  * per snapshot: the HUD and the map read it once per beat.
+ *
+ * Review 4 (#1047): a beat shows only once the map has drawn its tick (`TutorialMsg.tick`, P1: the
+ * card speaks about what is seen; the map reports its tick through `onRender`); a card goes once
+ * the player did what it asks (P2: Continue, or the orders it asks for standing); a focus beat
+ * shows no card, only the places it lights (P5).
  */
 import type {
   Allow,
@@ -46,6 +51,8 @@ export interface CoachCard {
 
 export interface CoachView {
   readonly card: CoachCard | null;
+  /** A focus phase (P5): no card, the map lights these places; null otherwise. */
+  readonly focus: readonly Mark[] | null;
   /** The simulation waits for the card (the "Paused" plate). */
   readonly paused: boolean;
   /** The pieces shown. */
@@ -64,6 +71,32 @@ export interface CoachOptions {
   resume: () => void;
   /** The places of the chapter's map and the node an own group stands in. */
   context: AllowContext;
+  /**
+   * A beat whose tick the map has not drawn after this long (ms) shows anyway: a map that draws
+   * nothing (no WebGL) never holds the chapter. Default `BEAT_FALLBACK_MS`.
+   */
+  fallbackMs?: number;
+}
+
+/** How long a beat waits for the map to draw its tick before it shows anyway (ms). */
+export const BEAT_FALLBACK_MS = 3000;
+
+/**
+ * The orders of `allow` that stand: the accepted commands of every entry, a cancel taking one back
+ * (I.5: the army sent, called back, sent again).
+ */
+export function standingOrders(allow: readonly Allow[], used: readonly number[]): number {
+  let n = 0;
+  allow.forEach((entry, i) => {
+    const count = used[i] ?? 0;
+    n += entry.cancel_order != null ? -count : count;
+  });
+  return n;
+}
+
+/** The beats of a chapter that show a card (a focus beat does not): the step lozenges. */
+function cardBeats(chapter: Chapter): readonly Beat[] {
+  return chapter.beats.filter((b) => b.focus == null);
 }
 
 /** A selection the UI beats look at: the node the selected own group stands in, or none. */
@@ -73,6 +106,7 @@ export class TutorialCoach {
   readonly chapter: Chapter;
   current = $state.raw<CoachView>({
     card: null,
+    focus: null,
     paused: false,
     gate: NO_GATE,
     allow: [],
@@ -88,7 +122,13 @@ export class TutorialCoach {
   sealed = $state(false);
 
   readonly #o: CoachOptions;
+  /** The latest message of the server. */
   #msg: TutorialMsg | null = null;
+  /** The message whose beat is shown: the latest once the map has drawn its tick. */
+  #shown: TutorialMsg | null = null;
+  /** The tick the map has drawn (the base snapshot of its frame). */
+  #rendered = -Infinity;
+  #fallback: ReturnType<typeof setTimeout> | undefined;
   /** The UI beat shown between two server beats (a selection), or null. */
   #uiBeat: string | null = null;
   /** The last main beat the server named: a failure card does not move it. */
@@ -108,12 +148,42 @@ export class TutorialCoach {
 
   /** A `tutorial` message of the server. */
   onMessage(msg: TutorialMsg): void {
-    const beatChanged = this.#msg?.beat !== msg.beat;
     this.#msg = msg;
+    this.#settle();
+  }
+
+  /**
+   * The map drew the snapshot of `tick` (every frame; cheap when nothing waits): a beat waiting
+   * for its tick shows now.
+   */
+  onRender(tick: number): void {
+    if (tick <= this.#rendered) return;
+    this.#rendered = tick;
+    const msg = this.#msg;
+    if (msg !== null && msg !== this.#shown && msg.tick <= tick) this.#settle();
+  }
+
+  /** The beat of the latest message shows when the map has drawn its tick (or the wait ran out). */
+  #settle(force = false): void {
+    const msg = this.#msg;
+    if (msg === null) return;
+    const sameBeat = this.#shown !== null && this.#shown.beat === msg.beat;
+    if (!sameBeat && !force && msg.tick > this.#rendered) {
+      clearTimeout(this.#fallback);
+      this.#fallback = setTimeout(() => {
+        if (this.#msg === msg) this.#settle(true);
+      }, this.#o.fallbackMs ?? BEAT_FALLBACK_MS);
+      // The pause and the locks are the server's now; the card waits.
+      this.#publish();
+      return;
+    }
+    clearTimeout(this.#fallback);
+    const beatChanged = this.#shown?.beat !== msg.beat;
+    this.#shown = msg;
     if (beatChanged) this.#uiBeat = null;
     const at = beatAt(this.chapter, msg.beat);
     if (at !== null && !at.fail) this.#lastMain = msg.beat;
-    if (at?.fail === true) this.#failUi = [...this.#failUi, ...(at.beat.ui ?? [])];
+    if (at?.fail === true && beatChanged) this.#failUi = [...this.#failUi, ...(at.beat.ui ?? [])];
     this.#publish();
   }
 
@@ -123,7 +193,7 @@ export class TutorialCoach {
    * names another beat.
    */
   onSelection(selected: SelectedGroup): void {
-    if (this.#uiBeat !== null || selected === null || this.#msg === null) return;
+    if (this.#uiBeat !== null || selected === null || this.#shown === null) return;
     const after = beatAt(this.chapter, this.#lastMain);
     if (after === null) return;
     const next = this.chapter.beats[after.index + 1];
@@ -193,10 +263,11 @@ export class TutorialCoach {
     return admits(view.allow, view.used, facts, this.#o.context.map);
   }
 
-  /** The HUD pieces the card marks. */
+  /** The HUD pieces the card (or the focus phase) marks. */
   hudMarks(): readonly HudPiece[] {
     const out: HudPiece[] = [];
-    for (const mark of this.current.card?.marks ?? []) if (mark.hud != null) out.push(mark.hud);
+    const marks = this.current.card?.marks ?? this.current.focus ?? [];
+    for (const mark of marks) if (mark.hud != null) out.push(mark.hud);
     return out;
   }
 
@@ -212,14 +283,29 @@ export class TutorialCoach {
   }
 
   #shownBeat(): { beat: Beat; index: number; fail: boolean } | null {
-    const msg = this.#msg;
+    const msg = this.#shown;
     if (msg === null) return null;
     if (this.#uiBeat !== null) return beatAt(this.chapter, this.#uiBeat);
     return beatAt(this.chapter, msg.beat);
   }
 
+  /**
+   * The player did what the shown card asks (P2): Continue on a card that asks for nothing more,
+   * or the orders it asks for stand (`acts`, a cancel takes one back). Its marks go with it.
+   */
+  #done(beat: Beat, msg: TutorialMsg): boolean {
+    if (msg.paused || beat.with_goal === true) return false;
+    // A UI beat asks for the command of the server beat it stands in.
+    const server = beatAt(this.chapter, msg.beat)?.beat ?? beat;
+    const allow = allowOf(this.chapter, msg.beat);
+    const asks = server.allow != null && server.allow.length > 0;
+    if (asks) return standingOrders(allow, msg.used) >= (server.acts ?? 1);
+    return server.pause === 'continue';
+  }
+
   #publish(): void {
-    const msg = this.#msg;
+    const msg = this.#shown;
+    const latest = this.#msg;
     const shown = this.#shownBeat();
     const gateBeat = this.#uiBeat ?? (shown?.fail === true ? this.#lastMain : (msg?.beat ?? null));
     const gate = gateWith(gateOf(this.chapter, gateBeat), [
@@ -227,35 +313,46 @@ export class TutorialCoach {
       ...(shown?.fail === true ? (shown.beat.ui ?? []) : []),
     ]);
     let card: CoachCard | null = null;
-    if (shown !== null && msg !== null) {
+    let focus: readonly Mark[] | null = null;
+    // A beat that waits for its tick shows nothing yet.
+    const waiting = latest !== null && latest !== msg && latest.beat !== msg?.beat;
+    if (shown !== null && msg !== null && !waiting) {
       const { beat } = shown;
-      // A UI beat keeps the pause of the server beat before it: it never has a Continue.
-      const ui = this.#uiBeat !== null;
-      const goalCard = beat.with_goal === true && msg.done && !this.#goalContinued;
-      card = {
-        id: beat.id,
-        key: `tutorial.${this.chapter.id}.${beat.id}`,
-        step: shown.fail ? 0 : shown.index + 1,
-        steps: this.chapter.beats.length,
-        fail: shown.fail,
-        slides: Math.max(1, beat.slides ?? 1),
-        marks: beat.mark ?? [],
-        turns: beat.turns !== undefined && beat.turns.length > 0 ? beat.turns : null,
-        canContinue: (!ui && beat.pause === 'continue' && msg.paused) || goalCard,
-      };
+      if (beat.focus != null) {
+        focus = beat.mark ?? [];
+      } else if (!this.#done(beat, msg)) {
+        // A UI beat keeps the pause of the server beat before it: it never has a Continue.
+        const ui = this.#uiBeat !== null;
+        const goalCard = beat.with_goal === true && msg.done && !this.#goalContinued;
+        const cards = cardBeats(this.chapter);
+        card = {
+          id: beat.id,
+          key: `tutorial.${this.chapter.id}.${beat.id}`,
+          step: shown.fail ? 0 : cards.indexOf(beat) + 1,
+          steps: cards.length,
+          fail: shown.fail,
+          slides: Math.max(1, beat.slides ?? 1),
+          marks: beat.mark ?? [],
+          turns: beat.turns !== undefined && beat.turns.length > 0 ? beat.turns : null,
+          canContinue: (!ui && beat.pause === 'continue' && msg.paused) || goalCard,
+        };
+      }
     }
-    if ((card?.id ?? null) !== this.#cardId) {
-      this.#cardId = card?.id ?? null;
+    // A card or a focus phase that begins starts its motion again (a focus beat's id is its own).
+    const showing = card?.id ?? (focus !== null ? (shown?.beat.id ?? null) : null);
+    if (showing !== this.#cardId) {
+      this.#cardId = showing;
       this.#seq += 1;
       this.slide = 0;
     }
     this.current = {
       card,
-      paused: msg?.paused ?? false,
+      focus,
+      paused: latest?.paused ?? false,
       gate,
-      allow: allowOf(this.chapter, msg?.beat ?? null),
-      used: msg?.used ?? [],
-      done: msg?.done ?? false,
+      allow: allowOf(this.chapter, latest?.beat ?? null),
+      used: latest?.used ?? [],
+      done: latest?.done ?? false,
       seq: this.#seq,
     };
   }

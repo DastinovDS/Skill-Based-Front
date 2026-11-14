@@ -33,7 +33,7 @@ from gow_protocol.tutorial import BeatId, ChapterId
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 54
+PROTOCOL_VERSION: Final = 55
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -548,6 +548,9 @@ class TutorialMsg(WireModel):
     many such commands were accepted, against its ``max``."""
     done: bool
     """The goal holds: the chapter ends with the next tick (``match_end``)."""
+    tick: NonNegInt
+    """The tick the beat began (0 before the first one): the client shows its card once the map
+    it draws has reached this tick (review 4, P1: the card speaks only about what is seen)."""
 
 
 type ServerMsg = Annotated[

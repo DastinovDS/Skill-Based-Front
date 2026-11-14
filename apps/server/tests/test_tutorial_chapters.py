@@ -2,7 +2,8 @@
 student (#806, ``docs/design/tutorial.md``, section 4).
 
 The expected ticks are the "Verified" lines of section 4 (AGENTS.md, 0.4), with the corrections
-the implementation recorded there (V: the fort a tick earlier, A3.2 at 30). The runner is stepped
+the implementation recorded there (V: the fort a tick earlier, A3.2 at 30) and the waits of review
+4 (#1047: a beat ``after`` its trigger, the focus phases). The runner is stepped
 by hand (``MatchRunner.step``, no loop): the student acts between two steps, as a client between
 two ticks, and a pause stops the stepping (the loop itself: ``test_tutorial.py``).
 
@@ -174,6 +175,8 @@ class Play:
                 case TutorialMsg():
                     if not self.beats or self.beats[-1][1] != msg.beat:
                         self.beats.append((self.tick, msg.beat))
+                        # the client shows the card once its map has drawn this tick (#1047)
+                        assert msg.tick == self.tick, (msg, self.tick)
                 case EventMsg():
                     self.events.append(msg)
                 case MatchEndMsg():
@@ -318,20 +321,22 @@ def test_units_plays_at_the_documented_ticks() -> None:
             assert nodes[p.ids["Kestrel"]].detail is Detail.RANGE
             assert nodes[p.ids["Brackenfold"]].detail is Detail.PRESENCE
             p.move("Elmstead", "Fordham")
-        if p.tick == 1:
-            assert view.me.cp == 400
+        cps[p.tick] = view.me.cp
 
+    cps: dict[int, int] = {}
     p = Play("units", UNITS_ALLOWED)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (65, "4"), (65, "5"), (119, "6"), (119, "7")]
+    assert p.beats == [(0, "1"), (1, "3"), (77, "4"), (77, "5"), (143, "6"), (143, "7")]
     assert [a[0].applied_tick for s, a in sorted(p.acks.items()) if s not in p.refused] == [
         1,
-        66,
-        120,
+        78,
+        144,
     ]
-    assert [e.tick for e in p.seen("node_captured", player=0)] == [65, 119, 229]
+    assert [e.tick for e in p.seen("node_captured", player=0)] == [65, 131, 253]
+    # CP: 5, 4 (tick 1), 3 (78), 3.5 (the income at 100), 2.5 (144), 3 (200)
+    assert [cps[t] for t in (1, 78, 100, 144, 200)] == [400, 300, 350, 250, 300]
     assert p.director.done
-    assert p.end is not None and p.end.tick == 230
+    assert p.end is not None and p.end.tick == 254
     assert (p.end.reason, p.end.winner) == (EndReason.FORFEIT, 0)
     view = p.view()
     assert p.size("Fordham") == (3, 0)
@@ -348,22 +353,22 @@ def test_units_with_the_offered_cancel() -> None:
             p.move("Highhold", "Ashford")
         elif p.beat == "5" and p.runner.paused:
             p.move("Ashford", "Elmstead")
-        elif p.beat == "5" and p.tick == 86:  # X at 87: the group a third of the way
+        elif p.beat == "5" and p.tick == 98:  # X at 99: the group a third of the way
             group = opaque_to_wire(p.groups()[0].id)
             p.order(wire.CancelOrderCmd(group=group))
             p.deny(wire.CancelOrderCmd(group=group))  # max 1
         elif p.beat == "5" and p.groups("Ashford") and p.once("again"):
-            assert p.tick == 107
-            assert p.seen("group_arrived", 107, back=True)
+            assert p.tick == 119
+            assert p.seen("group_arrived", 119, back=True)
             p.move("Ashford", "Elmstead")
         elif p.beat == "7" and p.runner.paused:
             p.move("Elmstead", "Fordham")
 
     p = Play("units", UNITS_ALLOWED)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (65, "4"), (65, "5"), (161, "6"), (161, "7")]
-    assert [e.tick for e in p.seen("node_captured", player=0)] == [65, 161, 271]
-    assert p.end is not None and p.end.tick == 272
+    assert p.beats == [(0, "1"), (1, "3"), (77, "4"), (77, "5"), (185, "6"), (185, "7")]
+    assert [e.tick for e in p.seen("node_captured", player=0)] == [65, 173, 295]
+    assert p.end is not None and p.end.tick == 296
     assert min(cps) == 150  # 1.5 CP: never short of an order (the document said 2, corrected)
 
 
@@ -376,26 +381,39 @@ def test_economy_plays_at_the_documented_ticks() -> None:
         view = p.view()
         westmarch = view.nodes[p.ids["Westmarch"]]
         if p.tick == 30:
-            assert view.packets  # beat II.2: the first charges on the roads
+            assert view.packets  # the first charges on the roads (shown from beat II.2)
+        if p.tick in (99, 100):
+            assert view.me.cp == {99: 300, 100: 350}[p.tick]  # II.1W sees the first income
         if p.tick == 124:
             assert p.size("Westmarch") == (3, 1)
         if p.tick == 244:
             assert p.size("Westmarch") == (3, 3)
         if p.tick == 266:
             assert westmarch.starve_in is None
-        if p.beat == "4" and p.runner.paused:
-            assert p.tick == 267
+        if p.tick == 267:
             assert westmarch.flow_pocket and westmarch.starve_in == 100
+        if p.beat == "4" and p.runner.paused:
+            assert p.tick == 279
             p.move("Millbrook", "Coldwell")
 
     p = Play("economy", {"4": only(("move", "Millbrook", "Coldwell", False))})
     p.play(student)
-    assert p.beats == [(0, "1"), (30, "2"), (124, "3"), (267, "4")]
+    assert p.beats == [
+        (0, "1"),
+        (0, "1W"),
+        (105, "2"),
+        (105, "2W"),
+        (165, "3"),
+        (165, "3W"),
+        (279, "4"),
+    ]
     assert min(e.tick for e in p.seen("packet_sent", player=0)) == 10
+    westmarch = p.ids["Westmarch"]
+    assert min(e.tick for e in p.seen("packet_delivered", player=0, node=westmarch)) == 124
     assert p.seen("node_captured", 267, player=1, node=p.ids["Coldwell"])
-    assert p.seen("node_captured", 328, player=0, node=p.ids["Coldwell"])
+    assert p.seen("node_captured", 340, player=0, node=p.ids["Coldwell"])
     assert not p.seen("starvation")  # the first would come at 367
-    assert p.end is not None and p.end.tick == 329 and p.end.winner == 0
+    assert p.end is not None and p.end.tick == 341 and p.end.winner == 0
 
 
 def test_economy_raiders_leave_at_once() -> None:
@@ -445,7 +463,15 @@ def test_building_plays_at_the_documented_ticks() -> None:
     }
     p = Play("building", allowed)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "2"), (66, "3"), (166, "4"), (170, "5"), (200, "6")]
+    assert p.beats == [
+        (0, "1"),
+        (1, "2"),
+        (1, "2W"),
+        (66, "3"),
+        (166, "4"),
+        (170, "5"),
+        (200, "6"),
+    ]
     factory = [
         (e.tick, e.data["units"], e.data["owed"]) for e in p.seen("build_paid", kind="factory")
     ]
@@ -489,8 +515,9 @@ def test_attack_plays_at_the_documented_ticks() -> None:
         (1, "4"),
         (20, "5"),
         (198, "6"),
-        (258, "7"),
-        (278, "8"),
+        (268, "7"),
+        (303, "8"),
+        (303, "8W"),
         (502, "9"),
     ]
     assert [e.tick for e in p.seen("plan_charged", player=0)] == [60, 90, 120]
@@ -529,11 +556,12 @@ def test_attack_failure_branch() -> None:
     assert p.beats == [
         (0, "1"),
         (0, "2"),
-        (138, "F"),
+        (148, "F"),
         (219, "4"),
         (402, "6"),
-        (442, "7"),
-        (442, "8"),  # Continue on IV.7 begins IV.8 on the same tick
+        (452, "7"),
+        (467, "8"),  # armed at 442 with IV.7, it waits its 25 ticks after IV.7's Continue
+        (467, "8W"),
         (502, "9"),
     ]
     assert p.end is not None and p.end.tick == 641
@@ -565,7 +593,7 @@ def test_defence_plays_at_the_documented_ticks() -> None:
     p = Play("defence", allowed)
     p.play(student)
     assert p.beats[0] == (0, None)  # no card until the march
-    assert p.beats[1:] == [(10, "1"), (119, "2"), (159, "3"), (200, "4"), (201, "5"), (384, "6")]
+    assert p.beats[1:] == [(10, "1"), (129, "2"), (169, "3"), (200, "4"), (201, "5"), (384, "6")]
     highcrag, flatford = p.ids["Highcrag"], p.ids["Flatford"]
     rounds = p.seen("fight_round", node=highcrag)
     assert [e.tick for e in rounds] == [119, 139, 159] and rounds[0].data["virtual_0"] == 1
@@ -597,13 +625,13 @@ def test_group_orders_plays_at_the_documented_ticks() -> None:
     }
     p = Play("group-orders", allowed)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (141, "4"), (221, "5")]
+    assert p.beats == [(0, "1"), (1, "3"), (141, "4"), (246, "5")]  # A1.5 25 ticks after 221
     ashwood = p.ids["Ashwood"]
     assert sorted(e.tick for e in p.seen("group_arrived", node=ashwood)) == [141, 141]
     (fight,) = p.seen("fight_ended", node=ashwood)
     assert (fight.tick, fight.data["shots_0"], fight.data["shots_1"]) == (221, 4, 2)
     assert p.size("Ashwood") == (5, 0)
-    assert p.end is not None and p.end.tick == 222 and p.end.winner == 0
+    assert p.end is not None and p.end.tick == 247 and p.end.winner == 0  # the goal waits for A1.5
 
 
 def test_rally_points_plays_at_the_documented_ticks() -> None:
@@ -638,7 +666,7 @@ def test_rally_points_plays_at_the_documented_ticks() -> None:
 
 def test_supply_distribution_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
-        continues(p, "1", "2", "3")
+        continues(p, "1", "2", "3", "5")
         view = p.view()
         if p.tick == 30:
             assert len(view.packets) == 4
@@ -651,7 +679,17 @@ def test_supply_distribution_plays_at_the_documented_ticks() -> None:
 
     p = Play("supply-distribution", {"4": only(("move", "Fernhold", "Ashwood", False))})
     p.play(student)
-    assert p.beats == [(0, "1"), (30, "2"), (83, "3"), (188, "4"), (300, "5")]
+    assert p.beats == [
+        (0, "1"),
+        (0, "1W"),
+        (30, "2"),
+        (30, "2W"),
+        (95, "3"),
+        (95, "3W"),
+        (188, "4"),
+        (300, "5"),
+        (300, "5W"),
+    ]
     names = p.names
 
     def sent(src: str, dst: str) -> list[int]:

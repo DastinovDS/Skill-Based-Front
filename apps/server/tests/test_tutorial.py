@@ -266,7 +266,7 @@ def test_a_chapter_over_http_and_the_websocket(tutorial_settings: Settings) -> N
                 assert welcome.ruleset_public.cp.cap == RULES.cp.cap
                 beat = await recv(ws)
                 assert beat == TutorialMsg(
-                    chapter="units", beat="1", paused=True, used=(0,), done=False
+                    chapter="units", beat="1", paused=True, used=(0,), done=False, tick=0
                 )
                 snapshot = await recv(ws)
                 assert isinstance(snapshot, SnapshotMsg)

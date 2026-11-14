@@ -12,6 +12,8 @@
     {"id": "2", "on": {"event": "build_paid", "by": "you", "min": {"units": 1}}, "pause": "continue",
      "allow": [],
      "mark": [{"node": "Millbrook"}]},
+    {"id": "2W", "on": {"continued": "2"}, "focus": 60,
+     "mark": [{"node": "Millbrook"}, {"road": ["Highhold", "Millbrook"]}]},
     {"id": "3", "on": {"event": "build_paid", "by": "you", "where": {"kind": "factory", "owed": 0}},
      "pause": "action",
      "allow": [{"build_barracks": {"node": "Fernhill"}}],

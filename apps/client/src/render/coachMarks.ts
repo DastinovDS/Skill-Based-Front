@@ -26,8 +26,19 @@ export interface CoachMarks {
   readonly roads: readonly (readonly [number, number])[];
   /** The VP badge of these cities is ringed. */
   readonly vpBadges: readonly number[];
-  /** The marks in turn, or null. */
+  /** The capacity ring of these places is lit itself, segment by segment (review 4, P3). */
+  readonly capacities: readonly number[];
+  /** The warehouse row under these places is lit itself (P3). */
+  readonly warehouses: readonly number[];
+  /** The count under the group in these places (an enemy's range, "1-2") is lit itself (P3). */
+  readonly counts: readonly number[];
+  /** The marks in turn: each terrain's area flashes in turn, then its label stays (P4); or null. */
   readonly turns: readonly CoachTurn[] | null;
+  /**
+   * A focus phase (P5): no Compass; the map is dimmed but for the places, roads and warehouse rows
+   * above, where the charges are made and carried.
+   */
+  readonly focus: boolean;
 }
 
 /** The look of a Compass mark in world units (the walkthrough's marks at the map's fit scale). */
@@ -51,7 +62,26 @@ export const COMPASS = {
   breaths: 4,
   /** The marks in turn: each terrain this long, ms, then all of them stay. */
   turnMs: 2000,
+  /** An element mark (capacity, warehouse, count): the glow and rim stand this far out. */
+  element: { pad: 4.5, glow: 7 },
+  /** A focus phase: how dark the rest of the map goes, and the fade in and out, ms. */
+  focus: { dim: 0.5, fadeMs: 600, pad: 10, road: 14 },
 } as const;
+
+/** The flash of a terrain area while its word is named (0..1): two soft pulses in its 2 s. */
+export function turnFlash(ms: number, reduced: boolean): number {
+  if (reduced) return 0;
+  const t = Math.max(0, Math.min(1, ms / COMPASS.turnMs));
+  // Two pulses, eased: up, down, up, down.
+  return Math.sin(t * Math.PI * 2) ** 2;
+}
+
+/** The darkness of a focus phase `ms` after it began: fades in, then holds. */
+export function focusDim(ms: number, reduced: boolean): number {
+  if (reduced) return COMPASS.focus.dim;
+  const t = Math.max(0, Math.min(1, ms / COMPASS.focus.fadeMs));
+  return COMPASS.focus.dim * (0.5 - Math.cos(t * Math.PI) / 2);
+}
 
 /** The rotation of the compass points `ms` after the card showed (radians): one eased turn. */
 export function compassTurn(ms: number, reduced: boolean): number {

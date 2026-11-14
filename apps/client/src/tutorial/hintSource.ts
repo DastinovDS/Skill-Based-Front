@@ -19,7 +19,11 @@ export function hintMarks(hint: HintShow, seq: number, since: number): CoachMark
     groupsAt: [],
     roads: hint.road === null ? [] : [hint.road],
     vpBadges: [],
+    capacities: [],
+    warehouses: [],
+    counts: [],
     turns: null,
+    focus: false,
   };
 }
 

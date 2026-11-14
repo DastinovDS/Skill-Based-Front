@@ -76,6 +76,15 @@ BROKEN: Final[list[tuple[Change, str]]] = [
     (lambda d: d["beats"][4]["on"].update(continued="9"), "continued names no beat"),
     (lambda d: d["beats"][0].update(extra=1), "extra"),
     (lambda d: d.update(cp_start="full"), "cp_start"),
+    (lambda d: d["beats"][0]["on"].update(after=5), "after goes with a trigger the server fires"),
+    (lambda d: d["beats"][1]["on"].update(after=5), "after goes with a trigger the server fires"),
+    (lambda d: d["goal"]["all"][0].update(after=5), "a goal condition has no after"),
+    (lambda d: d["beats"][3].update(focus=30), "a focus beat is no card"),
+    (
+        lambda d: d["beats"].insert(0, {"id": "0W", "on": {"start": True}, "focus": 5}),
+        "the first beat",
+    ),
+    (lambda d: d["beats"][0]["mark"].append({"capacity": "Ashford", "node": "Ashford"}), "a mark"),
     (
         lambda d: d["opponent"].append({"at": 3, "move": {"from": "a", "to": "b", "bonus": 1}}),
         "planned move",
@@ -115,7 +124,7 @@ def test_a_chapter_must_start_with_the_hud_before_it() -> None:
 
 
 def test_the_tutorial_message_and_the_schema() -> None:
-    msg = TutorialMsg(chapter="attack", beat="F", paused=True, used=(0,), done=False)
+    msg = TutorialMsg(chapter="attack", beat="F", paused=True, used=(0,), done=False, tick=148)
     assert decode_server(encode(msg)) == msg
     with pytest.raises(ValidationError):
         TutorialMsg.model_validate(
@@ -126,9 +135,25 @@ def test_the_tutorial_message_and_the_schema() -> None:
                 "paused": False,
                 "used": [],
                 "done": False,
+                "tick": 0,
             }
         )
     defs = protocol_json_schema()["$defs"]
     assert {"Chapter", "TutorialMsg", "Trigger", "Beat"} <= set(defs)
     # a field with a default may be left out of a file: not required in the TypeScript type
     assert "required" not in defs["Mark"] or "ring" not in defs["Mark"]["required"]
+
+
+def test_the_waits_of_review_4() -> None:
+    """#1047: a beat may begin ``after`` its trigger, a focus beat has no card, a card may ask
+    for several orders, and a mark may name the element of a place."""
+    by_id = {c.id: c for c in chapters()}
+    units = by_id["units"]
+    assert units.beats[3].on.after == 12 and units.beats[3].card
+    assert units.beats[2].mark[0].capacity == "Ashford"
+    economy = by_id["economy"]
+    focus = [b for b in economy.beats if not b.card]
+    assert [(b.id, b.focus) for b in focus] == [("1W", 105), ("2W", 60), ("3W", 80)]
+    assert economy.beats[4].mark[0].warehouse == "Westmarch"
+    assert by_id["rally-points"].beats[1].acts == 2
+    assert by_id["attack"].beats[1].mark[0].count == "Ashwood"

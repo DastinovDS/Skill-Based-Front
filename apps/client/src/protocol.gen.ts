@@ -1509,6 +1509,11 @@ export interface TutorialMsg {
    * The goal holds: the chapter ends with the next tick (``match_end``).
    */
   done: boolean;
+  /**
+   * The tick the beat began (0 before the first one): the client shows its card once the map
+   * it draws has reached this tick (review 4, P1: the card speaks only about what is seen).
+   */
+  tick: number;
 }
 export interface MapFile {
   meta: MapMetaFile;
@@ -1647,7 +1652,10 @@ export interface OpponentMove {
   bonus?: number;
 }
 /**
- * One hint card (section 4.0): it shows when its trigger fires and stays until the next.
+ * One hint card (section 4.0): it shows when its trigger fires (``on.after`` ticks later)
+ * and stays until the next, or until the player did what it asks (review 4, P2). A ``focus``
+ * beat has no card: for that many ticks the game runs with no text and its marks light the
+ * places to watch (P5).
  */
 export interface Beat {
   id: string;
@@ -1689,6 +1697,17 @@ export interface Beat {
    * is seen only on the planned path; on the failure path it is over before the plan).
    */
   optional?: boolean;
+  /**
+   * A focus phase (review 4, P5): no card and no text for this many ticks, the game runs and
+   * the marks light what makes or carries charges; the beat after it begins when its trigger has
+   * fired and the focus is over.
+   */
+  focus?: number | null;
+  /**
+   * Client only: the commands of ``allow`` the card asks for; once that many stand (a cancel
+   * takes one back), the card goes until the next beat (review 4, P2; A2.2: two recruits).
+   */
+  acts?: number;
 }
 /**
  * When a beat begins, or a condition of the goal (section 7.3, ``on``).
@@ -1696,8 +1715,13 @@ export interface Beat {
  * Exactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,
  * with filters), ``accepted`` (an own command the server accepted, by its pattern; the places
  * are those at the moment it was sent), ``view`` (a fact of the own view), ``continued``
- * (Continue on that beat, ``after`` ticks later), ``ui`` (client only: a selection) or ``any``
- * (the first of several that fires).
+ * (Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several
+ * that fires).
+ *
+ * ``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal
+ * condition): the beat begins that many ticks after its trigger fired, so the map has drawn
+ * what the card names (a capture's flood, the shots of a round) before the card shows (review
+ * 4, P1).
  */
 export interface Trigger {
   start?: true | null;
@@ -1745,7 +1769,8 @@ export interface Trigger {
   view?: ViewFact | null;
   continued?: string | null;
   /**
-   * With ``continued``: ticks after the Continue.
+   * Ticks from the trigger to the beginning of the beat (with ``continued``: after the
+   * Continue).
    */
   after?: number;
   ui?: 'select' | null;
@@ -1870,7 +1895,8 @@ export interface Allow {
 }
 /**
  * The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item
- * of a node or the VP badge of a city.
+ * of a node or the VP badge of a city; or the element of a place the card names, lit itself
+ * (review 4, P3): its capacity ring, its warehouse row, the count under its group.
  */
 export interface Mark {
   node?: string | null;
@@ -1890,6 +1916,18 @@ export interface Mark {
    */
   at?: string | null;
   vp_badge?: string | null;
+  /**
+   * The segments of the place's capacity ring.
+   */
+  capacity?: string | null;
+  /**
+   * The row of lozenges under the place (its warehouse).
+   */
+  warehouse?: string | null;
+  /**
+   * The number or range under the group in the place (an enemy's ``1-2``).
+   */
+  count?: string | null;
 }
 /**
  * One group of places the marks in turn ring (I.7), with the word of the card it lights.
@@ -1912,7 +1950,7 @@ export interface Goal {
   all: [Trigger, ...Trigger[]];
 }
 
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

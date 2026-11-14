@@ -12,7 +12,7 @@
      "mark": [{"menu": "rally", "at": "Highhold"}]},
     {"id": "2", "on": {"accepted": {"set_rally_point": {"node": "Highhold", "to": "Fernhold"}}},
      "pause": "action",
-     "allow": [{"recruit": {"node": "Highhold"}, "max": 2}],
+     "allow": [{"recruit": {"node": "Highhold"}, "max": 2}], "acts": 2,
      "mark": [{"node": "Highhold"}]},
     {"id": "3", "on": {"event": "rally_walk_paid", "by": "you"},
      "mark": [{"node": "Fernhold"}]}

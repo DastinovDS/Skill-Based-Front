@@ -101,23 +101,3 @@ export function compassPointsSpec(inner: number): BakeSpec {
     },
   };
 }
-
-/**
- * A ring of the marks in turn (I.7): one terrain each look, so the three read apart in grey too
- * (solid, dashed, dotted; ui rule: not by colour alone).
- */
-export function turnRingSpec(radius: number, look: 0 | 1 | 2): BakeSpec {
-  const r = Math.round(radius * 2) / 2;
-  return {
-    key: `coach-turn-${String(r)}-${String(look)}`,
-    box: circleBox(r + 4),
-    draw(into, tools) {
-      const g = graphics(into);
-      g.circle(0, 0, r).stroke({ width: tools.hair(4.5), color: CASING });
-      const ink = { width: tools.hair(1.8), color: INK, cap: 'butt' as const };
-      if (look === 0) g.circle(0, 0, r).stroke(ink);
-      else if (look === 1) dashedCircle(g, r, 7, 4).stroke(ink);
-      else dashedCircle(g, r, 2, 4).stroke(ink);
-    },
-  };
-}
