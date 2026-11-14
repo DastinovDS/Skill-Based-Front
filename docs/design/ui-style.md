@@ -2892,3 +2892,13 @@ Common to all: the place is a radio of the group "Chapters" (arrow keys move and
 plinth's way marker, the next one the Compass, a closed one the dashed ring and the lock and reads "After II", a done
 one the check lozenge; the detail is the eyebrow, the name and one line, then Start (Replay, Play, Play again;
 "Locked" with "Opens after ..." for a closed one) and Rules; the brand in the bar is the way back to the main menu.
+
+## 78. Progress looks: build, recruit, next charge (#1055) **[awaiting the owner's decision]**
+
+Review 5 (2026-11-14): players could not tell a build under way at a city (paying, then building), could not tell recruiting, and could neither find nor read when the next charge is made. Mockup round 1 (broad): [`mockups/progress-looks.html`](mockups/progress-looks.html), one large view of a `mvp-7` front with the top bar, one row of variant buttons per piece, zoom, play, pause and a scrubber, grey and reduced motion under More; the three pieces are shown together, each in its picked variant.
+
+- **Build** (Forkway's factory: 4 charges paid progressively, then 10 s): B0 today (V12 "Toast", section 75), B1 Works plate, B2 Seal dial, B3 Blueprint.
+- **Recruit** (Stonegate, 3 units then 2, 3 s a unit): R0 today (D2 "Foundation", section 76), R1 Foundation, readable, R2 Seal dial. R3 "Engraved recruit" (the unit under way drawn as a helmet beside the barracks) was dropped by the critique: outside the ring it reads as a group standing on the map.
+- **Next charge** (Stonegate and Watchpost, a charge every 20 s on their own counters, DEC-44, DEC-47): N0 today (the cell in the stance chip), N1 Forming lozenge, N2 Seal dial, N3 Mint in the bar.
+
+The new pieces have a size floor (`1.5 / zoom` of the icon scale, at most 2.2), the reason today's pieces fail at the normal zoom. The style-fit list, the table of variants and the recommendation (B1, R1, N3 with N1 as its map companion; the Seal dial family B2, R2, N2 the alternative) are in the issue. Client only, except N1 and N2 at a factory other than the capital: its counter is not in the view (`NodeView.factory_ticks`, own factories only, a protocol change).

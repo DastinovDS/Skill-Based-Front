@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progress looks</title>
+<!-- Progress looks, design round 1 (#1055, review 5 of 2026-11-14): players could not tell a build under way, could not
+     tell recruiting, and could not find or read when the next charge is made. Three pieces, each with today's look and
+     the new directions, on one front of a mvp-7 match (Balance): Forkway builds its factory (4 charges paid
+     progressively, DEC-41 item 7, then 10 s), Stonegate recruits 3 units and then 2 (3 s a unit, DEC-25), and Stonegate
+     and Watchpost each make a charge every 20 s on their own counters (DEC-44, DEC-47). Every piece is drawn from what
+     the view carries (NodeView.building / factory_build owed and done_tick, recruit_queue, recruit_progress,
+     SelfView.capital_ticks, ruleset_public) except the per-factory next charge of N1 and N2 at a factory other than the
+     capital, which needs NodeView.factory_ticks (own factories only; see the issue). The map pieces are the client's
+     (render/style.ts, units/helmet.ts, theme/cutIcons.ts, theme/cpMark.ts, render/buildingLayout.ts,
+     render/foundationLayout.ts), shared with recruit-plinth-d.html and build-animation.html. Self-contained: EB Garamond
+     and Cinzel (SIL OFL) and the ground crop come from assets/in-match-cp-vp/ and assets/city-buildings/. State in the
+     address (#el=charge&b=B0&r=R0&n=N1&z=normal&tm=...). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/in-match-cp-vp/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+@font-face{font-family:'Cinzel';src:url(assets/in-match-cp-vp/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-style:normal;font-display:block}
+:root{--stone:#16130f;--panel:#1d1a15;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--line:#3d372d;
+  --plate:#0e0c09;--casing:#060504;--warn:#e6ab42;--vp:#cfab62;--own:#86a6ea;--foe:#e5785e;--map-ink:#ccc0a6}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--stone);padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:9px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip .k{opacity:.7;margin-right:5px;font-weight:700}
+button.chip.var{padding:7px 10px;font-size:14px}
+button.chip.ref{border-style:dashed}
+button.chip.el{font:600 15px/1 'EB Garamond',Georgia,serif;letter-spacing:.06em;padding:7px 14px}
+button.chip:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#more{margin-left:auto}
+.moreBar{display:none;padding-top:9px;margin-top:9px;border-top:1px solid var(--line)}
+.moreBar.open{display:flex}
+input[type=range]{accent-color:#ece4d1;width:260px;vertical-align:middle}
+#clock{font:500 15px/1 'EB Garamond',Georgia,serif;color:var(--ink-dim);min-width:3.2em;font-variant-numeric:tabular-nums}
+main{padding:10px 16px 24px}
+#cap{margin:0 0 8px;font:500 16px/1.35 'EB Garamond',Georgia,serif;color:var(--ink-soft);min-height:2.7em;max-width:1100px}
+#cap b{color:var(--ink);font-weight:650;margin-right:8px}
+#cap .tag{display:inline-block;margin-left:10px;padding:1px 7px;border:1px solid var(--line);font:600 11px/1.5 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);vertical-align:2px}
+.wrap{position:relative;background:#0e0c09;border:1px solid var(--line);overflow:hidden}
+canvas{display:block;width:100%}
+#view{cursor:pointer}
+.gray .wrap{filter:grayscale(1)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>Progress looks</h1>
+    <div class="group" role="group" aria-label="Piece"><button class="chip el" data-el="build">Build</button><button class="chip el" data-el="recruit">Recruit</button><button class="chip el" data-el="charge">Next charge</button></div>
+  </div>
+  <div class="bar">
+    <div class="group" id="vars" role="group" aria-label="Variant"></div>
+  </div>
+  <div class="bar">
+    <div class="group" role="group" aria-label="Zoom"><span class="lab">Zoom</span><button class="chip" data-z="near">Near</button><button class="chip" data-z="normal">Normal</button><button class="chip" data-z="far">Far</button></div>
+    <div class="group"><button class="chip" id="play">Pause</button><input id="scrub" aria-label="Time in the loop" type="range" min="0" max="20000" step="10"><span id="clock" aria-hidden="true">0:00</span></div>
+    <button class="chip" id="more" aria-expanded="false">More</button>
+  </div>
+  <div class="bar moreBar" id="moreBar">
+    <div class="group"><button class="chip" id="still">Reduced motion</button><button class="chip" id="gray">Grey</button></div>
+  </div>
+</header>
+<main>
+  <p id="cap"></p>
+  <div class="wrap" id="rWrap"><canvas id="view" role="img"></canvas></div>
+</main>
+<script>
+'use strict';
+// =============================================================================================
+// The client's numbers (render/style.ts, theme/tokens.ts, units/helmet.ts, theme/cutIcons.ts),
+// shared with city-buildings-r2.html.
+// =============================================================================================
+const C = {
+  casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1',
+  vp: '#cfab62', up: '#8cc79a', down: '#ec6654', road: '#e6edf3', clash: '#e6ab42',
+};
+// The city menu's icons, exactly (cutIcons.ts): the outline and the ruled solid, a 26-unit box centred on 0.
+const CUT_D = {
+  barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z M-3 9 V3 H3 V9 M0 -8.5 V-12.5 L4.5 -11 L0 -9.5',
+  factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5',
+};
+const CUT_SOLID_D = { barracks: 'M-9 9 V-1 L0 -8.5 L9 -1 V9 Z', factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z' };
+const CUT = { barracks: new Path2D(CUT_D.barracks), factory: new Path2D(CUT_D.factory) };
+const CUT_SOLID = { barracks: new Path2D(CUT_SOLID_D.barracks), factory: new Path2D(CUT_SOLID_D.factory) };
+const CUT_BOX = { barracks: [-9, -12.5, 9, 9], factory: [-10, -10, 8.5, 9] };
+const CUT_STYLE = { box: 26, rule: 2.6, ruleW: 1.15, casing: 4.2, casingA: 0.9, ink: 2.1 };
+const ICON_HALF = 0.44; // half the drawn extent of an icon (casing included), a share of its box
+
+const HELMET_PATHS = {
+  own: { dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z', band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96' },
+  enemy: { dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z', band: null, strap: 'M38 75 L58 91 L64 68' },
+};
+const HELMET_SCALE = 1.34, HELMET_INSIDE = 0.92, UNIT_SIDES = [24, 30, 36, 42];
+const HE = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatchW: 0.9, font: 12.5 };
+const CITY_E = { cutGrow: 3.2, cutAlpha: 0.85, rimGrow: 1.6, rimW: 1.1, innerInset: 1.2, innerW: 0.8, innerA: 0.6, enemyInsets: [4.4, 6.4], enemyW: 0.9, star: [0.6, 0.27, 1.2] };
+const RING = { gap: 7, cut: 6, cutAlpha: 0.8, filled: 3.4, roomW: 0.9, roomOff: 1.6, wash: 0.3, segGap: 0.16 };
+const LOZ = { casing: 8.2, fill: 5.8, hollow: 4.7, line: 0.9, lineA: 0.92, pitch: 8.8, groupGap: 3.5, drop: 8.5 };
+const VPL = { side: 18.5, outer: 17.2, inner: 12.4, w: 1.1, font: 14.5, lift: 4.5 };
+const BADGE = { size: 11, stroke: 0.3, outline: 2.6, minPx: 8 };
+const TICKS = { gap: 2, arm: 6.2, casing: 4.4, ink: 1.7 }; // CORNER_TICKS after #952
+
+// =============================================================================================
+// Helmet geometry (a port of units/helmet.ts).
+// =============================================================================================
+function samplePath(d, steps = 10) {
+  const t = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || [];
+  const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(t[i++]);
+  while (i < t.length) {
+    const tok = t[i];
+    if (/[MLCQZ]/.test(tok)) { cmd = tok; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') { const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*u*at.x + 3*u*u*s*c1.x + 3*u*s*s*c2.x + s*s*s*e.x, y: u*u*u*at.y + 3*u*u*s*c1.y + 3*u*s*s*c2.y + s*s*s*e.y }); } at = e; }
+    else if (cmd === 'Q') { const c = { x: num(), y: num() }, e = { x: num(), y: num() }; for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u*u*at.x + 2*u*s*c.x + s*s*e.x, y: u*u*at.y + 2*u*s*c.y + s*s*e.y }); } at = e; }
+    else i++;
+  }
+  return pts;
+}
+function boundsOf(ps) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); } return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }; }
+function centroid(ps) { let a = 0, cx = 0, cy = 0; ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const cr = p.x*q.y - q.x*p.y; a += cr; cx += (p.x + q.x)*cr; cy += (p.y + q.y)*cr; }); return { x: cx / (3*a), y: cy / (3*a) }; }
+const RAW = {};
+for (const k of ['own', 'enemy']) { const P = HELMET_PATHS[k]; RAW[k] = { dome: samplePath(P.dome), band: P.band ? samplePath(P.band) : null, strap: samplePath(P.strap) }; const b = boundsOf([...RAW[k].dome, ...(RAW[k].band || []), ...RAW[k].strap]); RAW[k].c = { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
+const HELMETS = new Map();
+function helmet(kind, width) {
+  const key = kind + ':' + width; if (HELMETS.has(key)) return HELMETS.get(key);
+  const R = RAW[kind], s = width / 100, place = (p) => ({ x: (p.x - R.c.x) * s, y: (p.y - R.c.y) * s });
+  const dome = R.dome.map(place), band = R.band ? R.band.map(place) : null, strap = R.strap.map(place);
+  const db = boundsOf(dome), mid = centroid(dome);
+  const h = { kind, width, dome, band, strap, bounds: boundsOf([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height, domeBounds: db, middle: { x: mid.x, y: mid.y + width * 0.02 } };
+  HELMETS.set(key, h); return h;
+}
+function helmetLines(width) { const s = width / 100; return { strap: Math.max(6.4*s, 2.1), band: Math.max(5.6*s, 2.2), casing: 6.4 }; }
+function helmetExtent(h) { const L = helmetLines(h.width), pad = Math.max(L.casing, L.strap + L.casing) / 2; return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad }; }
+function helmetWidth(side, inside) { return Math.round(side * HELMET_SCALE * (inside ? HELMET_INSIDE : 1) * 100) / 100; }
+function helmetFit(kind, width, reach) {
+  let w = width;
+  for (let step = 0; step < 6 && w > 4; step++) { const e = helmetExtent(helmet(kind, w)), span = Math.max(e.right, -e.left, e.bottom, -e.top); if (span <= reach) break; w = Math.min(w - 0.25, Math.floor(((w * reach) / span) * 4) / 4); }
+  return w;
+}
+function unitSide(units) { return units <= 3 ? UNIT_SIDES[0] : units <= 7 ? UNIT_SIDES[1] : units <= 15 ? UNIT_SIDES[2] : UNIT_SIDES[3]; }
+
+// =============================================================================================
+// Drawing helpers (world units; the canvas transform carries the zoom). A hairline never falls
+// under 1.3 device px (#865).
+// =============================================================================================
+let GA = 1, PXW = 1, LS = 1;
+const hair = (w) => Math.max(w, 1.3 / (PXW * LS));
+function poly(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (closed) ctx.closePath(); }
+function polyA(ctx, ps, closed = true) { ctx.beginPath(); ps.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); if (closed) ctx.closePath(); }
+function stroke(ctx, w, color, alpha = 1, cap = 'round', join = 'round') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(); ctx.globalAlpha = GA; }
+function fill(ctx, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(); ctx.globalAlpha = GA; }
+function strokeP(ctx, p, w, color, alpha = 1, cap = 'square', join = 'miter') { ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.lineCap = cap; ctx.lineJoin = join; ctx.stroke(p); ctx.globalAlpha = GA; }
+function fillP(ctx, p, color, alpha = 1) { ctx.fillStyle = color; ctx.globalAlpha = Math.max(0, alpha*GA); ctx.fill(p); ctx.globalAlpha = GA; }
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI*2); }
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function hatchLines(ctx, b, angle, pitch) {
+  const cx = b.x + b.width/2, cy = b.y + b.height/2, R = Math.hypot(b.width, b.height)/2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux;
+  ctx.beginPath(); for (let d = -R; d <= R; d += pitch) { ctx.moveTo(cx + nx*d - ux*R, cy + ny*d - uy*R); ctx.lineTo(cx + nx*d + ux*R, cy + ny*d + uy*R); }
+}
+const polar = (a, d) => ({ x: d*Math.cos(a), y: d*Math.sin(a) });
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const ease = { engrave: (t) => 0.5 - 0.5*Math.cos(Math.PI*clamp01(t)), settle: (t) => 1 - Math.pow(1 - clamp01(t), 3), travel: (t) => { t = clamp01(t); return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2; } };
+function lozPath(ctx, x, y, side) { const h = side*Math.SQRT2/2; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y); ctx.closePath(); }
+/** One charge (57u): the casing, then the colour (in stock, paid) or hollow (room, owed). */
+function drawLozenge(ctx, x, y, on, color, k = 1, alpha = 1) {
+  lozPath(ctx, x, y, LOZ.casing*k); fill(ctx, C.casing, alpha);
+  if (on) { lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, color, alpha); return; }
+  lozPath(ctx, x, y, LOZ.fill*k); fill(ctx, C.plate, alpha);
+  lozPath(ctx, x, y, LOZ.hollow*k); stroke(ctx, hair(LOZ.line), C.ink, LOZ.lineA*alpha, 'butt', 'miter');
+}
+function frame(ctx, x, y, rot, s, fn) { ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, s); const ls = LS; LS = ls*s; fn(); LS = ls; ctx.restore(); }
+
+function drawBody(ctx, G, owner, color, occupied, star) {
+  const r = G.r;
+  circle(ctx, 0, 0, r + CITY_E.cutGrow); fill(ctx, C.cut, CITY_E.cutAlpha);
+  circle(ctx, 0, 0, r); fill(ctx, occupied ? C.plate : color);
+  circle(ctx, 0, 0, r + CITY_E.rimGrow); stroke(ctx, CITY_E.rimW, C.ink);
+  circle(ctx, 0, 0, r - CITY_E.innerInset); stroke(ctx, CITY_E.innerW, C.cut, CITY_E.innerA);
+  if (owner === 'enemy') for (const ins of CITY_E.enemyInsets) { circle(ctx, 0, 0, r - ins); stroke(ctx, CITY_E.enemyW, C.ink); }
+  if (G.kind === 'capital' && !occupied && star) {
+    ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI/2 + i*Math.PI/5, r2 = i % 2 ? r*CITY_E.star[1] : r*CITY_E.star[0]; ctx.lineTo(r2*Math.cos(a), r2*Math.sin(a)); }
+    ctx.closePath(); fill(ctx, C.plate); stroke(ctx, CITY_E.star[2], C.ink, 1, 'butt', 'miter');
+  }
+}
+const TAU = Math.PI*2, START = -Math.PI/2;
+function ringCells(cap, filled) {
+  const gap = RING.segGap, arcs = [];
+  for (let j = 0; j < cap; j++) { const f0 = TAU*j/cap, f1 = TAU*(j + 1)/cap; arcs.push({ from: START + f0 + gap/2, to: START + f1 - gap/2, filled: j < filled }); }
+  return arcs;
+}
+function strokeArcs(ctx, r, arcs, w, color, alpha = 1) { ctx.beginPath(); for (const a of arcs) { ctx.moveTo(r*Math.cos(a.from), r*Math.sin(a.from)); ctx.arc(0, 0, r, a.from, a.to); } stroke(ctx, w, color, alpha, 'butt'); }
+function drawRing(ctx, r, arcs) {
+  const o = RING.roomOff;
+  strokeArcs(ctx, r, arcs, RING.cut, C.cut, RING.cutAlpha);
+  strokeArcs(ctx, r, arcs.filter((a) => a.filled), RING.filled, C.ink);
+  const room = arcs.filter((a) => !a.filled);
+  strokeArcs(ctx, r, room, 2*o, C.ink, RING.wash);
+  for (const s of [-1, 1]) strokeArcs(ctx, r + s*o, room, hair(RING.roomW), C.ink);
+  ctx.beginPath(); for (const a of room) for (const ang of [a.from, a.to]) { const c = Math.cos(ang), s = Math.sin(ang); ctx.moveTo((r - o)*c, (r - o)*s); ctx.lineTo((r + o)*c, (r + o)*s); }
+  if (room.length) stroke(ctx, hair(RING.roomW), C.ink, 1, 'butt');
+}
+function rowXs(n) { const xs = [], gap = n > 4 ? LOZ.groupGap : 0; for (let i = 0; i < n; i++) xs.push(i*LOZ.pitch + Math.floor(i/3)*gap); const mid = n ? (xs[0] + xs[n - 1]) / 2 : 0; return xs.map((x) => x - mid); }
+function drawVp(ctx, at, n) {
+  lozPath(ctx, at.x, at.y, VPL.side); fill(ctx, C.plate);
+  lozPath(ctx, at.x, at.y, VPL.outer); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  lozPath(ctx, at.x, at.y, VPL.inner); stroke(ctx, hair(VPL.w), C.vp, 1, 'butt', 'miter');
+  ctx.font = `600 ${VPL.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = C.vp; ctx.fillText(String(n), at.x, at.y + 1);
+}
+function drawHelmet(ctx, g) {
+  const h = helmet(g.kind, g.width), L = helmetLines(g.width), facing = g.kind === 'own' ? 1 : -1, casing = g.pip ? 3.2 : HE.casing + HE.inside;
+  ctx.save(); ctx.translate(g.x, g.y); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap], gw = (line) => (line === h.strap ? L.strap : L.band) * HE.gear;
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line) + casing*0.8, C.casing); }
+  poly(ctx, h.dome); stroke(ctx, casing*0.9, C.casing); poly(ctx, h.dome); fill(ctx, C.plate);
+  const pitch = Math.min(3, Math.max(1.4, g.width*0.075)), top = h.domeBottom - g.level*(h.domeBottom - h.domeTop);
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  hatchLines(ctx, h.domeBounds, -Math.PI/4, pitch); stroke(ctx, hair(HE.hatchW*(g.pip ? .7 : 1)), g.color, 1, 'butt');
+  if (g.level > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, g.color); }
+  ctx.restore();
+  for (const line of gear) { poly(ctx, line, false); stroke(ctx, gw(line), C.ink); }
+  poly(ctx, h.dome); stroke(ctx, hair(g.pip ? .8 : HE.edge), C.ink);
+  ctx.restore();
+  if (g.pip) return;
+  const mx = g.x + h.middle.x*facing, my = g.y + h.middle.y;
+  ctx.font = `600 ${HE.font}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.lineJoin = 'round'; ctx.globalAlpha = GA; ctx.strokeText(String(g.units), mx, my + 0.6); ctx.fillStyle = C.ink; ctx.fillText(String(g.units), mx, my + 0.6);
+}
+/** B6 (#949, #952): four ivory corner ticks round the helmet as drawn. */
+function drawTicks(ctx, g) {
+  const e = helmetExtent(helmet(g.kind, g.width)), gap = TICKS.gap, facing = g.kind === 'own' ? 1 : -1;
+  const x0 = g.x + (facing === 1 ? e.left : -e.right) - gap, x1 = g.x + (facing === 1 ? e.right : -e.left) + gap, y0 = g.y + e.top - gap, y1 = g.y + e.bottom + gap, arm = TICKS.arm;
+  for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, TICKS.casing, C.casing, .95, 'square', 'miter');
+    ctx.beginPath(); ctx.moveTo(cx + sx*arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy + sy*arm); stroke(ctx, hair(TICKS.ink), C.ivory, 1, 'butt', 'miter');
+  }
+}
+
+const OWN = '#86a6ea', FOE = '#e5785e'; // lapis and minium, the default pair (DEC-49)
+const CHARGE_COST = { barracks: 3, factory: 4 };
+const PAY = { flightMs: 450, lift: 12, staggerMs: 150, popMs: 220, pop: 0.3, runMs: 350, runStagger: 60, shrink: 0.6, doneMs: 600 };
+const ZOOMS = { near: 2.2, normal: 1, far: 0.42 };
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const lerp = (a, b, q) => a + (b - a) * q;
+const bump = (q) => Math.sin(Math.PI * clamp01(q));
+
+// =============================================================================================
+// The menu icon on the map (CutIcon.svelte's art; render/pieceShapes.ts iconBackSpec, iconFillSpec,
+// iconFrontSpec). Looks: built (the ruled solid in the owner's colour, the opponent's at 45 degrees),
+// plan (owes charges: a half-dark ground and a dotted outline), rising (the build time: a fill from the
+// base with an ivory head line, or a hatch engraved line by line). `o.flash` lays an ivory outline over
+// it (0..1), `o.alpha` fades the whole icon.
+// =============================================================================================
+function drawIcon(ctx, kind, x, y, sz, o) {
+  const k = sz / CUT_STYLE.box, out = CUT[kind], sol = CUT_SOLID[kind], [bx0, by0, bx1, by1] = CUT_BOX[kind];
+  const ga = GA; GA = ga * (o.alpha === undefined ? 1 : o.alpha); ctx.globalAlpha = GA;
+  frame(ctx, x, y, 0, k, () => {
+    if (o.look === 'plan') {
+      fillP(ctx, sol, C.plate, o.planGround === undefined ? 0.62 : o.planGround);
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, 0.5);
+      ctx.setLineDash([2.2, 2.2]); strokeP(ctx, out, hair(1.5), C.ink, 0.9, 'butt'); ctx.setLineDash([]);
+    } else {
+      fillP(ctx, sol, C.plate);
+      ctx.save(); ctx.clip(sol);
+      const t = clamp01(o.time === undefined ? 1 : o.time);
+      if (o.look === 'built') {
+        if (o.enemy) { hatchLines(ctx, { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 }, -Math.PI / 4, CUT_STYLE.rule); stroke(ctx, CUT_STYLE.ruleW, o.color, 1, 'butt'); }
+        else { ctx.beginPath(); for (let yy = Math.floor(by0 / CUT_STYLE.rule) * CUT_STYLE.rule; yy < by1; yy += CUT_STYLE.rule) ctx.rect(bx0 - 1, yy, bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else if (o.prog === 'hatch') {
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        ctx.beginPath(); for (let i = 0; i < full; i++) ctx.rect(bx0 - 1, lines[i], bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, o.color);
+        if (full < lines.length && t > 0 && t < 1) { const yy = lines[full]; ctx.beginPath(); ctx.rect(bx0 - 1, yy, (bx1 - bx0 + 2) * frac, CUT_STYLE.ruleW); fill(ctx, o.color); }
+      } else {
+        const top = by1 - t * (by1 - by0);
+        ctx.beginPath(); ctx.rect(bx0 - 1, top, bx1 - bx0 + 2, by1 - top + 1); fill(ctx, o.color);
+        ctx.beginPath(); for (let yy = by1 - CUT_STYLE.rule; yy > top + 0.4; yy -= CUT_STYLE.rule) { ctx.moveTo(bx0 - 1, yy); ctx.lineTo(bx1 + 1, yy); } stroke(ctx, 0.55, C.casing, 0.5, 'butt');
+        if (t > 0 && t < 1) { const hw = o.head || 1.2; ctx.beginPath(); ctx.moveTo(bx0 - 1, top); ctx.lineTo(bx1 + 1, top); if (hw > 1.3) stroke(ctx, hw + 1.6, C.casing, 0.8, 'butt'); stroke(ctx, hair(hw), C.ivory, 1, 'butt'); }
+      }
+      ctx.restore();
+      strokeP(ctx, out, CUT_STYLE.casing, C.casing, CUT_STYLE.casingA);
+      strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, 1);
+      if (o.look === 'rising' && o.prog === 'hatch' && t > 0 && t < 1) {
+        // The burin: an ivory lozenge at the end of the line being cut.
+        const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+        const n = lines.length * t, full = Math.floor(n), frac = n - full;
+        if (full < lines.length) { const yy = lines[full], xx = bx0 - 1 + (bx1 - bx0 + 2) * frac; lozPath(ctx, xx, yy + 0.6, 5); fill(ctx, C.casing); lozPath(ctx, xx, yy + 0.6, 3.1); fill(ctx, C.ivory); }
+      }
+    }
+    if (o.flash > 0) { strokeP(ctx, out, CUT_STYLE.ink + 2.2, C.ivory, 0.9 * clamp01(o.flash)); strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, clamp01(o.flash)); }
+  });
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** The ring that opens round an icon just built (57k, BUILD_PAY.done): from 0.42 of its size, 10 out, 600 ms. */
+function doneRing(ctx, x, y, sz, ms, o = {}) {
+  const dur = o.ms || PAY.doneMs, q = ms / dur;
+  if (q < 0 || q >= 1) return;
+  const r = (o.from || 0.42) * sz + (o.grow || 10) * ease.settle(q), a = 1 - q;
+  circle(ctx, x, y, r); stroke(ctx, o.casing || 3, C.casing, a); circle(ctx, x, y, r); stroke(ctx, hair(o.width || 1), o.color || C.ink, a);
+}
+function ringArc(ctx, r, a0, a1, w, color, alpha = 1, cap = 'butt') { if (a1 <= a0) return; ctx.beginPath(); ctx.arc(0, 0, r, a0, a1); stroke(ctx, w, color, alpha, cap); }
+function line(ctx, x0, y0, x1, y1, w, color, alpha = 1, cap = 'round') { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); stroke(ctx, w, color, alpha, cap); }
+/** An ink stroke on its dark casing (the engraved line of every effect). */
+function inkLine(ctx, x0, y0, x1, y1, w, color = C.ink, alpha = 1, cas = 1.8) { line(ctx, x0, y0, x1, y1, w + cas, C.casing, 0.9 * alpha); line(ctx, x0, y0, x1, y1, hair(w), color, alpha); }
+
+// =============================================================================================
+// Where the buildings stand (render/buildingLayout.ts, P2 "Free side").
+// =============================================================================================
+function iconSize(z) { const raw = Math.max(16, 13 / Math.max(1e-3, z)); return 16 * 2 ** (Math.ceil(Math.log2(raw / 16) * 4 - 1e-9) / 4); }
+function lozK(sz) { return Math.max(0.72, Math.min(1.3, (0.74 * sz) / 14)); }
+function freeGap(roads, dist, vp) {
+  const blocks = roads.map((a) => [a, Math.asin(Math.min(1, 5.2 / dist))]);
+  if (vp) blocks.push([-Math.PI / 4, Math.asin(Math.min(1, 14 / dist))]);
+  blocks.push([Math.PI / 2, 0.95]);
+  const spans = blocks.map(([a, h]) => { const c = ((a % TAU) + TAU) % TAU; return [c - h, c + h]; }).sort((p, q) => p[0] - q[0]);
+  let best = { mid: Math.PI, width: 0 };
+  spans.forEach(([, end], i) => {
+    const next = i + 1 < spans.length ? spans[i + 1][0] : spans[0][0] + TAU;
+    let reach = end; for (let j = 0; j <= i; j++) reach = Math.max(reach, spans[j][1]);
+    const width = next - reach; if (width > best.width) best = { mid: reach + width / 2, width };
+  });
+  return best;
+}
+function layoutBuildings(G, kinds, z) {
+  const size = iconSize(z), half = ICON_HALF * size, dist = G.R + RING.cut / 2 + 1 + half;
+  const gap = freeGap(G.roads, dist, G.vp > 0), step = 2 * half + 2.5, side = gap.width >= step / dist + (2 * half) / dist;
+  const items = {}, angles = {};
+  kinds.forEach((kind, i) => {
+    let at;
+    if (kinds.length === 1) at = polar(gap.mid, dist);
+    else if (side) at = polar(gap.mid + ((i === 0 ? -1 : 1) * step) / dist / 2, dist);
+    else at = polar(gap.mid, dist + (kind === 'barracks' ? 1 : 0) * step);
+    items[kind] = at; angles[kind] = Math.atan2(at.y, at.x);
+  });
+  return { size, items, angles, gap };
+}
+/** The row of owed charges beside an icon (buildingLayout.ts owedRow): just outside it, laid across. */
+function owedRow(seat, angle, sz, k, cost) {
+  const out = ICON_HALF * sz + 1.5 + LOZ.casing * k * 0.71, mx = seat.x + Math.cos(angle) * out, my = seat.y + Math.sin(angle) * out;
+  const ax = -Math.sin(angle), ay = Math.cos(angle), pitch = LOZ.pitch * k * 0.96;
+  return Array.from({ length: cost }, (_, j) => { const d = (j - (cost - 1) / 2) * pitch; return { x: mx + ax * d, y: my + ay * d }; });
+}
+function glow(ctx, at, r, color, a) {
+  if (r <= 0 || a <= 0) return;
+  const g = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, r);
+  g.addColorStop(0, hexA(color, a)); g.addColorStop(0.45, hexA(color, a * 0.5)); g.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.beginPath(); ctx.arc(at.x, at.y, r, 0, TAU); ctx.fill();
+}
+let groundTile = null;
+function loadImg(src) { return new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; }); }
+function mirrorTile(img) { const w = img.width, h = img.height, c = document.createElement('canvas'); c.width = 2 * w; c.height = 2 * h; const g = c.getContext('2d'); for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { g.save(); g.translate(sx < 0 ? 2 * w : 0, sy < 0 ? 2 * h : 0); g.scale(sx, sy); g.drawImage(img, 0, 0); g.restore(); } return c; }
+
+function drawRoad(ctx, a, b) {
+  const sa = sideOf(a), sb = sideOf(b), ux = b.x - a.x, uy = b.y - a.y, len = Math.hypot(ux, uy), nx = ux / len, ny = uy / len;
+  const x0 = a.x + nx * (a.R + 3), y0 = a.y + ny * (a.R + 3), x1 = b.x - nx * (b.R + 3), y1 = b.y - ny * (b.R + 3);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+  if (sa === sb) { const col = sa === 'own' ? OWN : FOE; stroke(ctx, 7.4, C.casing, 0.55, 'butt'); stroke(ctx, 5.6, col, 0.46, 'butt'); stroke(ctx, 2, C.road, 0.7, 'butt'); }
+  else { stroke(ctx, 5.6, C.casing, 0.4, 'butt'); ctx.setLineDash([7, 5]); stroke(ctx, 2, '#aab2bd', 0.7, 'butt'); ctx.setLineDash([]); }
+}
+/** A packet of the supply flow (#858): a square of the owner's colour on a casing, an ivory outline, turned along its road. */
+function drawPacket(ctx, x, y, ang, color, alpha = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  const r = (s) => { ctx.beginPath(); ctx.rect(-s / 2, -s / 2, s, s); };
+  r(9.2); fill(ctx, C.casing, alpha); r(8); stroke(ctx, hair(0.8), C.ivory, alpha, 'butt', 'miter'); r(6); fill(ctx, color, alpha);
+  ctx.restore();
+}
+
+// =============================================================================================
+// More of the client's pieces: the CP mark (theme/cpMark.ts), the recruit helmet scale
+// (buildingLayout.ts pipScale), the muster ring (groupOrderView.ts, GROUP_ORDER.muster).
+// =============================================================================================
+const CPM = [[7.25, 1.5, 8.75, 1.5, 8.75, 15.5, 7.25, 15.5], [8, 0, 10, 3, 6, 3], [1.5, 3, 14.5, 3, 14.5, 4.5, 1.5, 4.5], [2.5, 4.5, 13.5, 4.5, 13.5, 12, 8, 9.5, 2.5, 12]];
+/** The CP mark of a rally walk (#930, W4): dim, inked in from its foot as its recruit is made (`ink` 0..1). */
+function cpMark(ctx, x, y, size, ink = 1, alpha = 1) {
+  const s = size / 16, path = () => { ctx.beginPath(); for (const p of CPM) { ctx.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]); ctx.closePath(); } };
+  ctx.save(); ctx.translate(x - 8 * s, y - 8 * s); ctx.scale(s, s);
+  path(); ctx.lineJoin = 'miter'; ctx.lineWidth = 2; ctx.strokeStyle = C.casing; ctx.globalAlpha = GA * alpha; ctx.stroke();
+  path(); ctx.fillStyle = C.ivory; ctx.globalAlpha = GA * alpha * 0.42; ctx.fill();
+  if (ink > 0) { ctx.save(); ctx.beginPath(); ctx.rect(-1, 16 - ink * 16.5, 18, ink * 16.5 + 1); ctx.clip(); path(); ctx.globalAlpha = GA * alpha; ctx.fill(); ctx.restore(); }
+  ctx.restore(); ctx.globalAlpha = GA;
+}
+function pipScale(z) { const minScale = 1.35, screen = 1.7, keep = 0.5, out = screen / minScale / Math.max(1e-3, z), exact = minScale * Math.max(1, out) ** keep; return 2 ** (Math.ceil(Math.log2(exact) * 4) / 4) / minScale; }
+const MUSTER = { gap: 13, arcs: 4, arc: 1.0, casing: 5.4, width: 2.6, disc: 13, helmet: 17, chevron: { gap: 12, length: 14, width: 7 } };
+const UNIT_MS = 3000, LEAD = 700, MERGE_MS = 420, WALK_MS = 2100, SLIDE_MS = 300, FLASH_MS = 520;
+const smooth = (a, b, x) => { const q = clamp01((x - a) / (b - a)); return q * q * (3 - 2 * q); };
+
+/** A helmet of the client (units/helmet.ts), with the extra looks the variants need. */
+function helm(ctx, o) {
+  const kind = o.kind || 'own', h = helmet(kind, o.w), L = helmetLines(o.w), facing = kind === 'own' ? 1 : -1;
+  const cas = o.cas !== undefined ? o.cas : Math.max(2.6, o.w * 0.24), ga = GA; GA = ga * (o.alpha === undefined ? 1 : o.alpha); ctx.globalAlpha = GA;
+  ctx.save(); ctx.translate(o.x, o.y); if (o.rot) ctx.rotate(o.rot); ctx.scale(facing, 1);
+  const gear = h.band ? [h.strap, h.band] : [h.strap], gw = (ln) => (ln === h.strap ? L.strap : L.band) * HE.gear;
+  if (o.dashed) {
+    poly(ctx, h.dome); fill(ctx, C.plate, 0.6);
+    ctx.setLineDash([Math.max(1, o.w * 0.1), Math.max(0.9, o.w * 0.085)]); poly(ctx, h.dome); stroke(ctx, hair(Math.max(0.75, o.w * 0.07)), C.ink, 0.95, 'butt'); ctx.setLineDash([]);
+  } else {
+    for (const ln of gear) { poly(ctx, ln, false); stroke(ctx, gw(ln) + cas * 0.8, C.casing); }
+    poly(ctx, h.dome); stroke(ctx, cas * 0.9, C.casing); poly(ctx, h.dome); fill(ctx, C.plate);
+    const pitch = Math.min(3, Math.max(1.4, o.w * 0.075)), lv = clamp01(o.level || 0), top = h.domeBottom - lv * (h.domeBottom - h.domeTop);
+    ctx.save(); poly(ctx, h.dome); ctx.clip();
+    hatchLines(ctx, h.domeBounds, -Math.PI / 4, pitch); stroke(ctx, hair(HE.hatchW * (o.w < 16 ? 0.7 : 1)), o.color || OWN, o.hatchA === undefined ? 1 : o.hatchA, 'butt');
+    if (lv > 0) { ctx.beginPath(); ctx.rect(h.domeBounds.x - 2, top, h.domeBounds.width + 4, h.domeBottom - top + 2); fill(ctx, o.color || OWN); }
+    if (o.head && lv > 0.02 && lv < 0.98) line(ctx, h.domeBounds.x - 2, top, h.domeBounds.x + h.domeBounds.width + 2, top, hair(Math.max(0.8, o.w * 0.075)), C.ivory, 1, 'butt');
+    ctx.restore();
+    for (const ln of gear) { poly(ctx, ln, false); stroke(ctx, gw(ln), C.ink); }
+    poly(ctx, h.dome); stroke(ctx, hair(o.w < 16 ? 0.8 : HE.edge), o.edge || C.ink);
+  }
+  ctx.restore(); GA = ga; ctx.globalAlpha = GA;
+}
+/** Text of the map: EB Garamond on a dark cut. */
+function txt(ctx, s, x, y, size, color = C.ivory, o = {}) {
+  ctx.font = `${o.weight || 600} ${size}px 'EB Garamond', Georgia, serif`; ctx.textAlign = o.align || 'center'; ctx.textBaseline = 'middle';
+  ctx.globalAlpha = GA * (o.alpha === undefined ? 1 : o.alpha); ctx.lineJoin = 'round'; ctx.lineWidth = o.cas === undefined ? Math.max(2, size * 0.26) : o.cas; ctx.strokeStyle = C.cut;
+  ctx.strokeText(s, x, y); ctx.fillStyle = color; ctx.fillText(s, x, y); ctx.globalAlpha = GA;
+}
+/** An engraved plate: a casing, the dark plate, an ink rim and a faint inner rule (the toast plate's double rule). */
+function plate(ctx, x, y, w, h, k, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha, c = 1.7 * k;
+  ctx.beginPath(); ctx.rect(x - c, y - c, w + 2 * c, h + 2 * c); fill(ctx, C.casing, 0.9 * a);
+  ctx.beginPath(); ctx.rect(x, y, w, h); fill(ctx, C.plate, 0.95 * a);
+  ctx.beginPath(); ctx.rect(x + 0.45 * k, y + 0.45 * k, w - 0.9 * k, h - 0.9 * k); stroke(ctx, hair(0.95 * k), o.rim || C.ink, 0.85 * a, 'butt', 'miter');
+  ctx.beginPath(); ctx.rect(x + 2.5 * k, y + 2.5 * k, w - 5 * k, h - 5 * k); stroke(ctx, hair(0.6 * k), C.ink, 0.26 * a, 'butt', 'miter');
+}
+/** The disc of the travel time and the waits (GROUP_ORDER.disc): a casing, a dark plate, a paper rim. */
+function disc(ctx, x, y, r, k, o = {}) {
+  circle(ctx, x, y, r + 1.6 * k); fill(ctx, C.casing, 0.92); circle(ctx, x, y, r); fill(ctx, C.plate, 0.94);
+  if (o.dash) ctx.setLineDash(o.dash); circle(ctx, x, y, r - 0.55 * k); stroke(ctx, hair(1 * k), o.rim || C.ink, o.rimA || 0.75, 'butt'); ctx.setLineDash([]);
+}
+function lozenge(ctx, x, y, side, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha;
+  lozPath(ctx, x, y, side + 2.4 * (o.k || 1)); fill(ctx, C.casing, 0.92 * a);
+  if (o.hollow) { lozPath(ctx, x, y, side); fill(ctx, C.plate, a); if (o.dash) ctx.setLineDash(o.dash); lozPath(ctx, x, y, side * 0.8); stroke(ctx, hair(0.85 * (o.k || 1)), o.color || C.ink, 0.9 * a, 'butt', 'miter'); ctx.setLineDash([]); }
+  else { lozPath(ctx, x, y, side); fill(ctx, o.color || C.ink, a); }
+}
+/** A queued unit as a dot on its casing; a free slot as a dashed ring (A "Cells", #439: queued = dot, free = dashed). */
+function bead(ctx, x, y, r, k, free) {
+  circle(ctx, x, y, r + 1.3 * k); fill(ctx, C.casing, 0.9);
+  if (free) { circle(ctx, x, y, r); fill(ctx, C.plate, 0.9); ctx.setLineDash([1.1 * k, 0.9 * k]); circle(ctx, x, y, r - 0.4 * k); stroke(ctx, hair(0.8 * k), C.ink, 0.9, 'butt'); ctx.setLineDash([]); }
+  else { circle(ctx, x, y, r); fill(ctx, C.ink); }
+}
+/** The amber "needs a look" ring (PROGRESS.alert): dashed, pulsing; still under reduced motion. */
+const pulseA = (P) => (P.still ? 1 : 0.45 + 0.55 * (0.5 - 0.5 * Math.cos((TAU * P.t) / 1100)));
+function alertCircle(ctx, x, y, r, P) { const a = pulseA(P); circle(ctx, x, y, r); stroke(ctx, 3.4 * P.k, C.casing, 0.75 * a); ctx.setLineDash([3 * P.k, 2.2 * P.k]); circle(ctx, x, y, r); stroke(ctx, hair(1.4 * P.k), C.clash, a, 'butt'); ctx.setLineDash([]); }
+function alertRect(ctx, x, y, w, h, P) { const a = pulseA(P); ctx.beginPath(); ctx.rect(x, y, w, h); stroke(ctx, 3.4 * P.k, C.casing, 0.75 * a, 'butt', 'miter'); ctx.setLineDash([3 * P.k, 2.2 * P.k]); ctx.beginPath(); ctx.rect(x, y, w, h); stroke(ctx, hair(1.4 * P.k), C.clash, a, 'butt', 'miter'); ctx.setLineDash([]); }
+/** A short progress rule: a dark track with an ink hairline, the owner's fill and an ivory burin lozenge at its head. */
+function progressRule(ctx, x0, y, len, share, k, o = {}) {
+  const h = (o.h || 2.6) * k;
+  ctx.beginPath(); ctx.rect(x0 - 1.2 * k, y - h / 2 - 1.2 * k, len + 2.4 * k, h + 2.4 * k); fill(ctx, C.casing, 0.92);
+  ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); fill(ctx, C.plate);
+  if (share > 0) { ctx.beginPath(); ctx.rect(x0, y - h / 2, len * share, h); fill(ctx, o.color || OWN); }
+  ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); stroke(ctx, hair(0.6 * k), C.ink, 0.55, 'butt', 'miter');
+  if (share > 0.01 && share < 0.995 && !o.noHead) { const hx = x0 + len * share; lozPath(ctx, hx, y, 5.6 * k); fill(ctx, C.casing); lozPath(ctx, hx, y, 3.5 * k); fill(ctx, C.ivory); }
+}
+const KINDS = { small: { cap: 4, r: 14, wh: 3 }, medium: { cap: 6, r: 17, wh: 3 }, large: { cap: 8, r: 20, wh: 3 }, capital: { cap: 10, r: 20, wh: 6 } };
+const CITIES = [
+  { name: 'Forkway', x: 0, y: 0, kind: 'small', side: 'own', vp: 1, stock: 2, b: ['barracks'], units: 1, charged: 1 },
+  { name: 'Watchpost', x: -250, y: 20, kind: 'small', side: 'own', vp: 1, stock: 2, b: ['factory'], units: 3, charged: 3 },
+  { name: 'Watchhouse', x: -40, y: -255, kind: 'small', side: 'own', vp: 1, stock: 1, units: 2, charged: 1 },
+  { name: 'Ford', x: -125, y: 235, kind: 'small', side: 'own', vp: 0, stock: 0 },
+  { name: 'Stonegate', x: -545, y: 45, kind: 'capital', side: 'own', vp: 3, stock: 4, b: ['barracks', 'factory'], units: 2, charged: 2 },
+  { name: 'Wood Hollow', x: -380, y: -265, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Firwood', x: -700, y: -330, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Brookside', x: -430, y: 310, kind: 'medium', side: 'own', vp: 1, stock: 1, b: ['barracks'] },
+  { name: 'Westmarch', x: -930, y: -40, kind: 'medium', side: 'own', vp: 2, stock: 2 },
+  { name: 'Pinecrest', x: -860, y: 360, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Archway', x: 265, y: 15, kind: 'medium', side: 'foe', vp: 2, b: ['barracks'], units: 3 },
+  { name: 'Crest', x: 470, y: -235, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Gateway', x: 505, y: 255, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Heart', x: 790, y: 15, kind: 'capital', side: 'foe', vp: 3, b: ['barracks', 'factory'] },
+  { name: 'Reach', x: 760, y: -390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farmstead', x: 810, y: 390, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Eastmarch', x: 1090, y: -160, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Crossing', x: 1110, y: 270, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Highfold', x: -200, y: -585, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Greyhill', x: -620, y: -610, kind: 'medium', side: 'own', vp: 1, stock: 2, b: ['factory'] },
+  { name: 'Northwatch', x: -1060, y: -470, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Saltmere', x: -1260, y: 140, kind: 'small', side: 'own', vp: 1, stock: 3 },
+  { name: 'Edgebrook', x: -1170, y: 560, kind: 'small', side: 'own', vp: 1, stock: 1 },
+  { name: 'Lowmarsh', x: -700, y: 625, kind: 'small', side: 'own', vp: 1, stock: 0 },
+  { name: 'Southford', x: -235, y: 590, kind: 'small', side: 'own', vp: 1, stock: 2 },
+  { name: 'Ridge', x: 330, y: -600, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Coldwater', x: 730, y: -660, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Spire', x: 1310, y: -520, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Farside', x: 1340, y: 90, kind: 'medium', side: 'foe', vp: 2 },
+  { name: 'Dunmore', x: 1300, y: 570, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Embers', x: 730, y: 680, kind: 'small', side: 'foe', vp: 1 },
+  { name: 'Marsh', x: 380, y: 615, kind: 'small', side: 'foe', vp: 1 },
+];
+const EDGES = [[0, 1], [0, 2], [0, 3], [0, 10], [1, 4], [1, 2], [2, 5], [5, 4], [5, 6], [4, 6], [4, 7], [3, 7], [4, 8], [6, 8], [7, 9], [8, 9],
+  [10, 11], [10, 12], [11, 13], [12, 13], [11, 14], [14, 13], [12, 15], [15, 13], [13, 16], [13, 17], [14, 16], [15, 17], [2, 11], [3, 12],
+  [18, 2], [18, 5], [19, 5], [19, 6], [20, 6], [20, 8], [21, 8], [21, 9], [22, 9], [22, 21], [23, 9], [23, 7], [24, 3], [24, 23],
+  [25, 11], [25, 18], [26, 25], [26, 14], [27, 14], [27, 16], [28, 16], [28, 17], [29, 17], [29, 30], [30, 15], [31, 12], [31, 24], [31, 30]];
+CITIES.forEach((c, i) => {
+  const k = KINDS[c.kind]; c.i = i; c.r = k.r; c.R = k.r + RING.gap; c.cap = k.cap; c.wh = k.wh;
+  c.roads = EDGES.filter((e) => e.includes(i)).map(([a, b]) => { const o = CITIES[a === i ? b : a]; return Math.atan2(o.y - c.y, o.x - c.x); });
+});
+
+// =============================================================================================
+// The scene of this page: the artery front at 2:00 of a mvp-7 match (Balance). Forkway builds its
+// factory (4 charges, progressive payment, then 10 s); Stonegate (the capital) recruits 3 units, then
+// 2 more (3 s a unit); Stonegate and Watchpost each make a charge every 20 s on their own counters
+// (DEC-44, DEC-47). One loop of 20 s, the capital's period, so every countdown runs without a seam.
+// =============================================================================================
+const FORK = CITIES[0], WATCH = CITIES[1], STONE = CITIES[4], BROOK = CITIES[7], GREY = CITIES[19];
+Object.assign(FORK, { b: ['barracks'], stock: 1, units: 3, charged: 1 });
+Object.assign(WATCH, { b: ['factory'], stock: 1, units: 3, charged: 3 });
+Object.assign(STONE, { b: ['barracks', 'factory'], stock: 4, units: 2, charged: 2 });
+GREY.b = [];
+const sideOf = (c) => c.side;
+const adjacentOwn = (c) => EDGES.some(([a, b]) => (a === c.i || b === c.i) && CITIES[a === c.i ? b : a].side === 'own');
+const norm = (a) => { let b = (a + Math.PI) % TAU; if (b < 0) b += TAU; return b - Math.PI; };
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const LOOP = 20000, PERIOD = 20000, BAR_H = 52;
+const FACTORIES = [STONE, WATCH];
+const FIRE = new Map([[STONE, 13000], [WATCH, 4000]]);
+
+// ---- the build (systems/build.py pay(): the warehouse, the group standing there, then packets) ----
+const ORDER = 700, PACKET_MS = 1500, BUILD_MS = 10000;
+const PAYS = [{ at: ORDER, from: ['w', 'g'] }, { at: 2600, from: ['p'] }, { at: 3700, from: ['p'] }];
+const BCH = [];
+for (const p of PAYS) p.from.forEach((f, k) => BCH.push({ j: BCH.length, from: f, start: p.at + k * PAY.staggerMs }));
+const BLAST = PAYS[PAYS.length - 1].at, BDONE = BLAST + BUILD_MS;
+
+// ---- the recruiting (DEC-25: a unit every recruit.unit_ticks, the queue at most 3) ----
+const RQ = [{ at: 500, n: 3 }, { at: 11000, n: 2 }];
+const RUNITS = (() => { const out = []; let free = 0; for (const q of RQ) for (let i = 0; i < q.n; i++) { const start = Math.max(q.at, free); out.push({ order: q.at, start, done: start + UNIT_MS }); free = start + UNIT_MS; } return out; })();
+
+// ---- the packets on the roads: the two that pay the build, and each charge leaving its factory a second after it is made ----
+const PACKETS = [
+  { from: WATCH, to: FORK, start: 2600 - PACKET_MS, dur: PACKET_MS },
+  { from: WATCH, to: FORK, start: 3700 - PACKET_MS, dur: PACKET_MS },
+  { from: STONE, to: BROOK, start: FIRE.get(STONE) + 1000, dur: 2300 },
+  { from: WATCH, to: FORK, start: FIRE.get(WATCH) + 1000, dur: PACKET_MS },
+];
+
+// =============================================================================================
+// The state of the page.
+// =============================================================================================
+const S = { el: 'charge', vb: 'B0', vr: 'R0', vn: 'N0', zoom: 'normal', still: false, gray: false, more: false, playing: true, time: 0 };
+const VAR_OF = { build: 'vb', recruit: 'vr', charge: 'vn' };
+
+const chargeOf = (c, t) => { const since = (((t - FIRE.get(c)) % PERIOD) + PERIOD) % PERIOD; return { share: since / PERIOD, since, left: PERIOD - since }; };
+/** How long after the charge is made it lands in the store, by the variant (a flight to the row). */
+function landDelay(c) { return S.vn === 'N2' ? PAY.flightMs : S.vn === 'N3' && c === STONE ? 760 : 0; }
+function stockOf(c, t) {
+  if (c === FORK) return t < ORDER ? 1 : 0;
+  let s = c.stock || 0;
+  if (FIRE.has(c)) { const since = chargeOf(c, t).since; if (since >= landDelay(c) && since < 1000) s += 1; }
+  return Math.min(s, c.wh);
+}
+
+/** One frame: everything the pieces draw from (the client would read the same from the view). */
+function frameState(t) {
+  const z = ZOOMS[S.zoom], tq = S.still ? Math.floor(t / 100) * 100 : t;
+  // build
+  const B = { ordered: t >= ORDER, built: t >= BDONE, time: clamp01((tq - BLAST) / BUILD_MS), sinceDone: t - BDONE, sinceOrder: t - ORDER, cost: 4 };
+  // recruit
+  const ordered = RUNITS.filter((u) => u.order <= t), finished = RUNITS.filter((u) => u.done <= t);
+  const queue = ordered.length - finished.length, cur = RUNITS[finished.length];
+  const share = queue > 0 ? clamp01((tq - cur.start) / UNIT_MS) : 0;
+  const lastDone = finished.length ? finished[finished.length - 1].done : null, since = lastDone === null ? Infinity : t - lastDone;
+  const mergeMs = S.still ? 0 : 560;
+  const merged = RUNITS.filter((u) => t >= u.done + mergeMs).length;
+  const flash = merged > 0 ? t - (RUNITS[merged - 1].done + mergeMs) : Infinity;
+  const batch = RQ.filter((q) => q.at <= t).pop(), batchEnd = RUNITS.filter((u) => u.order === (batch ? batch.at : -1)).pop();
+  let on = 0;
+  if (queue > 0) on = S.still ? 1 : ease.engrave((t - batch.at) / 320);
+  else if (batchEnd && t >= batchEnd.done) on = S.still ? 0 : 1 - ease.engrave((t - batchEnd.done) / 320);
+  const slideMs = S.still ? 0 : 300, shift = finished.length > 0 && since < slideMs && queue > 0 ? 1 - ease.engrave(since / slideMs) : 0;
+  const R = { queue, share, finished: finished.length, since, units: Math.min(STONE.cap, STONE.units + merged), charged: STONE.charged, flash, on, shift, mergeMs };
+  return { t, tq, z, still: S.still, B, R, k: iconSize(z) / 16 };
+}
+
+// =============================================================================================
+// Room round a city: what a piece keeps clear of (the client's foundationLayout.ts obstacles):
+// the ring, the B6 ticks of the largest garrison, the roads, the VP lozenge, the store row, the name.
+// =============================================================================================
+function iconBox(kind, x, y, size) { const s = size / CUT_STYLE.box, [a, b, c, d] = CUT_BOX[kind], p = (CUT_STYLE.casing / 2) * s; return [x + a * s - p, y + b * s - p, x + c * s + p, y + d * s + p]; }
+function boxCircles(x0, y0, x1, y1) {
+  const w = x1 - x0, h = y1 - y0, wide = w >= h, n = Math.max(1, Math.ceil((wide ? w / h : h / w) * 1.4)), out = [];
+  for (let i = 0; i < n; i++) { const f = (i + 0.5) / n; out.push(wide ? { x: x0 + f * w, y: y0 + h / 2, r: Math.hypot(w / n / 2, h / 2) } : { x: x0 + w / 2, y: y0 + f * h, r: Math.hypot(w / 2, h / n / 2) }); }
+  return out;
+}
+const NAME_W = new Map();
+function nameWidth(s) { if (!NAME_W.has(s)) { const c = document.createElement('canvas').getContext('2d'); c.font = '700 13px system-ui, sans-serif'; NAME_W.set(s, c.measureText(s).width); } return NAME_W.get(s); }
+function obstaclesOf(c, z, boxes = []) {
+  const R = c.R, out = [{ t: 'c', x: 0, y: 0, r: R + RING.cut / 2 + 1 }];
+  const gw = helmetFit('own', helmetWidth(unitSide(c.cap), true), R - RING.cut / 2 - 1), e = helmetExtent(helmet('own', gw)), tg = TICKS.gap + TICKS.casing / 2;
+  out.push({ t: 'b', x0: e.left - tg, y0: e.top - tg, x1: e.right + tg, y1: e.bottom + tg });
+  for (const a of c.roads) out.push({ t: 's', x0: R * Math.cos(a), y0: R * Math.sin(a), x1: 900 * Math.cos(a), y1: 900 * Math.sin(a), r: 3.7 + 1.6 });
+  if (c.vp) { const v = polar(-Math.PI / 4, R + VPL.lift); out.push({ t: 'c', x: v.x, y: v.y, r: (VPL.side * Math.SQRT2) / 2 + 2 }); }
+  const xs = rowXs(c.wh), rh = (xs.length ? xs[xs.length - 1] : 0) + LOZ.casing * 0.75 + 1.5;
+  out.push({ t: 'b', x0: -rh, y0: R + LOZ.drop - LOZ.casing * 0.75 - 1.5, x1: rh, y1: R + LOZ.drop + LOZ.casing * 0.75 + 1.5 });
+  if (z >= 0.45) { const nw = nameWidth(c.name) / z / 2 + 2, ny = R + 15 + (c.wh ? 4 : 0); out.push({ t: 'b', x0: -nw, y0: ny - 2, x1: nw, y1: ny + 16 / z }); }
+  for (const b of boxes) out.push({ t: 'b', x0: b[0], y0: b[1], x1: b[2], y1: b[3] });
+  return out;
+}
+function hits(o, x, y, r) {
+  if (o.t === 'c') return Math.hypot(x - o.x, y - o.y) < r + o.r;
+  if (o.t === 'b') return Math.hypot(x - clamp(x, o.x0, o.x1), y - clamp(y, o.y0, o.y1)) < r;
+  const dx = o.x1 - o.x0, dy = o.y1 - o.y0, q = clamp(((x - o.x0) * dx + (y - o.y0) * dy) / (dx * dx + dy * dy), 0, 1);
+  return Math.hypot(x - o.x0 - q * dx, y - o.y0 - q * dy) < r + o.r;
+}
+const PLACED = new Map();
+/** The free seat nearest to `seat` where `shape(at)` (circles) meets nothing; searched once per key. */
+function placeNear(key, seat, obs, shape, k) {
+  if (PLACED.has(key)) return PLACED.get(key);
+  const d0 = Math.hypot(seat.x, seat.y), a0 = Math.atan2(seat.y, seat.x);
+  let best = null;
+  for (let da = -90; da <= 90; da += 0.75) for (let dd = -4 * k; dd <= 60 * k; dd += 0.3 * k) {
+    const at = polar(a0 + (da * Math.PI) / 180, d0 + dd), cost = Math.hypot(at.x - seat.x, at.y - seat.y);
+    if (best && cost >= best.cost) continue;
+    if (shape(at).some((ci) => obs.some((o) => hits(o, ci.x, ci.y, ci.r)))) continue;
+    best = { cost, x: at.x, y: at.y };
+  }
+  const out = best || { x: seat.x, y: seat.y, fail: true };
+  PLACED.set(key, out); return out;
+}
+
+// =============================================================================================
+// Shared marks of the new variants (built from the client's own parts: the casing, the dark plate
+// ramp of the foundation, the ink rim, the owner's hatch, the ivory head line and the burin lozenge).
+// =============================================================================================
+function chamferBox(ctx, x0, y0, x1, y1, ch) { ctx.beginPath(); ctx.moveTo(x0 + ch, y0); ctx.lineTo(x1 - ch, y0); ctx.lineTo(x1, y0 + ch); ctx.lineTo(x1, y1 - ch); ctx.lineTo(x1 - ch, y1); ctx.lineTo(x0 + ch, y1); ctx.lineTo(x0, y1 - ch); ctx.lineTo(x0, y0 + ch); ctx.closePath(); }
+/** A plate of the foundation's material: casing, the plate darker downward, an ink rim. */
+function slab(ctx, x0, y0, x1, y1, k, o = {}) {
+  const c = 1.5 * k, ch = (o.ch || 1) * k, a = o.alpha === undefined ? 1 : o.alpha, ga = GA; GA = ga * a; ctx.globalAlpha = GA;
+  chamferBox(ctx, x0 - c, y0 - c * 0.4, x1 + c, y1 + c, ch + c * 0.6); fill(ctx, C.casing, 0.94);
+  const gr = ctx.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, '#2c261d'); gr.addColorStop(0.38, '#1b1712'); gr.addColorStop(1, '#0b0907');
+  chamferBox(ctx, x0, y0, x1, y1, ch); ctx.fillStyle = gr; ctx.globalAlpha = GA; ctx.fill();
+  chamferBox(ctx, x0 + 0.5 * k, y0 + 0.5 * k, x1 - 0.5 * k, y1 - 0.5 * k, ch * 0.7); stroke(ctx, hair(1 * k), o.rim || C.ink, 0.95, 'butt', 'miter');
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** A groove of a plate: a recess the owner's colour sweeps along behind an ivory burin lozenge. */
+function groove(ctx, x0, y, len, h, share, k, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha;
+  ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); fill(ctx, C.plate, a);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, y - h / 2, len, h); ctx.clip();
+  hatchLines(ctx, { x: x0, y: y - h / 2, width: len, height: h }, -Math.PI / 4, Math.max(1.6 * k, 1.1)); stroke(ctx, hair(0.55 * k), o.color || OWN, 0.55 * a, 'butt');
+  if (share > 0) {
+    ctx.beginPath(); ctx.rect(x0, y - h / 2, len * share, h); fill(ctx, o.color || OWN, a);
+    const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2); g.addColorStop(0, 'rgba(236,228,209,0.22)'); g.addColorStop(0.5, 'rgba(6,5,4,0)'); g.addColorStop(1, 'rgba(6,5,4,0.28)');
+    ctx.beginPath(); ctx.rect(x0, y - h / 2, len * share, h); ctx.fillStyle = g; ctx.globalAlpha = GA * a; ctx.fill(); ctx.globalAlpha = GA;
+  }
+  ctx.restore();
+  ctx.beginPath(); ctx.rect(x0 + 0.25 * k, y - h / 2 + 0.25 * k, len - 0.5 * k, h - 0.5 * k); stroke(ctx, hair(0.5 * k), C.ink, 0.55 * a, 'butt', 'miter');
+  if (share > 0.004 && share < 0.996 && !o.noHead) {
+    const hx = x0 + len * share;
+    if (!o.still) glow(ctx, { x: hx, y }, 4.6 * k, '#ece4d1', 0.16 * a);
+    line(ctx, hx, y - h / 2 - 0.4 * k, hx, y + h / 2 + 0.4 * k, 2 * k, C.casing, 0.8 * a, 'butt');
+    line(ctx, hx, y - h / 2 - 0.4 * k, hx, y + h / 2 + 0.4 * k, hair(1.05 * k), C.ivory, a, 'butt');
+    lozPath(ctx, hx, y - h / 2 - 1.6 * k, 4.4 * k); fill(ctx, C.casing, a); lozPath(ctx, hx, y - h / 2 - 1.6 * k, 2.7 * k); fill(ctx, C.ivory, a);
+  }
+}
+/** A sunk lozenge socket (an owed charge, a place on a plate): a recess with a faint ink rule. */
+function socketLoz(ctx, x, y, side, k, a = 1) {
+  lozPath(ctx, x, y, side + 1.6 * k); fill(ctx, C.casing, 0.9 * a);
+  lozPath(ctx, x, y, side); fill(ctx, '#080706', a);
+  lozPath(ctx, x, y, side * 0.78); stroke(ctx, hair(0.6 * k), C.ink, 0.62 * a, 'butt', 'miter');
+}
+/** A charge seated in a socket: the owner's colour with a light top facet (the store row's lozenge, lit). */
+function seatedLoz(ctx, x, y, side, k, color = OWN, a = 1, scale = 1) {
+  const s = side * scale;
+  lozPath(ctx, x, y, s + 1.6 * k); fill(ctx, C.casing, 0.95 * a);
+  lozPath(ctx, x, y, s); fill(ctx, color, a);
+  ctx.save(); lozPath(ctx, x, y, s); ctx.clip();
+  const h = (s * Math.SQRT2) / 2, g = ctx.createLinearGradient(x, y - h, x, y + h); g.addColorStop(0, 'rgba(236,228,209,0.35)'); g.addColorStop(0.5, 'rgba(236,228,209,0)'); g.addColorStop(1, 'rgba(6,5,4,0.25)');
+  ctx.fillStyle = g; ctx.globalAlpha = GA * a; ctx.fillRect(x - h, y - h, 2 * h, 2 * h); ctx.globalAlpha = GA; ctx.restore();
+}
+/**
+ * The seal dial: a round seal (the travel-time disc of orders: casing, dark plate, paper rim) whose
+ * rim is a clock: the owner's colour sweeps clockwise from the top with an ivory head tick.
+ */
+function sealDisc(ctx, x, y, r, k, o = {}) {
+  const a = o.alpha === undefined ? 1 : o.alpha, ga = GA; GA = ga * a; ctx.globalAlpha = GA;
+  circle(ctx, x, y, r + 2.2 * k); fill(ctx, C.casing, 0.94);
+  const g = ctx.createRadialGradient(x, y - r * 0.35, r * 0.1, x, y, r);
+  g.addColorStop(0, '#221d16'); g.addColorStop(0.7, '#110f0b'); g.addColorStop(1, '#0a0806');
+  circle(ctx, x, y, r); ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.fill();
+  // the dial track: a faint rule and twelve fine graduations, engraved
+  const rt = r - 1.9 * k;
+  circle(ctx, x, y, rt); stroke(ctx, 2.4 * k, '#050403', 0.85);
+  circle(ctx, x, y, rt); stroke(ctx, hair(0.5 * k), C.ink, 0.35);
+  ctx.beginPath(); for (let i = 0; i < 12; i++) { const an = START + (i * TAU) / 12, c1 = Math.cos(an), s1 = Math.sin(an); ctx.moveTo(x + c1 * (rt - 1.3 * k), y + s1 * (rt - 1.3 * k)); ctx.lineTo(x + c1 * (rt + 1.1 * k), y + s1 * (rt + 1.1 * k)); }
+  stroke(ctx, hair(0.45 * k), C.ink, 0.42, 'butt');
+  const share = o.share || 0;
+  if (share > 0) {
+    ctx.beginPath(); ctx.arc(x, y, rt, START, START + share * TAU); stroke(ctx, 2.2 * k, o.color || OWN, 1, 'butt');
+    ctx.beginPath(); ctx.arc(x, y, rt + 0.7 * k, START, START + share * TAU); stroke(ctx, hair(0.45 * k), C.ivory, 0.35, 'butt');
+  }
+  if (share > 0.003 && share < 0.997 && !o.noHead) {
+    const an = START + share * TAU, c1 = Math.cos(an), s1 = Math.sin(an);
+    if (!o.still) glow(ctx, { x: x + c1 * rt, y: y + s1 * rt }, 4.2 * k, '#ece4d1', 0.2);
+    line(ctx, x + c1 * (rt - 2.2 * k), y + s1 * (rt - 2.2 * k), x + c1 * (rt + 2.2 * k), y + s1 * (rt + 2.2 * k), 2.2 * k, C.casing, 0.85, 'butt');
+    line(ctx, x + c1 * (rt - 2.2 * k), y + s1 * (rt - 2.2 * k), x + c1 * (rt + 2.2 * k), y + s1 * (rt + 2.2 * k), hair(1.1 * k), C.ivory, 1, 'butt');
+  }
+  circle(ctx, x, y, r - 0.1 * k); stroke(ctx, hair(0.9 * k), o.rim || C.ink, o.rimA || 0.85, 'butt');
+  if (o.flash > 0) { circle(ctx, x, y, rt); stroke(ctx, 2.6 * k, C.ivory, 0.85 * o.flash, 'butt'); }
+  GA = ga; ctx.globalAlpha = GA;
+}
+
+// =============================================================================================
+// The build of Forkway's factory: today's parts (#872 motion, #972 V12 "Toast"), from build-animation.html.
+// =============================================================================================
+function buildGeo(P) {
+  const G = FORK, L = layoutBuildings(G, ['barracks', 'factory'], P.z), seat = L.items.factory, angle = L.angles.factory, sz = L.size;
+  return { G, L, seat, angle, sz, half: ICON_HALF * sz, k: lozK(sz), dir: { x: Math.cos(angle), y: Math.sin(angle) }, bar: L.items.barracks, psz: 16 * progK(P.z, sz / 16) };
+}
+/** Where a charge of the payment leaves from: the warehouse, the group's helmet, the road a packet came in on. */
+function srcOf(c, P, g) {
+  if (c.from === 'w') return { x: rowXs(FORK.wh)[0], y: FORK.R + LOZ.drop };
+  if (c.from === 'g') return { x: 0, y: -3 };
+  const a = Math.atan2(WATCH.y - FORK.y, WATCH.x - FORK.x); return { x: Math.cos(a) * (FORK.R + 3), y: Math.sin(a) * (FORK.R + 3) };
+}
+const age = (c, P) => P.t - c.start;
+function arcFlight(c, P, g, to, dur, lift = PAY.lift) {
+  const a = age(c, P); if (a < 0 || a >= dur) return null;
+  const q = ease.travel(a / dur), from = srcOf(c, P, g);
+  return { q, x: lerp(from.x, to.x, q), y: lerp(from.y, to.y, q) - Math.sin(q * Math.PI) * lift };
+}
+const popOf = (c, P, dur) => { const l = age(c, P) - dur; return !P.still && l >= 0 && l < PAY.popMs ? 1 + PAY.pop * Math.sin((l / PAY.popMs) * Math.PI) : 1; };
+function payState(P, dur = PAY.flightMs) {
+  const landed = P.still ? BCH.filter((c) => age(c, P) >= 0).length : BCH.filter((c) => age(c, P) >= dur).length;
+  const end = Math.max(...BCH.map((c) => c.start)) + (P.still ? 0 : dur);
+  return { landed, end, paid: landed >= BCH.length, dur };
+}
+function classic(P, g, o = {}) {
+  const s = o.scale || 1, sz = g.sz * s, push = g.half * (s - 1);
+  const seat = { x: g.seat.x + g.dir.x * push, y: g.seat.y + g.dir.y * push };
+  const k = o.k ? o.k(sz) : lozK(sz), slots = owedRow(seat, g.angle, sz, k, 4), ps = payState(P);
+  return { sz, seat, k, slots, ...ps, running: ps.paid && P.B.time > 0 };
+}
+function classicFlights(ctx, P, g, c0, to = (c) => c0.slots[c.j], k = c0.k) {
+  if (P.still) return;
+  for (const c of BCH) { const f = arcFlight(c, P, g, to(c), c0.dur); if (f) drawLozenge(ctx, f.x, f.y, true, OWN, lerp(1, k, f.q)); }
+}
+function cornerTicks(ctx, x, y, e, P, sz) {
+  if (P.B.sinceDone < 0 || P.B.sinceDone >= 3300) return;
+  const sd = P.B.sinceDone, a = sd < 3000 ? 1 : 1 - (sd - 3000) / 300, gin = P.still ? 0 : 3 * (1 - ease.settle(sd / 180)), ee = e + 2 + gin, arm = Math.max(3.4, 0.24 * sz);
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    const cx = x + sx * ee, cy = y + sy * ee;
+    ctx.beginPath(); ctx.moveTo(cx - sx * arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * arm); stroke(ctx, 3.4, C.casing, 0.95 * a, 'square', 'miter');
+    ctx.beginPath(); ctx.moveTo(cx - sx * arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * arm); stroke(ctx, hair(1.3), C.ivory, a, 'butt', 'miter');
+  }
+}
+/** The icon's finish: an ivory outline flash over 520 ms (no motion: none). */
+const finishFlash = (P) => (P.still || P.B.sinceDone < 0 ? 0 : 1 - clamp01(P.B.sinceDone / 520));
+
+// ---- B3: the blueprint (the icon drawn large while it is works, engraved line by line) ----------
+function blueprintIcon(ctx, kind, x, y, sz, o) {
+  const k = sz / CUT_STYLE.box, out = CUT[kind], sol = CUT_SOLID[kind], [bx0, by0, bx1, by1] = CUT_BOX[kind];
+  const lines = []; for (let yy = by1 - CUT_STYLE.rule + 0.6; yy > by0 - 1; yy -= CUT_STYLE.rule) lines.push(yy);
+  const t = clamp01(o.time || 0), n = lines.length * t, full = Math.floor(n), frac = n - full;
+  const cutY = t <= 0 ? by1 + 2 : t >= 1 ? by0 - 3 : lines[Math.min(full, lines.length - 1)] - (t < 1 ? 0 : 0);
+  frame(ctx, x, y, 0, k, () => {
+    // the ground: half dark while it is only a plan, the owner's faint hatch to say whose it is
+    fillP(ctx, sol, C.plate, 0.78);
+    ctx.save(); ctx.clip(sol);
+    hatchLines(ctx, { x: bx0, y: by0, width: bx1 - bx0, height: by1 - by0 }, -Math.PI / 4, 2.2); stroke(ctx, hair(0.45), OWN, 0.32, 'butt');
+    // the engraving: the owner's ruled lines cut from the ground up, the one under way left to right
+    ctx.beginPath(); for (let i = 0; i < full && i < lines.length; i++) ctx.rect(bx0 - 1, lines[i], bx1 - bx0 + 2, CUT_STYLE.ruleW); fill(ctx, OWN);
+    if (full < lines.length && t > 0 && t < 1) { ctx.beginPath(); ctx.rect(bx0 - 1, lines[full], (bx1 - bx0 + 2) * frac, CUT_STYLE.ruleW); fill(ctx, OWN); }
+    ctx.restore();
+    // the outline: solid ink where it is cut, a dashed plan above
+    strokeP(ctx, out, CUT_STYLE.casing, C.casing, 0.6);
+    ctx.save(); ctx.beginPath(); ctx.rect(bx0 - 6, cutY, bx1 - bx0 + 12, by1 - cutY + 6); ctx.clip();
+    strokeP(ctx, out, CUT_STYLE.casing, C.casing, CUT_STYLE.casingA); strokeP(ctx, out, hair(CUT_STYLE.ink), C.ink, 1); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(bx0 - 6, by0 - 8, bx1 - bx0 + 12, cutY - by0 + 8); ctx.clip();
+    ctx.setLineDash([2.4, 1.9]); strokeP(ctx, out, hair(1.35), C.ivory, 0.92, 'butt'); ctx.setLineDash([]); ctx.restore();
+    if (t > 0 && t < 1 && full < lines.length) {
+      const yy = lines[full] + CUT_STYLE.ruleW / 2, xx = bx0 - 1 + (bx1 - bx0 + 2) * frac;
+      if (!o.still) glow(ctx, { x: xx, y: yy }, 5, '#ece4d1', 0.28);
+      lozPath(ctx, xx, yy, 4.6); fill(ctx, C.casing); lozPath(ctx, xx, yy, 2.9); fill(ctx, C.ivory);
+    }
+  });
+}
+
+// =============================================================================================
+// The variants. Each piece draws its subject's own building(s) in `node` (city-local), may draw
+// flights over the groups in `top` (city-local) and screen marks in `hud`.
+// =============================================================================================
+const BUILD_VARS = [
+  { id: 'B0', name: 'Today', ref: true,
+    line: 'V12 “Toast” as built (#972): the icon a size up while it is works, the owed lozenges beside it, the fill rising, corner ticks for 3 s and a toast.',
+    node(ctx, P, g) {
+      const c0 = classic(P, g, { scale: 1.25, k: (sz) => lozK(sz) * 1.1 });
+      if (!P.B.built) {
+        if (!P.B.ordered) return;
+        drawIcon(ctx, 'factory', c0.seat.x, c0.seat.y, c0.sz, { look: c0.running ? 'rising' : 'plan', time: P.B.time, color: OWN });
+        if (!c0.running) c0.slots.forEach((p, j) => drawLozenge(ctx, p.x, p.y, j < c0.landed, OWN, c0.k * popOf(BCH[j], P, c0.dur)));
+        if (c0.paid && !P.still) { const into = P.t - c0.end; c0.slots.forEach((p, j) => { const q = ease.engrave((into - j * PAY.runStagger) / PAY.runMs); if (q > 0 && q < 1) drawLozenge(ctx, lerp(p.x, c0.seat.x, q), lerp(p.y, c0.seat.y, q), true, OWN, c0.k * (1 - PAY.shrink * q)); }); }
+        return;
+      }
+      drawIcon(ctx, 'factory', g.seat.x, g.seat.y, g.sz, { look: 'built', color: OWN });
+      if (!P.still) doneRing(ctx, g.seat.x, g.seat.y, g.sz, P.B.sinceDone);
+      cornerTicks(ctx, g.seat.x, g.seat.y, g.half, P, g.sz);
+    },
+    top(ctx, P, g) { if (P.B.ordered && !P.B.built) classicFlights(ctx, P, g, classic(P, g, { scale: 1.25, k: (sz) => lozK(sz) * 1.1 })); },
+    hud(ctx, P, W) { if (P.B.built) toast(ctx, P, W, 'Forkway is a factory now: it makes charges'); },
+  },
+  { id: 'B1', name: 'Works plate', tag: 'client only',
+    line: 'The factory stands on a works plate while it is built: the owed charges sit in its sockets, then melt into one groove the build time runs along. The plate sinks when it is done.',
+    geo(P, g) {
+      const k = g.psz / 16, sw = PLATE.sock * k, pitch = PLATE.pitch * k, w = 3 * pitch + (sw * Math.SQRT2) + 2 * PLATE.padX * k, h = sw * Math.SQRT2 + 2 * PLATE.padY * k;
+      const isz = g.psz * 1.15, ground = CUT_BOX.factory[3] * (isz / CUT_STYLE.box);
+      const shape = (at) => [...boxCircles(...iconBox('factory', at.x, at.y, isz)), ...boxCircles(at.x - w / 2 - 1.5 * k, at.y + ground, at.x + w / 2 + 1.5 * k, at.y + ground + h + 1.5 * k)];
+      const at = placeNear(`B1|${S.zoom}`, g.seat, obstaclesOf(FORK, P.z, [iconBox('barracks', g.bar.x, g.bar.y, g.sz)]), shape, k);
+      return { k, w, h, isz, ground, at, sw, pitch };
+    },
+    node(ctx, P, g) {
+      const G2 = this.geo(P, g), { k, w, h, isz, ground, sw, pitch } = G2, B = P.B;
+      if (!B.ordered) return;
+      // in over 260 ms at the order; down into the ground over 420 ms when built, the icon going home
+      const inQ = P.still ? 1 : ease.settle(B.sinceOrder / 260), out = B.built ? (P.still ? 1 : ease.engrave(B.sinceDone / 420)) : 0;
+      const home = B.built ? (P.still ? 1 : ease.engrave((B.sinceDone - 260) / 360)) : 0;
+      const at = { x: lerp(G2.at.x, g.seat.x, home), y: lerp(G2.at.y, g.seat.y, home) }, sz = lerp(isz, g.sz, home);
+      const px0 = G2.at.x - w / 2, py0 = G2.at.y + ground, sink = out * 3 * k;
+      if (out < 1) {
+        ctx.save(); ctx.beginPath(); ctx.rect(px0 - 4 * k, py0 - 30 * k, w + 8 * k, h + 30 * k + 3.2 * k); ctx.clip();
+        const pa = inQ * (1 - out);
+        slab(ctx, px0, py0 + sink, px0 + w, py0 + h + sink, k, { alpha: pa });
+        const ps = payState(P), cy = py0 + h / 2 + sink, x0 = px0 + PLATE.padX * k + (sw * Math.SQRT2) / 2;
+        const running = ps.paid && B.time > 0, merge = ps.paid ? (P.still ? 1 : ease.engrave((P.t - ps.end) / 380)) : 0;
+        if (!running || merge < 1) {
+          for (let j = 0; j < 4; j++) {
+            const x = x0 + j * pitch, xm = lerp(x, x0, merge);
+            socketLoz(ctx, x, cy, sw, k, pa * (1 - merge));
+            if (j < ps.landed) seatedLoz(ctx, xm, cy, sw, k, OWN, pa, popOf(BCH[j], P, ps.dur) * (1 - 0.35 * merge));
+          }
+        }
+        if (ps.paid) {
+          const gx0 = px0 + PLATE.padX * k, glen = w - 2 * PLATE.padX * k, gh = PLATE.groove * k;
+          GA = pa * merge; ctx.globalAlpha = GA;
+          groove(ctx, gx0, cy, glen, gh, B.built ? 1 : B.time, k, { still: P.still, alpha: 1, noHead: B.built });
+          GA = 1; ctx.globalAlpha = 1;
+        }
+        ctx.restore();
+      }
+      const look = B.built ? 'built' : payState(P).paid && B.time > 0 ? 'rising' : 'plan';
+      drawIcon(ctx, 'factory', at.x, at.y - (B.ordered && !B.built ? 0 : 0), sz, { look, time: B.time, color: OWN, flash: finishFlash(P), alpha: P.still ? 1 : clamp01(B.sinceOrder / 200) });
+      if (B.built && !P.still) doneRing(ctx, g.seat.x, g.seat.y, g.sz, B.sinceDone - 520);
+    },
+    top(ctx, P, g) {
+      if (!P.B.ordered || P.B.built) return;
+      const G2 = this.geo(P, g), { k, h, sw, pitch, w, ground } = G2, cy = G2.at.y + ground + h / 2, x0 = G2.at.x - w / 2 + PLATE.padX * k + (sw * Math.SQRT2) / 2;
+      const ps = payState(P);
+      if (P.still) return;
+      for (const c of BCH) { const f = arcFlight(c, P, g, { x: x0 + c.j * pitch, y: cy }, ps.dur, PAY.lift + 6); if (f) seatedLoz(ctx, f.x, f.y, sw * lerp(1.25, 1, f.q), k); }
+    },
+  },
+  { id: 'B2', name: 'Seal dial', tag: 'client only',
+    line: 'The factory sits in a seal: the owed charges are studs on its rim; once paid, the rim becomes a clock the build time sweeps round. The seal closes when it is done.',
+    geo(P, g) {
+      const k = g.psz / 16, r = DIAL.r * k, isz = g.psz * 0.98;
+      const at = placeNear(`B2|${S.zoom}`, g.seat, obstaclesOf(FORK, P.z, [iconBox('barracks', g.bar.x, g.bar.y, g.sz)]), (a) => [{ x: a.x, y: a.y, r: r + 2.6 * k + DIAL.stud * k * 0.6 }], k);
+      return { k, r, isz, at };
+    },
+    studs(G2) { const { k, r, at } = G2; return Array.from({ length: 4 }, (_, j) => { const an = START + (j - 1.5) * DIAL.studStep; return { x: at.x + Math.cos(an) * (r - 1.9 * k), y: at.y + Math.sin(an) * (r - 1.9 * k), an }; }); },
+    node(ctx, P, g) {
+      const G2 = this.geo(P, g), { k, r, isz } = G2, B = P.B;
+      if (!B.ordered) return;
+      const inQ = P.still ? 1 : ease.settle(B.sinceOrder / 260), out = B.built ? (P.still ? 1 : ease.engrave(B.sinceDone / 380)) : 0;
+      const home = B.built ? (P.still ? 1 : ease.engrave((B.sinceDone - 200) / 360)) : 0;
+      const ps = payState(P), running = ps.paid && B.time > 0;
+      if (out < 1) {
+        const rr0 = r * lerp(0.7, 1, inQ) * (1 - 0.45 * out);
+        sealDisc(ctx, G2.at.x, G2.at.y, rr0, k, { alpha: inQ * (1 - out), share: B.built ? 1 : running ? B.time : 0, still: P.still, noHead: B.built });
+        // the studs: owed charges on the rim, the first at the top-left; paid, they run to the top and are the sweep's start
+        const merge = ps.paid ? (P.still ? 1 : ease.engrave((P.t - ps.end) / 420)) : 0;
+        if (merge < 1) this.studs({ ...G2, r: rr0 }).forEach((s, j) => {
+          const an = lerp(s.an, START, merge), x = G2.at.x + Math.cos(an) * (rr0 - 1.9 * k), y = G2.at.y + Math.sin(an) * (rr0 - 1.9 * k);
+          if (j < ps.landed) seatedLoz(ctx, x, y, DIAL.stud * k, k, OWN, inQ * (1 - merge), popOf(BCH[j], P, ps.dur));
+          else socketLoz(ctx, x, y, DIAL.stud * k, k, inQ);
+        });
+      }
+      const at = { x: lerp(G2.at.x, g.seat.x, home), y: lerp(G2.at.y, g.seat.y, home) };
+      drawIcon(ctx, 'factory', at.x, at.y + 0.6 * k * (1 - home), lerp(isz * 0.86, g.sz, home), { look: B.built ? "built" : running ? "rising" : "plan", time: B.time, color: OWN, flash: finishFlash(P) });
+      if (B.built && !P.still) doneRing(ctx, g.seat.x, g.seat.y, g.sz, B.sinceDone - 380);
+    },
+    top(ctx, P, g) {
+      if (!P.B.ordered || P.B.built || P.still) return;
+      const G2 = this.geo(P, g), st = this.studs(G2), ps = payState(P);
+      for (const c of BCH) { const f = arcFlight(c, P, g, st[c.j], ps.dur, PAY.lift + 4); if (f) seatedLoz(ctx, f.x, f.y, DIAL.stud * G2.k * lerp(1.3, 1, f.q), G2.k); }
+    },
+  },
+  { id: 'B3', name: 'Blueprint', tag: 'client only',
+    line: 'While it is works the factory is drawn large as a plan: a dashed ivory outline with the owed charges at its foot, then its lines are engraved from the ground up. It settles to its size when done.',
+    geo(P, g) {
+      const k = g.psz / 16, isz = g.psz * BLUE.scale, ground = CUT_BOX.factory[3] * (isz / CUT_STYLE.box), row = 4 * LOZ.pitch * 0.8 * k;
+      const shape = (at) => [...boxCircles(...iconBox('factory', at.x, at.y, isz)), ...boxCircles(at.x - row / 2, at.y + ground, at.x + row / 2, at.y + ground + 6 * k)];
+      const at = placeNear(`B3|${S.zoom}`, g.seat, obstaclesOf(FORK, P.z, [iconBox('barracks', g.bar.x, g.bar.y, g.sz)]), shape, k);
+      return { k, isz, ground, at };
+    },
+    slots(G2) { const { k, isz, at } = G2, s = isz / CUT_STYLE.box, y = at.y + 4.6 * s, pitch = 4.3 * s; return Array.from({ length: 4 }, (_, j) => ({ x: at.x - 0.8 * s + (j - 1.5) * pitch, y })); },
+    node(ctx, P, g) {
+      const G2 = this.geo(P, g), { k, isz } = G2, B = P.B;
+      if (!B.ordered) return;
+      const ps = payState(P), running = ps.paid && B.time > 0;
+      if (!B.built) {
+        const grow = P.still ? 1 : ease.settle(B.sinceOrder / 300), sz = lerp(g.sz, isz, grow), at = { x: lerp(g.seat.x, G2.at.x, grow), y: lerp(g.seat.y, G2.at.y, grow) };
+        blueprintIcon(ctx, 'factory', at.x, at.y, sz, { time: running ? B.time : 0, still: P.still });
+        const merge = ps.paid ? (P.still ? 1 : ease.engrave((P.t - ps.end) / 420)) : 0, s = isz / CUT_STYLE.box;
+        if (merge < 1 && grow > 0.6) this.slots(G2).forEach((p, j) => {
+          const y = lerp(p.y, G2.at.y + CUT_BOX.factory[3] * s - 1.4 * s, merge);
+          if (j < ps.landed) seatedLoz(ctx, p.x, y, 2.9 * s, k * 0.8, OWN, 1 - merge, popOf(BCH[j], P, ps.dur) * (1 - 0.5 * merge));
+          else socketLoz(ctx, p.x, y, 2.9 * s, k * 0.8, 1);
+        });
+        return;
+      }
+      const back = P.still ? 1 : ease.engrave(B.sinceDone / 320), at = { x: lerp(G2.at.x, g.seat.x, back), y: lerp(G2.at.y, g.seat.y, back) };
+      drawIcon(ctx, 'factory', at.x, at.y, lerp(isz, g.sz, back), { look: 'built', color: OWN, flash: finishFlash(P) });
+      if (!P.still) doneRing(ctx, g.seat.x, g.seat.y, g.sz, B.sinceDone - 320);
+    },
+    top(ctx, P, g) {
+      if (!P.B.ordered || P.B.built || P.still) return;
+      const G2 = this.geo(P, g), sl = this.slots(G2), ps = payState(P), s = G2.isz / CUT_STYLE.box;
+      for (const c of BCH) { const f = arcFlight(c, P, g, sl[c.j], ps.dur, PAY.lift + 8); if (f) seatedLoz(ctx, f.x, f.y, 2.9 * s * lerp(1.3, 1, f.q), G2.k * 0.8); }
+    },
+  },
+];
+const PLATE = { sock: 3.9, pitch: 6.7, padX: 2.3, padY: 2.1, groove: 3.2 };
+const DIAL = { r: 12.5, stud: 3.3, studStep: 0.62 };
+const BLUE = { scale: 1.6 };
+/** The scale of a progress piece: the icon's, but never under 1.5 / zoom (a piece reads at the normal zoom), at most 2.2. */
+const progK = (z, k) => Math.max(k, Math.min(1.5 / z, 2.2));
+const FORM = { k: 1.38 };
+
+// =============================================================================================
+// The recruiting at Stonegate. R0 is D2 "Foundation" as built (#1005, foundationLayout.ts,
+// foundationView.ts): a port of recruit-plinth-d.html; R1 the same piece scaled to a readable floor.
+// =============================================================================================
+const FND = { cw: 4.1, ch: 4.1, gap: 0.9, padX: 1.3, padY: 1.2, casing: 1.5, chamfer: 1 };
+function recruitGeo(P) {
+  const L = layoutBuildings(STONE, ['barracks', 'factory'], P.z), sz = L.size, k = sz / 16;
+  return { L, sz, k, kp: progK(P.z, k), bar: L.items.barracks, barA: L.angles.barracks, fac: L.items.factory, facA: L.angles.factory };
+}
+/** The foundation drawn under a barracks at (x, y) of icon size `isz`, socket scale `kf`; `lead` widens the first socket. */
+function fndBox(x, y, isz, kf, lead = 1) {
+  const w = (2 + lead) * FND.cw * kf + 2 * FND.gap * kf + 2 * FND.padX * kf, h = FND.ch * kf + 2 * FND.padY * kf, y0 = y + CUT_BOX.barracks[3] * (isz / CUT_STYLE.box);
+  return { x0: x - w / 2, y0, x1: x + w / 2, y1: y0 + h, w, h, kf, lead };
+}
+function fndSlot(f, pos) {
+  const kf = f.kf, wOf = (j) => (j === 0 ? f.lead : 1) * FND.cw * kf, xs = [0];
+  for (let j = 1; j <= 3; j++) xs.push(xs[j - 1] + wOf(j - 1) + FND.gap * kf);
+  const j0 = Math.floor(pos), fr = pos - j0, x = lerp(xs[Math.min(j0, 3)], xs[Math.min(j0 + 1, 3)], fr), w = lerp(wOf(j0), wOf(Math.min(j0 + 1, 2)), fr);
+  return { x: f.x0 + FND.padX * kf + x, y: f.y0 + FND.padY * kf, w, h: FND.ch * kf };
+}
+function drawFoundation(ctx, f, alpha) {
+  const k = f.kf, c = FND.casing * k, ga = GA; GA = ga * alpha; ctx.globalAlpha = GA;
+  chamferBox(ctx, f.x0 - c, f.y0 - c * 0.4, f.x1 + c, f.y1 + c, FND.chamfer * k + c * 0.6); fill(ctx, C.casing, 0.94);
+  const gr = ctx.createLinearGradient(0, f.y0, 0, f.y1); gr.addColorStop(0, '#2c261d'); gr.addColorStop(0.38, '#1b1712'); gr.addColorStop(1, '#0b0907');
+  chamferBox(ctx, f.x0, f.y0, f.x1, f.y1, FND.chamfer * k); ctx.fillStyle = gr; ctx.globalAlpha = GA; ctx.fill();
+  chamferBox(ctx, f.x0 + 0.5 * k, f.y0 + 0.5 * k, f.x1 - 0.5 * k, f.y1 - 0.5 * k, FND.chamfer * k * 0.7); stroke(ctx, hair(1 * k), C.ink, 0.95, 'butt', 'miter');
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** A socket (D2): ordered = the owner's hatch; under way = the colour sweeping over the hatch behind an ivory head line. */
+function drawRectCell(ctx, P, s, kind, k, o = {}) {
+  const alpha = o.alpha === undefined ? 1 : o.alpha, ga = GA; GA = ga * alpha; ctx.globalAlpha = GA;
+  const R = () => { ctx.beginPath(); ctx.rect(s.x, s.y, s.w, s.h); };
+  R(); fill(ctx, C.plate, kind === 'empty' ? 0.8 : 1);
+  if (kind !== 'empty') {
+    const sh = kind === 'queued' ? 0 : clamp01(o.share), xe = s.x + sh * s.w;
+    ctx.save(); R(); ctx.clip();
+    if (sh < 1) { hatchLines(ctx, { x: s.x, y: s.y, width: s.w, height: s.h }, -Math.PI / 4, Math.max(1.5 * k, 1.1)); stroke(ctx, hair(0.55 * k), OWN, kind === 'queued' ? 0.95 : 0.7, 'butt'); }
+    if (sh > 0) {
+      ctx.beginPath(); ctx.rect(s.x, s.y, xe - s.x, s.h); fill(ctx, OWN);
+      const g = ctx.createLinearGradient(0, s.y, 0, s.y + s.h); g.addColorStop(0, 'rgba(236,228,209,0.2)'); g.addColorStop(0.45, 'rgba(6,5,4,0)'); g.addColorStop(1, 'rgba(6,5,4,0.25)');
+      ctx.beginPath(); ctx.rect(s.x, s.y, xe - s.x, s.h); ctx.fillStyle = g; ctx.globalAlpha = GA; ctx.fill();
+    }
+    ctx.restore();
+    if (kind === 'active' && sh > 0.01 && sh < 0.995) {
+      if (!P.still) glow(ctx, { x: xe, y: s.y + s.h / 2 }, 3.2 * k, '#ece4d1', 0.14 + 0.05 * Math.sin(P.t / 170));
+      line(ctx, xe, s.y - 0.5 * k, xe, s.y + s.h + 0.5 * k, 2.1 * k, C.casing, 0.8, 'butt');
+      line(ctx, xe, s.y - 0.5 * k, xe, s.y + s.h + 0.5 * k, hair(1.1 * k), C.ivory, 1, 'butt');
+    }
+  }
+  const ra = kind === 'empty' ? 0.2 : 0.55, i = 0.25 * k;
+  ctx.beginPath(); ctx.rect(s.x + i, s.y + i, s.w - 2 * i, s.h - 2 * i); stroke(ctx, hair(0.5 * k), C.ink, ra, 'butt', 'miter');
+  GA = ga; ctx.globalAlpha = GA;
+}
+/** A made unit drops from (mx, my) into its cell of the ring (recruitDrop.ts), city-local. */
+function dropToRing(ctx, P, mx, my, w0, h0, k, q) {
+  const cap = STONE.cap, idx = Math.min(P.R.units, cap - 1), cell = ringCells(cap, 0)[idx], R = STONE.R;
+  const r0 = Math.hypot(mx, my), t0 = Math.atan2(my, mx), b = (cell.from + cell.to) / 2, t1 = t0 + norm(b - t0);
+  const qr = ease.settle(clamp01(q / 0.45)), qa = ease.engrave(clamp01((q - 0.28) / 0.72));
+  const r = lerp(r0, R, qr), a = lerp(t0, t1, qa), len = lerp(w0, (cell.to - cell.from) * R, qa), h = len / r / 2, w = lerp(h0 * 0.86, RING.filled + 0.6, qr);
+  const on = smooth(0, 0.22, q);
+  ringArc(ctx, r, a - h, a + h, w + 2.4 * k * (1 - q) + 1.2, C.casing, 0.9 * on);
+  ringArc(ctx, r, a - h, a + h, w, OWN, on);
+  ringArc(ctx, r + w * 0.28, a - h * 0.9, a + h * 0.9, hair(0.6 * k), C.ivory, 0.5 * on * (1 - q));
+}
+/** The factory of Stonegate as the charge piece draws it (its box, for the recruit piece to keep clear of). */
+function factoryBoxOf(P, c) { const fp = chargePiece(P, c); return fp.box; }
+
+function foundationVariant(id, name, line, opts) {
+  return { id, name, ref: !!opts.ref, tag: opts.ref ? undefined : 'client only', line,
+    kf(P, rg) { const k = rg.k; if (!opts.floor) return k; return Math.max(k * 1.25, opts.floor / (FND.cw * P.z)); },
+    isz(P, rg) { return opts.floor ? rg.sz * clamp(this.kf(P, rg) / rg.k, 1, 1.35) : rg.sz; },
+    seat(P, rg) {
+      const kf = this.kf(P, rg), isz = this.isz(P, rg), lead = opts.lead || 1;
+      const shape = (at) => { const f = fndBox(at.x, at.y, isz, kf, lead), c = FND.casing * kf; return [...boxCircles(...iconBox('barracks', at.x, at.y, isz)), ...boxCircles(f.x0 - c, f.y0, f.x1 + c, f.y1 + c)]; };
+      return placeNear(`${id}|${S.zoom}|${S.vn}`, rg.bar, obstaclesOf(STONE, P.z, [factoryBoxOf(P, STONE)]), shape, rg.k);
+    },
+    node(ctx, P, rg) {
+      const R = P.R, kf = this.kf(P, rg), seat = this.seat(P, rg), lead = opts.lead || 1;
+      const d0 = Math.hypot(rg.bar.x, rg.bar.y), A = Math.atan2(seat.y, seat.x), on = R.on;
+      const bs = polar(rg.barA + norm(A - rg.barA) * on, lerp(d0, Math.hypot(seat.x, seat.y), on)), isz = lerp(rg.sz, this.isz(P, rg), on);
+      if (on > 0.01) {
+        const f = fndBox(seat.x, seat.y, this.isz(P, rg), kf, lead), fa = smooth(0.7, 1, on);
+        drawFoundation(ctx, f, fa);
+        for (let j = 0; j < 3; j++) if (j >= R.queue) drawRectCell(ctx, P, fndSlot(f, j), 'empty', kf, { alpha: fa });
+        for (let j = Math.min(R.queue, 3) - 1; j >= 0; j--) drawRectCell(ctx, P, fndSlot(f, j + R.shift), j === 0 ? 'active' : 'queued', kf, { share: R.share, alpha: fa });
+      }
+      drawIcon(ctx, 'barracks', bs.x, bs.y, isz, { look: 'built', color: OWN });
+    },
+    top(ctx, P, rg) {
+      const R = P.R; if (P.still || R.since >= R.mergeMs) return;
+      const kf = this.kf(P, rg), seat = this.seat(P, rg), f = fndBox(seat.x, seat.y, this.isz(P, rg), kf, opts.lead || 1), s = fndSlot(f, 0), q = ease.travel(R.since / R.mergeMs);
+      const lift = 1 - smooth(0, 0.3, q); if (lift > 0) { ctx.beginPath(); ctx.rect(s.x, s.y, s.w, s.h); fill(ctx, OWN, lift); }
+      dropToRing(ctx, P, s.x + s.w / 2, s.y + s.h / 2, s.w, s.h, kf, q);
+    },
+  };
+}
+const RECRUIT_VARS = [
+  foundationVariant('R0', 'Today', 'D2 “Foundation” as built (#1005): the barracks steps onto its own base of three sockets; the unit under way sweeps its socket, the ordered ones are hatched.', { ref: true }),
+  foundationVariant('R1', 'Foundation, readable', 'D2 with a floor: the piece grows until a socket is 7 px on screen at any zoom, the barracks a quarter larger with it, and the unit under way has a socket three times as long, so its sweep reads as motion.', { floor: 7, lead: 3 }),
+  { id: 'R2', name: 'Seal dial', tag: 'client only',
+    line: 'The barracks sits in a seal while it recruits: the rim is the clock of the unit under way, one dot under the seal for each unit ordered after it. A made unit leaves the seal for the ring.',
+    geo(P, rg) {
+      const k = rg.kp, r = DIAL.r * k;
+      const at = placeNear(`R2|${S.zoom}|${S.vn}`, rg.bar, obstaclesOf(STONE, P.z, [factoryBoxOf(P, STONE)]), (a) => [{ x: a.x, y: a.y, r: r + 2.6 * k }, { x: a.x, y: a.y + r + 4 * k, r: 4.5 * k }], k);
+      return { k, r, at };
+    },
+    node(ctx, P, rg) {
+      const R = P.R, G2 = this.geo(P, rg), { k, r } = G2, on = R.on;
+      const at = { x: lerp(rg.bar.x, G2.at.x, on), y: lerp(rg.bar.y, G2.at.y, on) };
+      if (on > 0.01) {
+        sealDisc(ctx, at.x, at.y, r * lerp(0.7, 1, on), k, { alpha: smooth(0.2, 1, on), share: R.queue > 0 ? R.share : 0, still: P.still, flash: !P.still && R.since < 300 ? 1 - R.since / 300 : 0 });
+        const n = Math.max(0, R.queue - 1), pitch = 4.6 * k;
+        for (let j = 0; j < n + (R.shift > 0 ? 1 : 0); j++) {
+          const x = at.x + (j - (n - 1) / 2 - R.shift * 0.5) * pitch, y = at.y + r + 4.4 * k, a = j >= n ? R.shift : 1;
+          circle(ctx, x, y, 2.2 * k); fill(ctx, C.casing, 0.92 * a * on); circle(ctx, x, y, 1.45 * k); fill(ctx, C.ink, a * on);
+        }
+      }
+      drawIcon(ctx, 'barracks', at.x, at.y + 0.5 * k * on, lerp(rg.sz, 16 * rg.kp * 0.86, on), { look: 'built', color: OWN });
+    },
+    top(ctx, P, rg) {
+      const R = P.R; if (P.still || R.since >= R.mergeMs) return;
+      const G2 = this.geo(P, rg), q = ease.travel(R.since / R.mergeMs), a = Math.atan2(-G2.at.y, -G2.at.x);
+      dropToRing(ctx, P, G2.at.x + Math.cos(a) * G2.r, G2.at.y + Math.sin(a) * G2.r, 6 * G2.k, 3 * G2.k, G2.k, q);
+    },
+  },
+];
+
+// =============================================================================================
+// The next charge of every own factory (the capital's counter is in the view; the others need
+// `NodeView.factory_ticks`, see the issue).
+// =============================================================================================
+/** The forming lozenge (N1): the next store place fills from its foot, the owner's colour over its hatch behind an ivory head line. */
+function formingLoz(ctx, x, y, share, P, o = {}) {
+  const s = LOZ.fill * (o.k || 1), cs = LOZ.casing * (o.k || 1), h = (s * Math.SQRT2) / 2, top = y + h - share * 2 * h;
+  if (!P.still) glow(ctx, { x, y }, cs * 1.25, '#86a6ea', 0.18 + 0.1 * share);
+  lozPath(ctx, x, y, cs + 1.2 * (o.k || 1)); fill(ctx, C.casing);
+  lozPath(ctx, x, y, cs - 0.2 * (o.k || 1)); stroke(ctx, hair(0.7 * (o.k || 1)), C.ivory, 0.5, 'butt', 'miter');
+  lozPath(ctx, x, y, s); fill(ctx, C.plate);
+  ctx.save(); lozPath(ctx, x, y, s); ctx.clip();
+  hatchLines(ctx, { x: x - h, y: y - h, width: 2 * h, height: 2 * h }, -Math.PI / 4, 1.5); stroke(ctx, hair(0.5), OWN, 0.8, 'butt');
+  if (share > 0) { ctx.beginPath(); ctx.rect(x - h - 1, top, 2 * h + 2, y + h - top + 1); fill(ctx, OWN); }
+  ctx.restore();
+  if (share > 0.01 && share < 0.995) {
+    const half = h - Math.abs(top - y), hw = Math.max(0, half) + 0.6;
+    if (!P.still) glow(ctx, { x, y: top }, 4.4, '#ece4d1', 0.22);
+    line(ctx, x - hw, top, x + hw, top, 1.8, C.casing, 0.8, 'butt'); line(ctx, x - hw, top, x + hw, top, hair(0.95), C.ivory, 1, 'butt');
+  }
+  lozPath(ctx, x, y, LOZ.hollow * (o.k || 1)); stroke(ctx, hair(LOZ.line), C.ink, share > 0 ? 0.55 : LOZ.lineA, 'butt', 'miter');
+}
+/** What the charge piece does to a factory's icon: its seat and box (for the recruit piece), and how to draw it. */
+function chargePiece(P, c) {
+  const L = layoutBuildings(c, c.b, P.z), at = L.items.factory, sz = L.size, k = progK(P.z, sz / 16);
+  if (S.vn !== 'N2') return { at, sz, k, box: iconBox('factory', at.x, at.y, sz), disc: null };
+  const r = DIAL.r * k, others = c.b.filter((kd) => kd !== 'factory').map((kd) => iconBox(kd, L.items[kd].x, L.items[kd].y, sz));
+  const d = placeNear(`N2|${c.name}|${S.zoom}`, at, obstaclesOf(c, P.z, others), (a) => [{ x: a.x, y: a.y, r: r + 2.6 * k }], k);
+  return { at: d, sz, k, r, box: [d.x - r - 2.2 * k, d.y - r - 2.2 * k, d.x + r + 2.2 * k, d.y + r + 2.2 * k], disc: true };
+}
+const CHARGE_VARS = [
+  { id: 'N0', name: 'Today', ref: true, hudCell: true,
+    line: 'As built (DEC-44): a small upright cell inside the stance chip of the top bar fills toward the capital’s next charge; the seconds are in the chip’s tooltip. Nothing on the map.' },
+  { id: 'N1', name: 'Forming lozenge', tag: 'protocol for the other factories',
+    line: 'The next charge forms where it lands: the first free place of each factory’s store fills from its foot, and sets solid when the charge is made. The top bar keeps today’s cell.',
+    hudCell: true,
+    /** Where the next charge forms: just past the end of the store row, larger than a stored charge. */
+    formAt(c, P, xs) { const big = FORM.k * Math.max(1, progK(P.z, 1)); return { x: xs[xs.length - 1] + LOZ.casing * 0.71 * (1 + big) + 2.2, big }; },
+    store(ctx, P, c, xs, stock) {
+      if (!FIRE.has(c)) return;
+      const ch = chargeOf(c, P.tq), f = this.formAt(c, P, xs), y = c.R + LOZ.drop;
+      // made: it slides into its place over 320 ms; the next one inks in at the end of the row
+      const appear = P.still ? (ch.since < 1000 ? 0 : 1) : ch.since < 320 ? 0 : smooth(320, 700, ch.since);
+      if (appear <= 0) return;
+      GA = appear; ctx.globalAlpha = GA; formingLoz(ctx, f.x, y, ch.since < 700 && !P.still ? 0 : ch.share, P, { k: f.big }); GA = 1; ctx.globalAlpha = 1;
+    },
+    storeAt(c, P, i, stock, xs) {
+      if (!FIRE.has(c) || i !== stock - 1 || P.still) return null;
+      const ch = chargeOf(c, P.t); if (ch.since >= 320) return null;
+      const f = this.formAt(c, P, xs), q = ease.engrave(ch.since / 320);
+      return { x: lerp(f.x, xs[i], q), sc: lerp(f.big * LOZ.fill / LOZ.fill, 1, q) };
+    } },
+  { id: 'N2', name: 'Seal dial', tag: 'protocol for the other factories',
+    line: 'Every factory sits in a seal whose rim is the clock of its next charge; when it is made the rim flashes and the charge flies from the seal into the store. The top bar keeps today’s cell.',
+    hudCell: true,
+    factory(ctx, P, c, fp) {
+      const ch = chargeOf(c, P.tq), fl = P.still ? 0 : ch.since < 400 ? 1 - ch.since / 400 : 0;
+      sealDisc(ctx, fp.at.x, fp.at.y, fp.r, fp.k, { share: ch.share, still: P.still, flash: fl });
+      drawIcon(ctx, 'factory', fp.at.x, fp.at.y + 0.6 * fp.k, 16 * fp.k * 0.86, { look: 'built', color: OWN });
+    },
+    top(ctx, P, c, fp) {
+      if (P.still) return;
+      const ch = chargeOf(c, P.t); if (ch.since >= PAY.flightMs) return;
+      const stock = (c.stock || 0), to = { x: rowXs(c.wh)[stock], y: c.R + LOZ.drop }, q = ease.travel(ch.since / PAY.flightMs);
+      const x = lerp(fp.at.x, to.x, q), y = lerp(fp.at.y, to.y, q) - Math.sin(q * Math.PI) * 14;
+      drawLozenge(ctx, x, y, true, OWN, lerp(1.3, 1, q));
+    } },
+  { id: 'N3', name: 'Mint in the bar', tag: 'client only',
+    line: 'The top bar gets its own piece beside the factory count: a large charge lozenge that fills toward the capital’s next charge, the time left in figures. When it is made the lozenge flies down to the capital’s store.',
+    hudCell: false },
+];
+
+const PIECES = {
+  build: { label: 'Build', vars: BUILD_VARS, key: 'vb' },
+  recruit: { label: 'Recruit', vars: RECRUIT_VARS, key: 'vr' },
+  charge: { label: 'Next charge', vars: CHARGE_VARS, key: 'vn' },
+};
+const byId = (list, id) => list.find((v) => v.id === id) || list[0];
+
+// =============================================================================================
+// The ground and the territories (a Voronoi of the cities, baked once into a bitmap).
+// =============================================================================================
+const BOUNDS = { x: -1750, y: -950, w: 3500, h: 1900 }, STEP = 2.5;
+let terrBitmap = null;
+function territory() {
+  if (terrBitmap) return terrBitmap;
+  const w = Math.round(BOUNDS.w / STEP), h = Math.round(BOUNDS.h / STEP), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'), img = g.createImageData(w, h), own = [134, 166, 234], foe = [229, 120, 94];
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = BOUNDS.x + i * STEP, y = BOUNDS.y + j * STEP;
+    let dOwn = Infinity, dFoe = Infinity;
+    for (let n = 0; n < CITIES.length; n++) { const dx = x - CITIES[n].x, dy = y - CITIES[n].y, d = dx * dx + dy * dy; if (CITIES[n].side === 'own') { if (d < dOwn) dOwn = d; } else if (d < dFoe) dFoe = d; }
+    dOwn = Math.sqrt(dOwn); dFoe = Math.sqrt(dFoe);
+    const o1 = dOwn <= dFoe ? 'own' : 'foe', edge = Math.abs(dFoe - dOwn) / 2, col = o1 === 'own' ? own : foe, kk = (j * w + i) * 4;
+    const ramp = (e0, e1, v) => clamp01((v - e0) / (e1 - e0)), core = 1 - ramp(0.6, 2.4, edge);
+    const band = (o1 === 'own' ? 0.55 : 0.45) * (1 - ramp(8, 12.5, edge)) + 0.07 * ramp(8, 12.5, edge);
+    const a = core * 0.85 + (1 - core) * band, mix = a > 0 ? (core * 0.85) / a : 0;
+    img.data[kk] = lerp(col[0], 6, mix); img.data[kk + 1] = lerp(col[1], 5, mix); img.data[kk + 2] = lerp(col[2], 4, mix); img.data[kk + 3] = Math.round(a * 255);
+  }
+  g.putImageData(img, 0, 0); terrBitmap = cv; return cv;
+}
+
+// =============================================================================================
+// The map pieces.
+// =============================================================================================
+function garrisonOf(c, P) {
+  if (c === STONE) return { units: P.R.units, charged: Math.min(P.R.units, STONE.charged) };
+  if (c === FORK) return { units: 3, charged: P.B.ordered ? 0 : 1 };
+  return c.units ? { units: c.units, charged: c.charged === undefined ? c.units : c.charged } : null;
+}
+function drawCityBase(ctx, c, P, z) {
+  const side = c.side, color = side === 'own' ? OWN : FOE, grp = garrisonOf(c, P);
+  drawBody(ctx, c, side === 'own' ? 'own' : 'enemy', color, !!grp, true);
+  drawRing(ctx, c.R, ringCells(c.cap, grp ? Math.min(grp.units, c.cap) : 0));
+  if (c === STONE && P.R.flash < FLASH_MS && P.R.units > 0) {
+    const cell = ringCells(c.cap, 0)[P.R.units - 1], q = P.R.flash / FLASH_MS;
+    ringArc(ctx, c.R, cell.from, cell.to, RING.filled + 3 * (1 - q), C.ivory, 1 - q);
+  }
+  if (side === 'own') {
+    const xs = rowXs(c.wh), stock = stockOf(c, P.t), nv = byId(CHARGE_VARS, S.vn);
+    xs.forEach((x, i) => { const m = nv.storeAt ? nv.storeAt(c, P, i, stock, xs) : null; if (m) drawLozenge(ctx, x, c.R + LOZ.drop, false, OWN); drawLozenge(ctx, m ? m.x : x, c.R + LOZ.drop, i < stock, OWN, m ? m.sc : 1); });
+    if (nv.store) nv.store(ctx, P, c, xs, stock);
+  }
+  if (c.vp) drawVp(ctx, polar(-Math.PI / 4, c.R + VPL.lift), c.vp);
+  if (z >= 0.45) {
+    ctx.save(); ctx.translate(0, c.R + 15 + (side === 'own' && c.wh ? 4 : 0)); ctx.scale(1 / z, 1 / z);
+    ctx.font = '700 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,4,3,0.85)'; ctx.lineJoin = 'round'; ctx.globalAlpha = 1; ctx.strokeText(c.name, 0, 0);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(c.name, 0, 0); ctx.restore();
+  }
+}
+/** The buildings of a city: the subjects through their pieces, the rest as built icons. */
+function drawBuildings(ctx, c, P, z) {
+  if (!(c.side === 'own' || adjacentOwn(c))) return;
+  const color = c.side === 'own' ? OWN : FOE;
+  if (c === FORK) { const g = buildGeo(P); drawIcon(ctx, 'barracks', g.bar.x, g.bar.y, g.sz, { look: 'built', color }); byId(BUILD_VARS, S.vb).node(ctx, P, g); return; }
+  const nv = byId(CHARGE_VARS, S.vn);
+  if (FACTORIES.includes(c)) {
+    const fp = chargePiece(P, c);
+    if (nv.factory) nv.factory(ctx, P, c, fp); else drawIcon(ctx, 'factory', fp.at.x, fp.at.y, fp.sz, { look: 'built', color });
+    if (c === STONE) byId(RECRUIT_VARS, S.vr).node(ctx, P, recruitGeo(P));
+    else { const L = layoutBuildings(c, c.b, z); for (const kd of c.b) if (kd !== 'factory') drawIcon(ctx, kd, L.items[kd].x, L.items[kd].y, L.size, { look: 'built', color }); }
+    return;
+  }
+  const kinds = c.b || []; if (!kinds.length) return;
+  const L = layoutBuildings(c, kinds, z);
+  for (const kd of kinds) drawIcon(ctx, kd, L.items[kd].x, L.items[kd].y, L.size, { look: 'built', color, enemy: c.side === 'foe' });
+}
+function drawGroup(ctx, c, P) {
+  const grp = garrisonOf(c, P); if (!grp) return;
+  const kind = c.side === 'own' ? 'own' : 'enemy', units = Math.min(grp.units, c.cap);
+  const width = helmetFit(kind, helmetWidth(unitSide(units), true), c.R - RING.cut / 2 - 1);
+  drawHelmet(ctx, { kind, width, x: 0, y: 0, level: units ? grp.charged / units : 0, color: kind === 'own' ? OWN : FOE, units });
+}
+function drawPackets(ctx, P) {
+  for (const p of PACKETS) {
+    const q = (P.t - p.start) / p.dur; if (q < 0 || q >= 1) continue;
+    const A = p.from, B = p.to, dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), d = lerp(A.R + 4, L - B.R - 2, q);
+    drawPacket(ctx, A.x + (dx / L) * d, A.y + (dy / L) * d, Math.atan2(dy, dx), OWN, q > 0.9 ? 1 - (q - 0.9) / 0.1 : q < 0.08 ? q / 0.08 : 1);
+  }
+}
+
+// =============================================================================================
+// The top bar (hud/TopBar.svelte, ui-style 53 and 63): the CP gauge, the factory count, the stance
+// chip with today's capital cell, the VP tug, the clock cartouche. Screen pixels.
+// =============================================================================================
+const CUT_HUD = {
+  factory: new Path2D('M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5'),
+  factorySolid: new Path2D('M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z'),
+  balance: new Path2D('M0 -10 V9 M-6 9.5 H6 M-9 -6 H9 M-9 -6 L-11.5 1 H-6.5 Z M9 -6 L6.5 1 H11.5 Z'),
+};
+const INK = '#ece4d1', INK_DIM = '#ada38f';
+function hudIcon(ctx, name, x, y, size, solid) {
+  const s = size / 26; ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  if (solid) { ctx.save(); ctx.clip(solid); ctx.fillStyle = INK; for (let yy = -13; yy < 13; yy += 2.6) ctx.fillRect(-13, yy, 26, 1.15); ctx.restore(); }
+  ctx.lineCap = 'square'; ctx.lineJoin = 'miter'; ctx.strokeStyle = '#060504'; ctx.lineWidth = 4.2; ctx.globalAlpha = 0.9; ctx.stroke(CUT_HUD[name]);
+  ctx.globalAlpha = 1; ctx.strokeStyle = INK; ctx.lineWidth = 2.1; ctx.stroke(CUT_HUD[name]); ctx.restore();
+}
+function framed(ctx, x, y, w, h, o = {}) {
+  ctx.save(); ctx.lineWidth = 1;
+  if (o.dashed) ctx.setLineDash([4, 2]);
+  ctx.strokeStyle = o.rim || 'rgba(236,228,209,0.6)'; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1); ctx.setLineDash([]);
+  if (!o.single) { ctx.strokeStyle = 'rgba(236,228,209,0.22)'; ctx.strokeRect(x + 3.5, y + 3.5, w - 7, h - 7); }
+  ctx.restore();
+}
+function hudText(ctx, s, x, y, size, color = INK, o = {}) { ctx.font = `${o.weight || 400} ${size}px 'EB Garamond', Georgia, serif`; ctx.fillStyle = color; ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); }
+/** The N3 piece: a large charge lozenge filling toward the capital's next charge, the time left beside it. */
+function mintPiece(ctx, x, cy, P) {
+  const ch = chargeOf(STONE, P.tq), fire = !P.still && ch.since < 600 ? ch.since : null, share = ch.since < 260 && !P.still ? 1 : ch.share;
+  const s = 15, h = (s * Math.SQRT2) / 2, lx = x + 15, top = cy + h - share * 2 * h;
+  // a framed slot like the factory count, dashed never: it always runs
+  framed(ctx, x - 6, cy - 15, 90, 30, { single: true, rim: 'rgba(236,228,209,0.35)' });
+  ctx.save();
+  lozPath(ctx, lx, cy, s + 4.6); ctx.fillStyle = '#060504'; ctx.fill();
+  lozPath(ctx, lx, cy, s); ctx.fillStyle = '#0e0c09'; ctx.fill();
+  ctx.save(); lozPath(ctx, lx, cy, s); ctx.clip();
+  ctx.strokeStyle = OWN; ctx.lineWidth = 0.9; ctx.globalAlpha = 0.85; hatchLines(ctx, { x: lx - h, y: cy - h, width: 2 * h, height: 2 * h }, -Math.PI / 4, 2.6); ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.fillStyle = OWN; ctx.fillRect(lx - h - 1, top, 2 * h + 2, cy + h - top + 1);
+  const g = ctx.createLinearGradient(0, cy - h, 0, cy + h); g.addColorStop(0, 'rgba(236,228,209,0.25)'); g.addColorStop(0.5, 'rgba(236,228,209,0)'); g.addColorStop(1, 'rgba(6,5,4,0.25)');
+  ctx.fillStyle = g; ctx.fillRect(lx - h - 1, top, 2 * h + 2, cy + h - top + 1);
+  ctx.restore();
+  if (share > 0.01 && share < 0.995) {
+    const hw = Math.max(0, h - Math.abs(top - cy)) + 1;
+    if (!P.still) { const gg = ctx.createRadialGradient(lx, top, 0, lx, top, 9); gg.addColorStop(0, 'rgba(236,228,209,0.3)'); gg.addColorStop(1, 'rgba(236,228,209,0)'); ctx.fillStyle = gg; ctx.fillRect(lx - 9, top - 9, 18, 18); }
+    ctx.lineCap = 'butt'; ctx.strokeStyle = '#060504'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(lx - hw, top); ctx.lineTo(lx + hw, top); ctx.stroke();
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(lx - hw, top); ctx.lineTo(lx + hw, top); ctx.stroke();
+  }
+  lozPath(ctx, lx, cy, s - 0.6); ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.lineJoin = 'miter'; ctx.stroke();
+  if (fire !== null) { const q = fire / 600; lozPath(ctx, lx, cy, s + 4 + 10 * ease.settle(q)); ctx.strokeStyle = `rgba(236,228,209,${0.8 * (1 - q)})`; ctx.lineWidth = 1.4; ctx.stroke(); }
+  ctx.restore();
+  const secs = Math.ceil(ch.left / 1000 - 1e-6), label = ch.since < 1000 && !P.still ? '0:00' : `0:${String(Math.min(secs, 59)).padStart(2, '0')}`;
+  hudText(ctx, label, x + 34, cy + 1, 17, INK, { weight: 500 });
+  return { lx, ly: cy };
+}
+function drawBar(ctx, W, P) {
+  ctx.fillStyle = 'rgba(14,12,9,0.96)'; ctx.fillRect(0, 0, W, BAR_H + 3);
+  ctx.fillStyle = 'rgba(236,228,209,0.55)'; ctx.fillRect(0, BAR_H - 1, W, 1);
+  ctx.fillStyle = 'rgba(236,228,209,0.22)'; ctx.fillRect(0, BAR_H + 3, W, 1);
+  const cy = BAR_H / 2;
+  // CP: the mark, the value, the Double frame gauge (a scale, the fill, the head)
+  cpMark(ctx, 26, cy, 16, 1);
+  hudText(ctx, '3.2', 40, cy + 1, 22, INK, { weight: 500 });
+  const gx = 78, gw = 150, fillW = gw * 0.64;
+  ctx.fillStyle = '#0e0c09'; ctx.fillRect(gx, cy - 8, gw, 7); ctx.fillStyle = OWN; ctx.fillRect(gx, cy - 8, fillW, 7);
+  ctx.strokeStyle = 'rgba(236,228,209,0.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(gx, cy + 3.5); ctx.lineTo(gx + gw, cy + 3.5); ctx.stroke();
+  ctx.beginPath(); for (let i = 0; i <= 10; i++) { const x = Math.round(gx + (gw * i) / 10) + 0.5; ctx.moveTo(x, cy + 3.5); ctx.lineTo(x, cy + (i % 5 ? 7 : 9)); } ctx.stroke();
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.moveTo(gx + fillW, cy + 4.5); ctx.lineTo(gx + fillW - 4, cy + 9.5); ctx.lineTo(gx + fillW + 4, cy + 9.5); ctx.closePath(); ctx.fill();
+  // the factory count (builds under way included): dashed when at the most
+  const fx = 252, count = P.B.ordered ? 3 : 2, full = count >= 3;
+  framed(ctx, fx, cy - 15, 64, 30, { dashed: full, single: true, rim: full ? 'rgba(236,228,209,0.6)' : 'rgba(236,228,209,0)' });
+  hudIcon(ctx, 'factory', fx + 17, cy, 22, CUT_HUD.factorySolid);
+  hudText(ctx, `${count}/3`, fx + 32, cy + 1, 19, INK);
+  let x = fx + 76, mint = null;
+  const nv = byId(CHARGE_VARS, S.vn);
+  if (!nv.hudCell) { mint = mintPiece(ctx, x + 6, cy, P); x += 98; }
+  // the stance chip: the icon, today's capital cell (N0..N2), the key
+  const chipW = nv.hudCell ? 80 : 60;
+  framed(ctx, x, cy - 15, chipW, 30);
+  hudIcon(ctx, 'balance', x + 19, cy, 20, null);
+  let kx = x + 33;
+  if (nv.hudCell) {
+    const ch = chargeOf(STONE, P.tq), cx0 = x + 36, cw = 12, chh = 16;
+    ctx.fillStyle = '#0e0c09'; ctx.fillRect(cx0 - 2, cy - chh / 2 - 2, cw + 4, chh + 4);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(cx0 + 0.5, cy - chh / 2 + 0.5, cw - 1, chh - 1);
+    const fh = (chh - 2) * ch.share; ctx.fillStyle = OWN;
+    for (let yy = cy + chh / 2 - 1 - 1; yy >= cy + chh / 2 - 1 - fh; yy -= 2.5) ctx.fillRect(cx0 + 1, Math.round(yy), cw - 2, 1);
+    kx = x + 55;
+  }
+  ctx.strokeStyle = 'rgba(236,228,209,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(kx + 0.5, cy - 7.5, 16, 15);
+  ctx.font = "500 11px 'Cinzel', serif"; ctx.fillStyle = INK_DIM; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('Q', kx + 8.5, cy + 0.5);
+  // the VP tug (centre)
+  const mx = W / 2;
+  hudText(ctx, '9', mx - 104, cy + 1, 22, OWN, { align: 'right', weight: 500 });
+  ctx.fillStyle = '#0e0c09'; ctx.fillRect(mx - 90, cy - 8, 180, 8); ctx.fillStyle = OWN; ctx.fillRect(mx - 90, cy - 8, 63, 8);
+  ctx.save(); ctx.beginPath(); ctx.rect(mx - 27, cy - 8, 117, 8); ctx.clip(); ctx.strokeStyle = FOE; ctx.lineWidth = 1; hatchLines(ctx, { x: mx - 27, y: cy - 8, width: 117, height: 8 }, -Math.PI / 4, 3); ctx.stroke(); ctx.restore();
+  ctx.strokeStyle = 'rgba(236,228,209,0.5)'; ctx.beginPath(); ctx.moveTo(mx - 90, cy + 4.5); ctx.lineTo(mx + 90, cy + 4.5); ctx.stroke();
+  hudText(ctx, '17', mx + 104, cy + 1, 22, FOE, { align: 'left', weight: 500 });
+  // the clock cartouche
+  if (W > 760) {
+    const cw = 110, ch = 44, ccx = W - 18 - 3 * 38 - cw;
+    ctx.fillStyle = '#0b0907'; ctx.fillRect(ccx, cy - ch / 2, cw, ch);
+    ctx.strokeStyle = 'rgba(236,228,209,0.6)'; ctx.strokeRect(ccx + 0.5, cy - ch / 2 + 0.5, cw - 1, ch - 1);
+    ctx.strokeStyle = 'rgba(236,228,209,0.22)'; ctx.strokeRect(ccx + 3.5, cy - ch / 2 + 3.5, cw - 7, ch - 7);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const x0 = ccx + (sx ? cw + 1 : -1), y0 = cy - ch / 2 + (sy ? ch + 1 : -1), dx = sx ? -8 : 8, dy = sy ? -8 : 8; ctx.beginPath(); ctx.moveTo(x0 + dx, y0); ctx.lineTo(x0, y0); ctx.lineTo(x0, y0 + dy); ctx.stroke(); }
+    ctx.lineWidth = 1; hudText(ctx, '11:00', ccx + cw / 2, cy + 2, 27, INK, { align: 'center' });
+    ['M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z M11 5.5a3.5 3.5 0 0 1 0 5', 'M5.6 6a2.4 2.4 0 1 1 3.2 2.3c-.6.2-.8.6-.8 1.2v.6 M8 12.2v.4', 'M9 3H3v10h6M7 8h7M11.5 5.5 14 8l-2.5 2.5'].forEach((d, i) => {
+      const bx = W - 18 - (3 - i) * 38 + 8; framed(ctx, bx, cy - 15, 30, 30);
+      ctx.save(); ctx.translate(bx + 7, cy - 8); ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(new Path2D(d)); ctx.restore();
+    });
+  }
+  return mint;
+}
+/** A toast of an event (hud/ToastStack.svelte): an engraved plate in a double rule, the tone a coloured left edge. */
+function toast(ctx, P, W, text) {
+  const sd = P.B.sinceDone; if (sd < 0 || sd > 6000) return;
+  const w = Math.min(340, W - 24), h = 40, x0 = W - 12 - w, y0 = BAR_H + 10;
+  const slide = P.still ? 0 : 12 * (1 - ease.settle(sd / 160)), a = P.still ? 1 : clamp01(sd / 160) * (sd > 5700 ? 1 - (sd - 5700) / 300 : 1);
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x0 + slide, y0);
+  ctx.fillStyle = 'rgba(14,12,9,0.95)'; ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(236,228,209,0.55)'; ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+  ctx.strokeStyle = 'rgba(236,228,209,0.18)'; ctx.strokeRect(3.5, 3.5, w - 7, h - 7);
+  ctx.fillStyle = OWN; ctx.fillRect(0, 0, 3, h);
+  hudIcon(ctx, 'factory', 24, h / 2 + 1, 22, CUT_HUD.factorySolid);
+  hudText(ctx, text, 44, h / 2 + 1, 15, INK, { weight: 500 });
+  ctx.restore();
+}
+
+// =============================================================================================
+// The view.
+// =============================================================================================
+const view = document.getElementById('view'), rWrap = document.getElementById('rWrap');
+const VIEW = { W: 1200, H: 640, dpr: 1 };
+function layoutView() {
+  const W = rWrap.clientWidth || 1200, room = window.innerHeight - rWrap.getBoundingClientRect().top - 16;
+  const H = Math.round(Math.max(420, Math.min(W * 0.6, room))), dpr = window.devicePixelRatio || 1;
+  view.style.height = H + 'px'; view.width = Math.round(W * dpr); view.height = Math.round(H * dpr);
+  Object.assign(VIEW, { W, H, dpr });
+}
+const CAMERA = {
+  build: { near: [FORK.x - 4, FORK.y - 16], normal: [FORK.x - 90, FORK.y + 10], far: [FORK.x - 230, FORK.y + 40] },
+  recruit: { near: [STONE.x + 8, STONE.y - 4], normal: [STONE.x + 90, STONE.y + 10], far: [STONE.x + 260, STONE.y + 40] },
+  charge: { near: [(STONE.x + WATCH.x) / 2, STONE.y], normal: [(STONE.x + WATCH.x) / 2 + 40, STONE.y + 20], far: [(STONE.x + WATCH.x) / 2 + 120, STONE.y + 40] },
+};
+function render() {
+  const P = frameState(S.time), z = P.z, ctx = view.getContext('2d'), { W, H, dpr } = VIEW, MH = H - BAR_H;
+  const [cx, cy] = CAMERA[S.el][S.zoom];
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W * dpr, H * dpr);
+  PXW = dpr * z; LS = 1; GA = 1;
+  const ox = W / 2 - cx * z, oy = BAR_H + MH / 2 - cy * z;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
+  const box = { x: cx - W / 2 / z - 4, y: cy - MH / 2 / z - 4, w: W / z + 8, h: MH / z + 8 };
+  if (groundTile) { ctx.fillStyle = ctx.createPattern(groundTile, 'repeat'); ctx.fillRect(box.x, box.y, box.w, box.h); } else { ctx.fillStyle = '#3a4630'; ctx.fillRect(box.x, box.y, box.w, box.h); }
+  ctx.fillStyle = 'rgba(11,10,8,0.12)'; ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(territory(), BOUNDS.x, BOUNDS.y, BOUNDS.w, BOUNDS.h);
+  for (const [a, b] of EDGES) drawRoad(ctx, CITIES[a], CITIES[b]);
+  drawPackets(ctx, P);
+  const at = (c, fn) => { ctx.save(); ctx.translate(c.x, c.y); fn(); ctx.restore(); GA = 1; ctx.globalAlpha = 1; };
+  for (const c of CITIES) at(c, () => drawCityBase(ctx, c, P, z));
+  for (const c of CITIES) at(c, () => drawBuildings(ctx, c, P, z));
+  for (const c of CITIES) at(c, () => drawGroup(ctx, c, P));
+  // flights over the groups
+  at(FORK, () => { const v = byId(BUILD_VARS, S.vb); if (v.top) v.top(ctx, P, buildGeo(P)); });
+  at(STONE, () => { const v = byId(RECRUIT_VARS, S.vr); if (v.top) v.top(ctx, P, recruitGeo(P)); });
+  const nv = byId(CHARGE_VARS, S.vn);
+  if (nv.top) for (const c of FACTORIES) at(c, () => nv.top(ctx, P, c, chargePiece(P, c)));
+  // the screen: the top bar, the toast, the N3 flight from the bar to the capital's store
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); PXW = dpr; LS = 1; GA = 1;
+  const mint = drawBar(ctx, W, P);
+  const bv = byId(BUILD_VARS, S.vb); if (bv.hud) bv.hud(ctx, P, W);
+  if (mint && !P.still) {
+    const ch = chargeOf(STONE, P.t), dur = 760;
+    if (ch.since < dur) {
+      const xs = rowXs(STONE.wh), to = { x: ox + (STONE.x + xs[STONE.stock]) * z, y: oy + (STONE.y + STONE.R + LOZ.drop) * z }, q = ease.travel(ch.since / dur);
+      const x = lerp(mint.lx, to.x, q), y = lerp(mint.ly, to.y, q) - Math.sin(q * Math.PI) * 40, s = lerp(15, LOZ.fill * z, q);
+      if (!(x < 0 || x > W)) { glow(ctx, { x, y }, 14, '#ece4d1', 0.25 * (1 - q)); lozPath(ctx, x, y, s + 3.5); fill(ctx, C.casing); lozPath(ctx, x, y, s); fill(ctx, OWN); }
+    }
+  }
+}
+
+// =============================================================================================
+// Controls and state (also in the address: #el=charge&b=B0&r=R0&n=N1&z=normal&tm=...).
+// =============================================================================================
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (PIECES[q.get('el')]) S.el = q.get('el');
+  if (q.get('b') && BUILD_VARS.some((v) => v.id === q.get('b'))) S.vb = q.get('b');
+  if (q.get('r') && RECRUIT_VARS.some((v) => v.id === q.get('r'))) S.vr = q.get('r');
+  if (q.get('n') && CHARGE_VARS.some((v) => v.id === q.get('n'))) S.vn = q.get('n');
+  if (ZOOMS[q.get('z')]) S.zoom = q.get('z');
+  for (const [k, key] of [['rm', 'still'], ['gr', 'gray'], ['more', 'more']]) if (q.has(k)) S[key] = q.get(k) === '1';
+  const tm = Number(q.get('tm')); if (q.has('tm') && tm >= 0) { S.time = tm % LOOP; S.playing = false; }
+}
+function writeHash() {
+  const b = (x) => (x ? 1 : 0);
+  history.replaceState(null, '', `#el=${S.el}&b=${S.vb}&r=${S.vr}&n=${S.vn}&z=${S.zoom}&rm=${b(S.still)}&gr=${b(S.gray)}&more=${b(S.more)}` + (S.playing ? '' : `&tm=${Math.round(S.time)}`));
+}
+let playFrom = 0, playAt = 0;
+const START_OF = { build: 0, recruit: 0, charge: 7000 };
+function restart() { S.time = START_OF[S.el]; S.playing = true; playFrom = S.time; playAt = performance.now(); refresh(); }
+const varsEl = document.getElementById('vars');
+function buildVarChips() {
+  varsEl.textContent = '';
+  for (const v of PIECES[S.el].vars) {
+    const b = document.createElement('button'); b.className = 'chip var' + (v.ref ? ' ref' : ''); b.dataset.v = v.id;
+    const k = document.createElement('span'); k.className = 'k'; k.textContent = v.id; b.append(k, document.createTextNode(v.name));
+    b.addEventListener('click', () => { S[PIECES[S.el].key] = v.id; refresh(); }); varsEl.append(b);
+  }
+}
+const on = (sel, fn) => document.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => fn(b)));
+on('[data-el]', (b) => { S.el = b.dataset.el; buildVarChips(); restart(); });
+on('[data-z]', (b) => { S.zoom = b.dataset.z; refresh(); });
+for (const id of ['still', 'gray']) document.getElementById(id).addEventListener('click', () => { S[id] = !S[id]; refresh(); });
+const moreBtn = document.getElementById('more'), playBtn = document.getElementById('play'), scrub = document.getElementById('scrub');
+moreBtn.addEventListener('click', () => { S.more = !S.more; refresh(); });
+view.addEventListener('click', restart);
+playBtn.addEventListener('click', () => { if (S.playing) S.playing = false; else { S.playing = true; playFrom = S.time; playAt = performance.now(); } refresh(); });
+scrub.addEventListener('input', () => { S.playing = false; S.time = Number(scrub.value); refresh(); });
+const clockEl = document.getElementById('clock');
+function refresh() {
+  const press = (els, f) => els.forEach((e) => e.setAttribute('aria-pressed', String(f(e))));
+  const piece = PIECES[S.el], cur = S[piece.key];
+  press([...document.querySelectorAll('[data-el]')], (e) => e.dataset.el === S.el);
+  press([...varsEl.querySelectorAll('button')], (e) => e.dataset.v === cur);
+  press([...document.querySelectorAll('[data-z]')], (e) => e.dataset.z === S.zoom);
+  for (const id of ['still', 'gray']) press([document.getElementById(id)], () => S[id]);
+  document.getElementById('moreBar').classList.toggle('open', S.more); moreBtn.setAttribute('aria-expanded', String(S.more));
+  playBtn.textContent = S.playing ? 'Pause' : 'Play'; playBtn.setAttribute('aria-pressed', String(!S.playing));
+  scrub.min = 0; scrub.max = LOOP; scrub.value = S.time;
+  document.body.classList.toggle('gray', S.gray);
+  const v = byId(piece.vars, cur), cap = document.getElementById('cap'); cap.textContent = '';
+  const b = document.createElement('b'); b.textContent = `${v.id} ${v.name}`;
+  const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = v.ref ? 'reference' : v.tag;
+  cap.append(b, document.createTextNode(v.line), tag);
+  const others = Object.entries(PIECES).filter(([k]) => k !== S.el).map(([, p]) => `${p.label.toLowerCase()} ${byId(p.vars, S[p.key]).id}`).join(', ');
+  view.setAttribute('aria-label', `${piece.label}: ${v.id} ${v.name}, ${S.zoom} zoom (also shown: ${others}). Click to replay.`);
+  writeHash();
+}
+function tick(now) {
+  if (S.playing) {
+    S.time = playFrom + (now - playAt);
+    if (S.time >= LOOP) { S.time %= LOOP; playFrom = S.time; playAt = now; }
+    scrub.value = S.time;
+  }
+  const s = Math.floor(S.time / 1000); clockEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  render();
+  requestAnimationFrame(tick);
+}
+window.addEventListener('resize', () => { layoutView(); });
+try { if (!location.hash && window.matchMedia('(prefers-reduced-motion: reduce)').matches) S.still = true; } catch (e) { /* no media queries */ }
+readHash();
+if (S.playing) { if (!location.hash.includes('tm=')) S.time = START_OF[S.el]; playFrom = S.time; playAt = performance.now(); }
+buildVarChips(); refresh(); layoutView();
+(async () => {
+  try { groundTile = mirrorTile(await loadImg('assets/city-buildings/ground-plains.webp')); } catch (e) { /* the flat ground stays */ }
+  try { await Promise.all([document.fonts.load("600 12px 'EB Garamond'"), document.fonts.load("500 12px 'Cinzel'")]); } catch (e) { /* the serif fallback */ }
+  document.body.dataset.ready = '1';
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
