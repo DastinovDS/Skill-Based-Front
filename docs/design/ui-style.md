@@ -2895,7 +2895,7 @@ one the check lozenge; the detail is the eyebrow, the name and one line, then St
 
 ## 78. Progress looks: build, recruit, next charge (#1055) **[awaiting the owner's decision]**
 
-Review 5 (2026-11-14): players could not tell a build under way at a city (paying, then building), could not tell recruiting, and could neither find nor read when the next charge is made. Mockup round 1 (broad): [`mockups/progress-looks.html`](mockups/progress-looks.html), one large view of a `mvp-7` front with the top bar, one row of variant buttons per piece, zoom, play, pause and a scrubber, grey and reduced motion under More; the three pieces are shown together, each in its picked variant.
+Review 5 (2026-11-14): players could not tell a build under way at a city (paying, then building), could not tell recruiting, and could neither find nor read when the next charge is made. Mockup round 1 (broad): [`mockups/progress-looks.html`](mockups/progress-looks.html) (frames: [`mockups/img/progress-looks/`](mockups/img/progress-looks/)), one large view of a `mvp-7` front with the top bar, one row of variant buttons per piece, zoom, play, pause and a scrubber, grey and reduced motion under More; the three pieces are shown together, each in its picked variant.
 
 - **Build** (Forkway's factory: 4 charges paid progressively, then 10 s): B0 today (V12 "Toast", section 75), B1 Works plate, B2 Seal dial, B3 Blueprint.
 - **Recruit** (Stonegate, 3 units then 2, 3 s a unit): R0 today (D2 "Foundation", section 76), R1 Foundation, readable, R2 Seal dial. R3 "Engraved recruit" (the unit under way drawn as a helmet beside the barracks) was dropped by the critique: outside the ring it reads as a group standing on the map.
