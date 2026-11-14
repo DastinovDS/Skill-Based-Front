@@ -94,6 +94,19 @@ export function standingOrders(allow: readonly Allow[], used: readonly number[])
   return n;
 }
 
+/**
+ * The events that are the walk of the player's own order (A2.3: the first recruit's walk is paid):
+ * a card with no pause that begins on one answers the order, like one that begins on its
+ * acceptance (A1.3, IV.4).
+ */
+const ORDER_WALK_EVENTS: readonly string[] = ['rally_walk_paid'];
+
+/** The beat begins with the player's order accepted, or with the walk that order starts. */
+function answersOrder(beat: Beat): boolean {
+  const on = beat.on;
+  return on.accepted != null || (on.event != null && ORDER_WALK_EVENTS.includes(on.event));
+}
+
 /** The beats of a chapter that show a card (a focus beat does not): the step lozenges. */
 function cardBeats(chapter: Chapter): readonly Beat[] {
   return chapter.beats.filter((b) => b.focus == null);
@@ -295,6 +308,9 @@ export class TutorialCoach {
    */
   #done(beat: Beat, msg: TutorialMsg): boolean {
     if (msg.paused || beat.with_goal === true) return false;
+    // A card with no pause that answers the player's order is shown while the army walks: P2 hides
+    // it, the same as the card that asked for the order (the orders it follows allow no cancel).
+    if (beat.pause == null && answersOrder(beat)) return true;
     // A UI beat asks for the command of the server beat it stands in.
     const server = beatAt(this.chapter, msg.beat)?.beat ?? beat;
     const allow = allowOf(this.chapter, msg.beat);

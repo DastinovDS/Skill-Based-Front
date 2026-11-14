@@ -8,10 +8,10 @@ import { Player } from '../support/player.ts';
 // to the chapter, and the chapter select. `TUTORIAL_SHOTS=<dir>` also writes the key screens there.
 const SHOTS = process.env['TUTORIAL_SHOTS'];
 
-async function shot(page: Page, name: string): Promise<void> {
+async function shot(page: Page, name: string, settle = 900): Promise<void> {
   if (SHOTS === undefined) return;
   // Let the cards and marks finish their entrance (the burin, the leader).
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(settle);
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
 
@@ -255,6 +255,102 @@ test('the rules from the chapter select, and the first match with its hints acro
   await expect(page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
   await expect.poll(async () => (await progress(page))['first_match']).toBe(true);
   expect((await progress(page))['first_match_id']).toBeNull();
+  expect(errors).toEqual([]);
+  await player.close();
+});
+
+test('the cards that answer an order show nothing while the army walks (P2: A1.3, A2.3, IV.4)', async ({
+  browser,
+  baseURL,
+}) => {
+  const player = await Player.create(browser, baseURL ?? '', nick('tutp2'));
+  const { page } = player;
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await player.enter();
+  await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      'sbf.tutorial',
+      JSON.stringify({
+        v: 1,
+        done: ['units', 'economy', 'building', 'attack', 'defence'],
+        offerOff: true,
+      }),
+    );
+  });
+  await page.reload();
+
+  const mapOf = async (name: string): Promise<MapFile> =>
+    (await (await page.request.get(`/api/maps/${name}`)).json()) as MapFile;
+  const leave = async (): Promise<void> => {
+    await page.getByRole('button', { name: 'Exit', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Leave the chapter?' })
+      .getByRole('button', { name: 'Leave the chapter' })
+      .click();
+    await expect(page.getByRole('radio', { name: /Chapter I:/ })).toBeVisible({ timeout: 30_000 });
+  };
+  const node = (map: MapFile, name: string): number => {
+    const found = map.nodes.find((n) => n.name === name);
+    if (found === undefined) throw new Error(name);
+    return found.id;
+  };
+  const plate = page.locator('.coach .plate');
+
+  // A1.3: the group order is given, the card "Fernhold waits" is not shown while they walk.
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await page.getByRole('radio', { name: /Group orders/ }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  const group = await mapOf('tut-group');
+  await card(page, 'Sent one at a time');
+  await player.clickNode(group, node(group, 'Fernhold'));
+  await card(page, 'One group order');
+  await player.clickNode(group, node(group, 'Lowfield'), ['Shift']);
+  await player.clickNode(group, node(group, 'Ashwood'));
+  await page.waitForTimeout(1500);
+  await expect(plate.filter({ hasText: 'Fernhold waits' })).toHaveCount(0);
+  await shot(page, '14-a1-walking', 0);
+  // A1.4 comments on the fight: it still shows.
+  await card(page, 'they far outnumber');
+  await leave();
+
+  // A2.3: the rally point and the recruits are given, the card "walking" is not shown.
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await page.getByRole('radio', { name: /Rally points/ }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  const rally = await mapOf('tut-rally');
+  await card(page, 'rally point');
+  await player.clickNode(rally, node(rally, 'Highhold'));
+  await page.keyboard.press('KeyP');
+  await player.clickNode(rally, node(rally, 'Fernhold'));
+  await card(page, 'Recruit two');
+  await player.clickNode(rally, node(rally, 'Highhold'));
+  await page.keyboard.press('KeyR');
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(4500);
+  await expect(plate.filter({ hasText: 'is walking to Fernhold' })).toHaveCount(0);
+  await shot(page, '15-a2-walking', 0);
+  await leave();
+
+  // IV.4: the planned order is given, the card "gathers its bonus" is not shown.
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await page.getByRole('radio', { name: /Chapter IV/ }).click();
+  await page.getByRole('button', { name: /^(Replay|Play again)$/ }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  const attack = await mapOf('tut-attack');
+  await card(page, 'every charge your units hold is a shot');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await card(page, 'Count on two');
+  for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await player.clickNode(attack, node(attack, 'Fernhold'));
+  await card(page, 'planned order');
+  await player.clickNode(attack, node(attack, 'Ashwood'), ['KeyE']);
+  await page.waitForTimeout(1200);
+  await expect(plate.filter({ hasText: 'gathers its bonus' })).toHaveCount(0);
+  await shot(page, '16-iv-walking', 0);
   expect(errors).toEqual([]);
   await player.close();
 });

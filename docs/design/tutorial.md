@@ -239,8 +239,11 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   a round of a fight 10 (its shots), a capture after a fight 25 (the last shots, the winner's walk in, the flood).
 - **A card goes once the player did what it asks** (review 4, P2): after Continue on a card that asks for nothing
   more, or once the orders it asks for stand (`acts`, one by default; a cancel takes one back, so I.5 comes back when
-  the army is called back). Its marks go with it; nothing is written on the screen while the army walks. A card that
-  only comments on what happens (no pause) stays until the next beat.
+  the army is called back). Its marks go with it; nothing is written on the screen while the army walks. This holds
+  for a card without a pause too (owner, 2026-11-14): the card that answers the player's order (its beat begins on
+  the order accepted, or on the walk the order starts: IV.4, A1.3, A2.3) is never shown, because the order it answers
+  stands already; those beats stay in the chapter file for the server (their `allow` and the chain of triggers). A card
+  that only comments on what happens (no order of the player's: A1.4, V.3, V.6) stays until the next beat.
 - **A focus phase** (review 4, P5) follows a card that explains how charges or CP are made or carried: for a set
   number of ticks the game runs with no card, the map is dimmed but for the places, roads and warehouse rows that
   make and carry them (a HUD piece by its outline), so the player watches it happen; then the next card. Its length is
@@ -500,7 +503,7 @@ cards count no defenders. The chapter ends by itself: taking the enemy capital e
 | IV.1 | chapter start | "In a fight, every charge your units hold is a **shot**. Two shots from opposite sides cancel out; a shot that meets none kills a unit." | none | `continue` | none | |
 | IV.2 | Continue on IV.1 (mark: the count under Ashwood's enemy, "1-2") | three slides (section 4.0): 1. "Ashwood shows **1-2**: the enemy may have up to two units there. Count on two." 2. "Your 3 units hold 3 charges. Attack now, and two of your shots cancel their two; your last shot kills one unit." 3. "One defender is left, and you have **no charge left** to take the city. Don't worry if this takes a while to sink in: it gets easier with every match." | on slide 3: "Click on your group in Fernhold" | `action` | move Fernhold to Ashwood (ordinary or planned) | |
 | IV.3 | the group is selected (UI) | "To solve this, use a **planned order**: it gathers **bonus shots**, which fight like extra charges." | "Hold {planned_key} over Ashwood, turn the wheel to +3, then click" | (as before) | as before | planned orders (`{planned_key}`, the wheel) |
-| IV.4 | your planned order accepted | "Your group gathers its bonus from the warehouse here, then sets off on its own." | none | none | none | |
+| IV.4 | your planned order accepted | "Your group gathers its bonus from the warehouse here, then sets off on its own." (not shown: P2, the army walks) | none | none | none | |
 | IV.5 | the enemy's planned intent appears | "That arrow is an enemy **plan**. You see where it goes, but never how strong it is, and they see yours the same way." | none | `continue` | none | |
 | IV.6 | `fight_started` at Ashwood | "A fight runs in **rounds**: each side fires one shot a round, **bonus shots first**." | none | `continue` | none | |
 | IV.7 | the first `fight_round` at Ashwood with a loss, 10 ticks later | "Be careful: once in a fight, you **cannot leave** until it ends, but reinforcements can join to help." | none | `continue` | none | |
@@ -617,7 +620,7 @@ Only the group order is allowed, so that never happens.
 |---|---|---|---|---|---|---|
 | A1.1 | chapter start | "Sent one at a time, these groups would arrive apart and fight alone." | "Click on one of them" | `action` | a group order of both groups to Ashwood | group selection |
 | A1.2 | a group is selected (UI) | "One **group order** sends both, and they arrive together." | "Shift-click the other group, then click on Ashwood" | (as before) | as before | |
-| A1.3 | your `GroupMove` accepted (`kind = attack`) | "**Fernhold waits** so both arrive together. The hourglass shows the wait." | none | none | none | |
+| A1.3 | your `GroupMove` accepted (`kind = attack`) | "**Fernhold waits** so both arrive together. The hourglass shows the wait." (not shown: P2, the army walks) | none | none | none | |
 | A1.4 | `fight_started` at Ashwood with both groups | "Together, they far outnumber the defenders." | none | none | none | |
 | A1.5 | `node_captured` Ashwood by you, 25 ticks later (the goal waits for it) | "The same order to your own place is a **rally**: the groups gather there for **half the price**." | Continue (it fires with the goal) | (goal) | none | |
 | done | `node_captured` Ashwood by you | Seal (after Continue on A1.5) | | | | |
@@ -656,7 +659,7 @@ Fernhold-Ashwood 75, Ashwood-Stormcrown 70, Lowfield-Stormcrown 202.
 |---|---|---|---|---|---|---|
 | A2.1 | chapter start | "Give your capital a **rally point**, and its recruits walk to the front by themselves." | "Click on Highhold, choose Rally point, then click on Fernhold" | `action` | a rally point of Highhold on Fernhold | rally points |
 | A2.2 | your `SetRallyPoint` accepted (the card stays until both recruits are given, `acts` 2) | "Highhold's new units will now walk to Fernhold. Each walk costs a little CP." | "Recruit two: press {recruit_key} twice" | `action` | recruit in Highhold (twice) | |
-| A2.3 | the first own `rally_walk_paid` | "Your first recruit is walking to Fernhold. The second will follow." | none | none | as before (A2.2's two recruits, the same count) | |
+| A2.3 | the first own `rally_walk_paid` | "Your first recruit is walking to Fernhold. The second will follow." (not shown: P2, the recruit walks) | none | none | as before (A2.2's two recruits, the same count) | |
 | done | two own groups of `rally_walk_paid` arrived at Fernhold (`group_arrived`, then `groups_merged` there) | Seal | | | | |
 
 No failure branch: two recruits at most (`allow` counts them), so the walks never lack CP (round 2's A2.F needed a
@@ -1232,7 +1235,8 @@ Sheet's buttons stand still.
 - **P2**: `TutorialCoach` hides the card and its marks after Continue (a `continue` card that asks for no order) and
   once the orders its `allow` asks for stand (`standingOrders`: the accepted commands, a cancel taking one back;
   `acts` of the beat, A2.2 two); a UI beat asks for the command of the server beat it stands in. A card without a
-  pause stays. IV.F keeps its card after Continue until the plan is given.
+  pause that answers the player's order (`on.accepted`, or the event `rally_walk_paid`: IV.4, A1.3, A2.3) shows no
+  card at all (`TutorialCoach.#done`); a comment on an event (A1.4, V.3, V.6) stays. IV.F keeps its card after Continue until the plan is given.
 - **P3**: the marks `capacity`, `warehouse` and `count` (`render/coachMarkView.ts`): each segment of the capacity ring
   rimmed in ivory on a casing with a faint wash; the warehouse row and the count under a group in an engraved capsule
   with a lozenge at each end; a glow behind breathes with the Compass. I.3 lights Ashford's segments, II.3
