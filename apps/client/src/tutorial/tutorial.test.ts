@@ -489,9 +489,9 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.allows({ type: 'move', group: 'g', dest: ashwood, planned: true, bonus: 3 })).toBe(
       true,
     );
-    // The planned order accepted: IV.4, the plan stays shown.
+    // The planned order accepted: IV.4 shows no card while the army walks, the plan stays shown.
     coach.onMessage(msg('attack', '4', false, []));
-    expect(coach.current.card?.fail).toBe(false);
+    expect(coach.current.card).toBeNull();
     expect(coach.shows('planned')).toBe(true);
     coach.onMessage(msg('attack', '8', true, []));
     expect(coach.shows('clock')).toBe(true);
@@ -555,6 +555,24 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.current.card?.id).toBe('2');
     coach.onMessage(msg('rally-points', '2', false, [2]));
     expect(coach.current.card).toBeNull();
+  });
+
+  it('shows no card for a beat that answers the order while the army walks (A1.3, IV.4, A2.3)', () => {
+    for (const [id, beat] of [
+      ['group-orders', '3'],
+      ['attack', '4'],
+      ['rally-points', '3'],
+    ] as const) {
+      const { coach } = coachOf(id, { g: 'Fernhold' });
+      coach.onMessage(msg(id, beat, false, []));
+      expect(coach.current.card).toBeNull();
+      expect(coach.hudMarks()).toEqual([]);
+      // The next beat shows again.
+      if (id !== 'rally-points') {
+        coach.onMessage(msg(id, id === 'group-orders' ? '4' : '5', true, []));
+        expect(coach.current.card).not.toBeNull();
+      }
+    }
   });
 
   it('keeps the failure card after Continue until the plan is given (IV.F)', () => {
