@@ -198,6 +198,8 @@ export class FightView {
   private readonly endLayer = new Container({ label: 'fight-feeds' });
   private readonly popLayer = new Container({ label: 'fight-losses' });
   private readonly arenas: Arena[] = [];
+  /** The centres of the arenas drawn now, world units (the tutorial's cards keep clear, #1053). */
+  private placed: Point[] = [];
   private readonly pops: Pop[] = [];
   private readonly feeds: Feed[] = [];
   private readonly contexts: GraphicsContext[] = [];
@@ -394,6 +396,7 @@ export class FightView {
       if (phase !== null) feeds.push({ fx, phase });
     }
     const spots = this.layout(items);
+    this.placed = spots.map((spot) => ({ x: spot.x, y: spot.y }));
     items.forEach((item, index) => {
       const arena = this.arena(index);
       const spot = spots[index];
@@ -439,6 +442,11 @@ export class FightView {
       return { ...base, top: LIVE_REACH.top, bottom: LIVE_REACH.bottom };
     });
     return layoutArenas(slots, this.cities(), this.cameraScale, this.view, this.piecesOf());
+  }
+
+  /** The centres of the arenas drawn now (world units): a plate `PLATE` px wide around each. */
+  arenaCentres(): readonly Point[] {
+    return this.placed;
   }
 
   /** The cities that arenas and feeds should not cover. */

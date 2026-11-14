@@ -186,7 +186,7 @@ Charter ─> any open intro (II ... V; Advanced I to III after V) ─> the chapt
 |---|---|---|---|
 | **Popup (first entry)** | over the main screen, the stone dialog of the client (the stone window of `theme/primitives.css` on a dim that keeps the main screen in view, as the walkthrough's E.1; PR 2, section 7.11): eyebrow "How to play", title "New to the game?", one line "A short tutorial teaches the basics, one chapter at a time.", "Start the tutorial" (primary), "Not now" (secondary), the checkbox "Don't show again" | the main screen of an entry (section "Entry") | the intro of chapter I, the main screen |
 | **Chapter intro (Sheet)** | "Tutorial · Chapter N of V" (Advanced: "Advanced · N of III"), the name, one sentence, the goal list, a crop of the chapter map with the goals ringed, Start and "All chapters"; no row of chapters (round 5) | the popup; Charter | the chapter, Charter |
-| **Chapter** | the match screen with only the unlocked HUD (section 4, "Shown"), the hint card (Leader), the goal mark (Compass), the "Paused" plate while the simulation waits; no start banner (beat 1 takes its place); the exit button reads "Leave the chapter" | intro | Seal, or Charter (leave) |
+| **Chapter** | the match screen with only the unlocked HUD (section 4, "Shown"), the hint card (Leader), the goal mark (Compass); no start banner (beat 1 takes its place); the exit button reads "Leave the chapter" | intro | Seal, or Charter (leave) |
 | **Result (Seal)** | a stone window over the chapter's last moment: the seal, "Complete", the three lessons, two buttons: "All chapters" (primary) and "Replay chapter" (secondary) | the goal of the chapter | Charter, the chapter again |
 | **Chapter select (Charter)** | the client's top bar (the brand, the way back to the main menu; "Tutorial"; help; the player) over a stone sheet of seals: the main rule I to V ending in an arrow at the first match's seal (the enemy star in a minium rim, always open), the Advanced rule dropping from it after V to its three seals ("Advanced"). A seal is the result screen's seal with the chapter's menu icon and numeral: an empty dashed seat with a lock while closed ("After II"), a dark seal while open, the Compass on the next one, pressed in ivory with the check lozenge when done; the chosen one carries the plinth's way marker. Under the seals the detail of the chosen one: eyebrow, name, one line, then Start (Replay, Play, Play again; "Locked" with "Opens after ..." for a closed one), **"First match"** (a secondary button with the star, on every chapter but the first match itself) and "Rules". A main chapter opens when the one before it is done; the Advanced chapters open when V is done (Q8) | "?" on the main screen; "All chapters" | any open intro, the first match, the rules reference, the main menu |
 | **First match** | a normal bot match (`@easy`, `narrows`) with the full HUD and the hints of section 5 | Charter | the normal result screen |
@@ -261,11 +261,13 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   command, no server message), the step lozenges stay those of the beat, and a small "1 of 3" sits beside "Next". The
   beat's pause and `allow` hold for all its slides; the action line is on the last slide only. A command the beat allows
   given on an earlier slide is accepted as on the last one.
-- **Marks in turn** (round 5, I.7; review 4, P4): a beat may name several terrains one after another, each for 2 s,
-  one pass: the area of that terrain (the territory cells of its places) flashes twice, the matching word of the card
-  is underlined, and its label comes up over its first place and stays; after the pass only the labels stay, no ring
-  on the places, beside the beat's own mark (the motion stops within 6 s, WCAG 2.2.2). With "Less motion" the labels
-  show at once and nothing flashes. Every card that names a terrain uses it (I.6, I.7, V.1, V.2, V.4).
+- **Marks in turn** (round 5, I.7; review 4, P4; review 5, P9): a beat may name several terrains one after another,
+  a page each, turned by the player with "Next" as slides are ("1 of 3" beside it; no timer): the area of the terrain
+  of the page (the territory cells of its places) flashes twice when the page shows and stays outlined, the matching
+  word of the card is underlined (the words before it stay, dimmer), and its label comes up over its first place and
+  stays; no ring on the places, beside the beat's own mark. Continue and the action line are on the last page; a
+  command the beat allows is accepted on any page. With "Less motion" nothing flashes. Every card that names a
+  terrain uses it (I.6, I.7, V.1, V.2, V.4; a card with one terrain has one page).
 - **Shown (`ui`).** A chapter starts with the HUD of the chapters before it, and its beats unlock more (section 4.9,
   the table). A piece not yet unlocked is **hidden**: a top-bar piece, a map mark, a tooltip line. An item of a menu
   the player can open (the city menu, the group menu) whose concept is not unlocked, or whose command the beat does
@@ -281,8 +283,7 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   - `action`: the card asks for a command; the simulation resumes when the server accepts the first allowed command of
     the beat, so the player is never rushed and nothing happens behind the card;
   - none: the simulation runs (a card that only comments on what is happening).
-  The "Paused" plate (bottom centre, clear of the top-bar pieces and the warnings at the top, as the walkthrough draws
-  it; PR 2) shows while the simulation waits. A pause adds
+  Nothing on the screen says "Paused" (review 5: the card holds the player; the plate of PR 2 is gone). A pause adds
   no tick: the "Verified" ticks below are the simulation's, with the player acting on the tick after each pause.
 - **Failures.** A failure branch stays only where the failure is the lesson: chapter IV's ordinary attack that
   bounces (beat IV.F). Every other mistake is prevented: by `allow` (no wrong target, no wrong group, a bounded number
@@ -1035,8 +1036,8 @@ disagree).
   "Chapters", the detail with Start, "First match" and "Rules"; the menu icons of `hud/icons.ts`); the stone and the
   rule frame of ui-style 69.
 - **In a chapter:** the match screen as it is, without the start banner (`hud/StartBanner.svelte`: beat 1 replaces
-  it), plus a `TutorialCoach` (HTML over the map): the Leader card with Continue on a `continue` beat, the "Paused"
-  plate while `paused`. The Compass mark of a place on the map is drawn by PixiJS in the effects layer (a baked
+  it), plus a `TutorialCoach` (HTML over the map): the Leader card with Continue on a `continue` beat (no "Paused"
+  plate since review 5). The Compass mark of a place on the map is drawn by PixiJS in the effects layer (a baked
   sprite, `render/bake.ts`, one texture; the compass points turn once), the card and its leader are HTML (`AGENTS.md`
   7.2). A mark on the HUD (the CP gauge, the VP rail, the stance chip) is an HTML outline. The exit dialog reads "Leave
   the chapter". Continue sends `resume`.
@@ -1145,7 +1146,8 @@ What the client PR built, and where it differs from 7.7 or from the walkthrough 
   when the card shows, and the player has to find X first. The coach stands over the radial menus (it points into
   them) and hides while a dialog of the HUD is open.
 - **Card placement** (`tutorial/leader.ts`) is the walkthrough's: a 10 px grid scored by overlap with every place and
-  its name, the marks, the top bar, the open menus and the Paused plate, then by the distance to the target; it is done
+  its name, the marks, the top bar and the open menus (and, since review 5, the arenas of fights at any cost), then by
+  the distance to the target; it is done
   again when the card, its slide or its size changes, or its target moves (the camera).
 - **Locks.** `OrderController` takes `locks` (the coach): a command the beat does not allow is not sent, a click on a
   target it does not allow keeps the selection and pulses the card's action line, the keys of hidden pieces do nothing,
@@ -1251,6 +1253,47 @@ Sheet's buttons stand still.
 - **P6**: the line under the title keeps two lines on the chapter select and on the Sheet, and the Sheet's buttons
   stand at its foot, so they stand at one place on every chapter.
 
+### 7.14 Review 5, batch 1 as built (#1053)
+
+A player's feedback relayed by the owner (2026-11-14); this batch is the client's presentation, the chapters' content
+(texts, beat order, maps, scripts) is batch 2. New principles, applied everywhere, not only where the player met them:
+P7 a card never covers the arena of a fight nor the element it names; P8 no road mark where the map already draws an
+arrow, a focus lights the charges moving on the roads; P9 the pace of a multi-part explanation is the player's.
+
+- **P7, arenas.** The map reports the arenas of the fights it draws (`MapAnchors.arenas`, from
+  `FightView.arenaCentres`: the plate and the badges over it, client px). The chapter card and the hint card keep
+  clear of them at any cost (`placeCard`'s `hard` obstacles, a hundred times a plain one), and a card an arena comes
+  up under is placed again (once per change of the arenas, so a crowded screen is not placed every frame). IV.6, IV.7,
+  V.2, V.3, V.6, A1.4 and H4 use it.
+- **P7, the bonus counter.** The counter over the target of a planned order (E held, `overlayView.ts`) stands over the
+  Compass when a card rings that target (IV.3), not under its rings (`compassReach`).
+- **P8.** A chapter's road mark lights each charge moving on that road where it is drawn (a thin ivory ring on a
+  casing and a soft glow, `EntityView.chargesOn`), on a card and in a focus phase; no rails and no chevron (II.2,
+  IV.5, A3.2, A3.5: the packets and the plan's ribbon are the map's own arrows). A focus phase is dimmed but for its
+  places and a hole round each moving charge on its roads, no band along the roads. The rails stay for the first
+  match's hints (H4, a fight on a road).
+- **The warehouse row (II.3)** dims the map as a focus phase does, round the row alone (its capsule and a little
+  more), and the capsule's rim and glow lie on it as before.
+- **No "Paused" plate**: the card holds the player.
+- **P9.** The terrains of a card are its pages (`CoachCard.pages`, with the slides' "Next" and "1 of 3"): the area of
+  the terrain of the page flashes twice when it shows and stays outlined until the next page, the labels of the pages
+  seen stay (`CoachMarks.turn`, `turnSince`). No timer is left in the marks in turn.
+- **The action line** is full ivory, italic at weight 600 and 16.5 px, under a rule of the plate with an ivory
+  lozenge before it (the chapter card and the hint card).
+- **The threat of a planned order (V.4 and the main game).** The arc and the marching chevrons round a target faced
+  the tangent of the ribbon at its tip; an enemy ribbon bulges up by the fixed arc (the enemy's path is hidden), so the
+  tangent swung the mark round the city by about 40 degrees, to a side no arrow came from (in V.4 over Flatford's
+  top, the arrow touching its upper right). They now face the point where the ribbon touches the target's ring, the
+  side of the city the order comes from (`arrivalAngle(axis, target)`, a test on V.4's geometry).
+- **The stance menu (III.6).** Played in the browser: the menu has the three stances, Balance current, Economy
+  allowed, War locked (its icon, a dashed edge and a padlock), as the beat says. The current stance was told only by a
+  7 px lozenge over its icon and a brighter edge, so it read as one more offer beside Economy; and the padlock was
+  grey on the dark plate. The current stance's sector now has a lit plate and the step lozenge of "now" (a lozenge in
+  a halo, ruled either side); the padlock is ivory and a quarter larger. The radial is the main game's too.
+- **The threat and the counter clear of the Compass.** A Compass round a place keeps the threat of a plan on it (V.4)
+  and the bonus counter over it (IV.3) outside its rings: both stand at its reach (`compassReach`), and the head of a
+  plan's ribbon stops before them.
+
 ---
 
 ## 8. The look [accepted 2026-11-13]
@@ -1264,13 +1307,13 @@ piece and per moment; the state is in the address (`#el=card&m=IV.5`).
 | Piece | Chosen | Round 1 alternatives (dropped) |
 |---|---|---|
 | Hint card of a chapter | **Leader**: a plate tied to its place by a ruled leader, the chapter and its step lozenges in the head, the action under a rule; Continue at its foot on a `continue` beat | Tablet, Banner |
-| Goal mark on the map | **Compass**: a double ring, the four compass points turn once and stop; on a road two rails and a chevron; on the HUD an outline with corner lozenges | Lantern, Burin |
+| Goal mark on the map | **Compass**: a double ring, the four compass points turn once and stop; on a road two rails and a chevron (since review 5 only for the first match's hints: a chapter's road lights its moving charges, 7.14); on the HUD an outline with corner lozenges | Lantern, Burin |
 | Chapter intro | **Sheet**: a stone sheet on the blurred main screen, the goal list and a crop of the chapter map with the goals ringed; no row of chapters (round 5) | Plinth |
 | Chapter result | **Seal**: a stone window over the chapter's last moment, the seal (a lozenge with the chapter numeral), three lessons, two buttons: All chapters (primary) and Replay chapter (secondary; round 4) | Page |
 | Chapter select (round 5) | **Charter** (`mockups/tutorial-roadmap.html`): a stone sheet of seals under the client's top bar; the main rule I to V ending in an arrow at the first match's seal (the enemy star, a minium rim), the Advanced rule dropping from it after V to its three seals; a seal is an empty dashed seat with a lock while closed, a dark seal while open, the Compass on the next, pressed in ivory with the check lozenge when done; the detail under the seals with Start, "First match" and "Rules" | Road (accepted in round 2, replaced), Campaign, March, Cards |
 | Entry popup (round 5) | the client's stone dialog: "How to play", "New to the game?", one line, "Start the tutorial" (primary), "Not now", the checkbox "Don't show again" (an engraved box, an ivory check) | the forced intro of round 1 |
 | Hint of the first match | **Leader**: the chapter card without the step lozenges, with "Turn off hints" | Toast |
-| Paused (round 3) | **Plate**: a small stone plate at the bottom centre of the map (PR 2, as the walkthrough), the pause glyph and "Paused", ivory on the casing; the frame under it unchanged (nothing is dimmed: the card asks the player to look at it) | |
+| Paused (round 3; removed in review 5, 7.14) | **Plate**: a small stone plate at the bottom centre of the map (PR 2, as the walkthrough), the pause glyph and "Paused", ivory on the casing; the frame under it unchanged (nothing is dimmed: the card asks the player to look at it) | |
 | Locked (round 3) | the radial's existing disabled style, icon only, plus a small lock; the top-bar chip at 40% with the lock at its corner | |
 
 Checked with `design:design-critique` and `design:accessibility-review` in round 1 (contrast of every text pair

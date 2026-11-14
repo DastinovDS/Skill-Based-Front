@@ -325,7 +325,7 @@
                   row.dy -
                   5 -
                   iconSize / 2 +
-                  3})"
+                  3}) scale(1.25)"
               >
                 <path class="lock-case" d="M-5 -1h10v8.5h-10z" />
                 <path class="lock-shackle-case" d="M-3 -1v-3a3 3 0 0 1 6 0v3" />
@@ -334,11 +334,14 @@
               </g>
             {/if}
             {#if item.current === true && item.compact === true}
-              <!-- The current choice: a lozenge over its icon (a shape, not a colour). -->
-              <path
-                class="current-mark"
-                d="M{spot.x} {spot.y + row.dy - iconSize / 2 - 13}l3.5 3.5l-3.5 3.5l-3.5 -3.5z"
-              />
+              <!-- The current choice (#1053): a lozenge over its icon in a halo, ruled either side, as
+                   the step lozenge of "now" (a shape, not a colour). -->
+              {@const cy = spot.y + row.dy - iconSize / 2 - 11}
+              <g class="current-mark">
+                <path class="current-rule" d="M{spot.x - 22} {cy}h12M{spot.x + 10} {cy}h12" />
+                <path class="current-halo" d="M{spot.x} {cy - 8}l8 8l-8 8l-8 -8z" />
+                <path class="current-gem" d="M{spot.x} {cy - 4.5}l4.5 4.5l-4.5 4.5l-4.5 -4.5z" />
+              </g>
             {/if}
           {:else if row.kind === 'price' && item.price !== undefined}
             {@const p = item.price}
@@ -522,7 +525,24 @@
     stroke-width: 1.6;
   }
 
-  .current-mark {
+  /* The current choice reads as chosen, not as one more offer (#1053): a lit plate, the mark. */
+  .sector.current:not(.hover) .plate {
+    fill: rgb(30 26 20 / 97%);
+  }
+
+  .current-rule {
+    fill: none;
+    stroke: var(--ink-soft);
+    stroke-width: 1;
+  }
+
+  .current-halo {
+    fill: none;
+    stroke: rgb(236 228 209 / 30%);
+    stroke-width: 1;
+  }
+
+  .current-gem {
     fill: var(--ink);
     stroke: var(--casing);
     stroke-width: 1;
@@ -573,13 +593,14 @@
     stroke-width: 4;
   }
 
+  /* The padlock reads on the dark plate (#1053): ivory, a little dimmer than the ink. */
   .lock-body {
-    fill: var(--rule, #7d7363);
+    fill: var(--ink-soft);
   }
 
   .lock-shackle {
     fill: none;
-    stroke: var(--rule, #7d7363);
+    stroke: var(--ink-soft);
     stroke-width: 1.8;
   }
 

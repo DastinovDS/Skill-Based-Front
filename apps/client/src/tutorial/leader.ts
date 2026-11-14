@@ -44,15 +44,30 @@ export interface Placement {
   readonly y: number;
 }
 
+/** How much more a covered `hard` obstacle costs than a covered plain one. */
+const HARD = 100;
+
+/** The plate at `at` of `size` covers some of `boxes`. */
+export function covers(
+  at: Placement,
+  size: { readonly w: number; readonly h: number },
+  boxes: readonly Rect[],
+): boolean {
+  const r: Rect = [at.x, at.y, at.x + size.w, at.y + size.h];
+  return boxes.some((b) => overlap(r, b) > 0);
+}
+
 /**
  * The best place for a plate `w` x `h` inside `area` (the part of the screen below the top bar),
- * near `target`, away from `obstacles`.
+ * near `target`, away from `obstacles`, and from the `hard` ones (the arena of a fight, review 5
+ * P7) at nearly any distance.
  */
 export function placeCard(
   target: Target,
   size: { readonly w: number; readonly h: number },
   area: Rect,
   obstacles: readonly Rect[],
+  hard: readonly Rect[] = [],
 ): Placement {
   const { x: cx, y: cy } = centreOf(target);
   const [ax0, ay0, ax1, ay1] = area;
@@ -63,6 +78,7 @@ export function placeCard(
       const r: Rect = [x - 6, y - 6, x + size.w + 6, y + size.h + 6];
       let ov = 0;
       for (const o of obstacles) ov += overlap(r, o);
+      for (const o of hard) ov += HARD * overlap(r, o);
       const nx = Math.min(x + size.w, Math.max(x, cx));
       const ny = Math.min(y + size.h, Math.max(y, cy));
       const d = Math.hypot(nx - cx, ny - cy);

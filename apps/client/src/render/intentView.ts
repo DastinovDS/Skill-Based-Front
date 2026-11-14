@@ -98,6 +98,8 @@ export class IntentView {
   private readonly chains = new Map<string, number[]>();
   /** The eased fill of each gathering plan, by group. */
   private readonly fills = new Map<string, PlanFill>();
+  /** How far a tutorial's Compass reaches round a place (world units), `setCompassReach`. */
+  private compassReach: ReadonlyMap<number, number> = new Map();
   private flightsLive: Flight[] = [];
   /** Where the tail of each gathering plan is, this frame (the charges fly there). */
   private readonly tailOf = new Map<string, Point>();
@@ -199,6 +201,11 @@ export class IntentView {
     }
   }
 
+  /** The places a tutorial card rings now and how far each Compass reaches (world units). */
+  setCompassReach(reach: ReadonlyMap<number, number>): void {
+    this.compassReach = reach;
+  }
+
   destroy(): void {
     this.lines.destroy();
     this.ribbons.destroy();
@@ -237,7 +244,12 @@ export class IntentView {
       .filter((p): p is Point => p !== undefined);
     const own = intent.owner === this.me;
     const radius = this.radiusOf(intent.origin);
-    const ring = ringRadius(this.radiusOf(intent.target));
+    // Outside a tutorial's Compass round the target (#1053): its rings never cover the threat.
+    const compass = this.compassReach.get(intent.target);
+    const ring = Math.max(
+      ringRadius(this.radiusOf(intent.target)),
+      compass === undefined ? 0 : compass - FINE_RING.r2 + RIBBON_ENGRAVED.attack.width,
+    );
     const E = RIBBON_ENGRAVED;
     const endGap = own
       ? ring + CASED.endGap
@@ -313,7 +325,7 @@ export class IntentView {
       this.drawTarget(
         target,
         ring,
-        arrivalAngle(axis),
+        arrivalAngle(axis, target),
         targetOwner === this.me,
         clock,
         reduced,

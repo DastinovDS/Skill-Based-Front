@@ -480,14 +480,16 @@ export function ribbonShape(
 }
 
 /**
- * The angle (radians, y down) from the tip of a ribbon `axis` back along the way it comes in: the
- * side of the target the order arrives from. 0 for a degenerate axis.
+ * The side of `target` a ribbon `axis` arrives on (radians, y down): the direction from the centre
+ * of the target to the tip of the ribbon, where the arrow touches the target's ring. The arc and
+ * the chevrons of a threat stand there (#1053). The tangent of the arc at its tip is not that side:
+ * a ribbon bulges up, so its tangent swung the mark round the city by up to 40 degrees, onto a side
+ * no arrow came from. 0 for a degenerate axis.
  */
-export function arrivalAngle(axis: readonly Point[]): number {
+export function arrivalAngle(axis: readonly Point[], target: Point): number {
   const tip = axis[axis.length - 1];
-  const before = axis[axis.length - 2];
-  if (tip === undefined || before === undefined) return 0;
-  return Math.atan2(before.y - tip.y, before.x - tip.x);
+  if (tip === undefined || axis.length < 2) return 0;
+  return Math.atan2(tip.y - target.y, tip.x - target.x);
 }
 
 /**

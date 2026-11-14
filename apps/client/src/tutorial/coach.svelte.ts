@@ -42,8 +42,13 @@ export interface CoachCard {
   readonly fail: boolean;
   /** Slides of the card (IV.2: 3), 1 for a plain card. */
   readonly slides: number;
+  /**
+   * The pages "Next" walks (review 5, P9): its slides, or its terrains in turn (I.7: 3), one a page,
+   * so the player sets the pace; 1 for a plain card.
+   */
+  readonly pages: number;
   readonly marks: readonly Mark[];
-  /** The marks in turn (I.7), or null. */
+  /** The marks in turn (I.7), or null: the terrain of page `i` is `turns[i]`. */
   readonly turns: readonly Turn[] | null;
   /** The card has a Continue button: a `continue` pause, or the last card of a goal (A1.5). */
   readonly canContinue: boolean;
@@ -53,7 +58,7 @@ export interface CoachView {
   readonly card: CoachCard | null;
   /** A focus phase (P5): no card, the map lights these places; null otherwise. */
   readonly focus: readonly Mark[] | null;
-  /** The simulation waits for the card (the "Paused" plate). */
+  /** The simulation waits for the card (Continue shows, nothing moves behind it). */
   readonly paused: boolean;
   /** The pieces shown. */
   readonly gate: Gate;
@@ -127,7 +132,7 @@ export class TutorialCoach {
     done: false,
     seq: 0,
   });
-  /** The slide of the card on screen (0-based); a new card starts at 0. */
+  /** The page of the card on screen (0-based: its slide, or its terrain in turn); a new card starts at 0. */
   slide = $state(0);
   /** Bumped when a control or a command was refused by the lock: the action line pulses. */
   pulse = $state(0);
@@ -233,10 +238,10 @@ export class TutorialCoach {
     this.#o.resume();
   }
 
-  /** "Next" on a card with slides. */
+  /** "Next" on a card with pages (slides, or terrains in turn). */
   nextSlide(): void {
     const card = this.current.card;
-    if (card !== null && this.slide < card.slides - 1) this.slide += 1;
+    if (card !== null && this.slide < card.pages - 1) this.slide += 1;
   }
 
   /**
@@ -341,15 +346,18 @@ export class TutorialCoach {
         const ui = this.#uiBeat !== null;
         const goalCard = beat.with_goal === true && msg.done && !this.#goalContinued;
         const cards = cardBeats(this.chapter);
+        const slides = Math.max(1, beat.slides ?? 1);
+        const turns = beat.turns !== undefined && beat.turns.length > 0 ? beat.turns : null;
         card = {
           id: beat.id,
           key: `tutorial.${this.chapter.id}.${beat.id}`,
           step: shown.fail ? 0 : cards.indexOf(beat) + 1,
           steps: cards.length,
           fail: shown.fail,
-          slides: Math.max(1, beat.slides ?? 1),
+          slides,
+          pages: Math.max(slides, turns?.length ?? 1),
           marks: beat.mark ?? [],
-          turns: beat.turns !== undefined && beat.turns.length > 0 ? beat.turns : null,
+          turns,
           canContinue: (!ui && beat.pause === 'continue' && msg.paused) || goalCard,
         };
       }

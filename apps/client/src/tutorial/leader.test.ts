@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { leaderLine, placeCard, type Rect } from './leader.ts';
+import { covers, leaderLine, placeCard, type Rect } from './leader.ts';
 
 // The hint card stands near its target and off every place, mark and HUD piece (the walkthrough's
 // placement, docs/design/tutorial.md section 8).
@@ -31,5 +31,14 @@ describe('the Leader card', () => {
     expect(line.to.y).toBeCloseTo(300);
     const box = leaderLine({ kind: 'box', x: 10, y: 8, w: 200, h: 36 }, { x: 100, y: 200 }, size);
     expect(box.to.y).toBe(51);
+  });
+
+  it('keeps off the arena of a fight even where that costs room near the target (P7)', () => {
+    const target = { kind: 'circle' as const, x: 640, y: 400, r: 30 };
+    // The arena floats over the place and fills the band above it.
+    const arena: Rect = [300, 200, 980, 360];
+    const at = placeCard(target, size, area, [[584, 344, 696, 456]], [arena]);
+    expect(covers(at, size, [arena])).toBe(false);
+    expect(covers({ x: 320, y: 250 }, size, [arena])).toBe(true);
   });
 });

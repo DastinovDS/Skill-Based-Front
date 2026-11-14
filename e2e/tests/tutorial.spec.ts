@@ -61,13 +61,14 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   const response = await page.request.get('/api/maps/tut-move');
   const map = (await response.json()) as MapFile;
   await card(page, 'This is your army');
-  await expect(page.getByRole('status').filter({ hasText: 'Paused' })).toBeVisible();
+  // No "Paused" plate: the card holds the player (review 5).
+  await expect(page.getByRole('status').filter({ hasText: 'Paused' })).toHaveCount(0);
   await expect(page.getByText('You are')).toHaveCount(0);
   // Chapter I shows no CP, no VP and no clock (section 4.9).
   await expect(page.locator('[data-coach="cp"]')).toHaveCount(0);
   await expect(page.locator('[data-coach="vp"]')).toHaveCount(0);
   await expect(page.locator('[data-coach="clock"]')).toHaveCount(0);
-  await shot(page, '03-card-compass-paused');
+  await shot(page, '03-card-compass');
 
   // I.1 -> I.2 (a selection) -> the march to Ashford -> I.3 (Continue).
   await player.clickNode(map, 0);
@@ -91,8 +92,16 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await card(page, 'You see only the places next to your groups');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Terrain sets your speed');
-  // The marks in turn: one pass of 2 s a terrain, then all three stay with their labels.
-  await page.waitForTimeout(6500);
+  // The marks in turn: a page a terrain, turned by the player (review 5, P9); the action line
+  // comes with the last one.
+  const plate = page.locator('.coach .plate');
+  await expect(plate).toContainText('1 of 3');
+  await expect(plate).not.toContainText('Now take Fordham');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(plate).toContainText('2 of 3');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(plate).toContainText('3 of 3');
+  await expect(plate).toContainText('Now take Fordham');
   await shot(page, '06-card-turns');
 
   // A reload in the middle of the chapter returns to it, at its card.

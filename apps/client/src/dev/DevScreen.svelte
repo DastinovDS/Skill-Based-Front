@@ -20,7 +20,7 @@
   import { OrderController } from '../match/orderController.ts';
   import type { Command, ReachNode, ReachSplit } from '../protocol.gen.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl, bundledGeo } from '../map/bundledMaps.ts';
-  import type { Anchor } from '../render/anchors.ts';
+  import type { Anchor, ScreenBox } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
   import { otherPlayer } from '../render/style.ts';
@@ -140,6 +140,7 @@
         focusNode: (node: number) => void;
         nodeAnchor: (node: number) => Anchor | null;
         groupAnchor: (group: string) => Anchor | null;
+        arenaBoxes: () => ScreenBox[];
       }
     | undefined = $state.raw();
 
@@ -461,6 +462,7 @@
       anchors={{
         node: (id: number) => canvas?.nodeAnchor(id) ?? null,
         group: (id: string) => canvas?.groupAnchor(id) ?? null,
+        arenas: () => canvas?.arenaBoxes() ?? [],
       }}
     />
   {/if}

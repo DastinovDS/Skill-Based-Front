@@ -197,6 +197,11 @@ export class EffectsView {
   }
 
   /** How many particles the last frame drew (tests, the dev tools). */
+  /** The centres of the fight arenas drawn now, world units (`FightView.arenaCentres`). */
+  arenaCentres(): readonly Point[] {
+    return this.fightView.arenaCentres();
+  }
+
   particleCount(): { normal: number; additive: number } {
     return this.particles.count();
   }

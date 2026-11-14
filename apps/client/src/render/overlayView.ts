@@ -173,6 +173,8 @@ export class OverlayView {
   private readonly bonusText: Text;
   /** The text the pill was drawn for (empty: not drawn yet). */
   private bonusKey = '';
+  /** How far a tutorial's Compass reaches round a place (world units): the counter stands over it. */
+  private compassReach: ReadonlyMap<number, number> = new Map();
   private readonly bonusStyle = new TextStyle({
     fontFamily: 'system-ui, sans-serif',
     fontSize: BONUS_MARK.fontSize,
@@ -559,10 +561,20 @@ export class OverlayView {
     const M = BONUS_MARK;
     const scale = badgeScale(this.cameraScale);
     // The ring is in world units, the pill and its lift keep their size on screen.
-    const lift = this.radiusOf(mark.node) + REACH_RING.gap + (M.lift + M.height / 2) * scale;
+    // Over the Compass of a tutorial card that marks the target (review 5, P7: the ring never covers it).
+    const ring = Math.max(
+      this.radiusOf(mark.node) + REACH_RING.gap,
+      this.compassReach.get(mark.node) ?? 0,
+    );
+    const lift = ring + (M.lift + M.height / 2) * scale;
     this.bonus.scale.set(scale);
     this.bonus.position.set(at.x, at.y - lift);
     this.bonus.visible = true;
+  }
+
+  /** The places a tutorial card rings now and how far each Compass reaches (world units). */
+  setCompassReach(reach: ReadonlyMap<number, number>): void {
+    this.compassReach = reach;
   }
 
   private drawBonus(value: string): void {

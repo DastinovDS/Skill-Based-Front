@@ -37,7 +37,7 @@
   import { HintWatcher } from '../tutorial/hints.ts';
   import { HintSource } from '../tutorial/hintSource.ts';
   import { cardKicker } from './tutorial/texts.ts';
-  import type { Anchor } from '../render/anchors.ts';
+  import type { Anchor, ScreenBox } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
   import { renderRules } from '../render/renderRules.ts';
@@ -122,6 +122,7 @@
         focusNode: (node: number) => void;
         nodeAnchor: (node: number) => Anchor | null;
         groupAnchor: (group: string) => Anchor | null;
+        arenaBoxes: () => ScreenBox[];
       }
     | undefined = $state.raw();
   let insets: Insets = $state.raw(NO_INSETS);
@@ -466,6 +467,7 @@
         anchors={{
           node: (id: number) => canvas?.nodeAnchor(id) ?? null,
           group: (id: string) => canvas?.groupAnchor(id) ?? null,
+          arenas: () => canvas?.arenaBoxes() ?? [],
         }}
       />
     {:else if coach.sealed}
@@ -480,6 +482,7 @@
       anchors={{
         node: (id: number) => canvas?.nodeAnchor(id) ?? null,
         group: (id: string) => canvas?.groupAnchor(id) ?? null,
+        arenas: () => canvas?.arenaBoxes() ?? [],
       }}
     />
   {/if}
