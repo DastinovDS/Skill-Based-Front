@@ -147,7 +147,6 @@ def get_progress(response: Response, player: CurrentPlayer) -> TutorialProgress:
 def put_progress(
     body: TutorialFlags, response: Response, player: CurrentPlayer, session: DbSession
 ) -> TutorialProgress:
-    """Replace the interface flags; the chapters done stay the server's (``import_done`` is taken
-    once, while none is done)."""
+    """Replace the interface flags; the chapters done stay the server's."""
     response.headers["Cache-Control"] = "no-store"
     return write_flags(session, player, body)

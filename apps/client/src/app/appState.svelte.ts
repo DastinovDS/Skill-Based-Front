@@ -138,7 +138,7 @@ export class AppState {
     this.api = opts.api ?? new Api();
     this.maps = new MapCache(this.api);
     this.#storage = opts.storage ?? (() => window.localStorage);
-    this.tutorial = new TutorialProgressState(this.api, this.#storage);
+    this.tutorial = new TutorialProgressState(this.api);
     this.#botTimeoutMs = opts.botTimeoutMs ?? BOT_START_TIMEOUT_MS;
     this.#location = opts.location ?? window.location;
     this.#replaceUrl =

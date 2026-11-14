@@ -525,8 +525,7 @@ export interface paths {
     get: operations['get_progress_api_me_tutorial_get'];
     /**
      * Put Progress
-     * @description Replace the interface flags; the chapters done stay the server's (``import_done`` is taken
-     *     once, while none is done).
+     * @description Replace the interface flags; the chapters done stay the server's.
      */
     put: operations['put_progress_api_me_tutorial_put'];
     post?: never;
@@ -1434,8 +1433,6 @@ export interface components {
       hints: components['schemas']['HintId'][];
       /** Hints Off */
       hints_off: boolean;
-      /** Import Done */
-      import_done?: components['schemas']['ChapterId'][];
     };
     /** TutorialMatchOut */
     TutorialMatchOut: {

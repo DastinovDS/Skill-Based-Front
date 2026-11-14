@@ -278,7 +278,6 @@ describe('AppState', () => {
       // The server keeps the progress of the account: a new app on the same account reads it.
       tutorialProgress: () => Promise.resolve({ ...account }),
       saveTutorialFlags: (_token: string, flags: Record<string, unknown>) => {
-        delete flags['import_done'];
         account = { ...account, ...flags };
         return Promise.resolve({ ...account });
       },

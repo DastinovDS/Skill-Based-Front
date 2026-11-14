@@ -1082,11 +1082,9 @@ is a fresh tutorial and a player keeps the progress across browsers).
   in order; a chapter that reached its goal is shown at once without being sent. A server that cannot be reached leaves
   the empty progress for the visit. Whether the popup was shown in this visit is kept in memory only, so it shows at most
   once per entry.
-- **One-time import.** `localStorage` `sbf.tutorial` (older versions): when the account has no progress and the key
-  exists, the client sends it once (the flags, and the chapters as `import_done`, which the server takes only while no
-  chapter is done on the account) and then removes the key. A key that finds a non-empty account progress is removed
-  without a send. This is the one place a client names chapters, and it can name only chapters while none is done, which
-  is harmless: the lock of the chapter select is a convenience, not a rule of the game.
+- **No import of the old browser key.** Older versions kept the progress in `localStorage` (`sbf.tutorial`); it is not
+  read any more (owner decision 2026-11-14: it brought old progress back into a fresh database, and nobody but the owner
+  had any). A stale key stays in the browser, unused and harmless. The chapters are marked only by the server.
 - **A guest and an account** have separate progress when they are separate players. A guest that sets a password stays
   the same player and keeps its progress; logging in to another account loads that account's progress.
 

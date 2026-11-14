@@ -133,8 +133,7 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   const { page } = player;
   await player.enter();
   await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
-  // Chapters are the server's to record: a fresh account takes the import of the old browser's.
-  await putProgress(page, { import_done: ['units', 'economy', 'building'] });
+  await showDone(page, ['units', 'economy', 'building']);
   await page.reload();
   await page.getByRole('button', { name: 'How to play' }).click();
   await expect(
@@ -175,6 +174,20 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   );
   await player.close();
 });
+
+/**
+ * Shows the account with `done` chapters finished. Chapters are the server's to record and a test
+ * cannot reach one without playing it, so the `GET /api/me/tutorial` answer is patched in the
+ * browser (the server does not check the lock of the chapter select); the next reload applies it.
+ */
+async function showDone(page: Page, done: string[]): Promise<void> {
+  await page.route('**/api/me/tutorial', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const real = await route.fetch();
+    const body = (await real.json()) as Record<string, unknown>;
+    return route.fulfill({ response: real, json: { ...body, done } });
+  });
+}
 
 /** The tutorial progress of the account (`GET /api/me/tutorial`, snake_case). */
 async function progress(page: Page): Promise<Record<string, unknown>> {
@@ -269,10 +282,7 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   page.on('pageerror', (error) => errors.push(error.message));
   await player.enter();
   await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
-  // Chapters are the server's to record: a fresh account takes the import of the old browser's.
-  await putProgress(page, {
-    import_done: ['units', 'economy', 'building', 'attack', 'defence'],
-  });
+  await showDone(page, ['units', 'economy', 'building', 'attack', 'defence']);
   await page.reload();
 
   const mapOf = async (name: string): Promise<MapFile> =>

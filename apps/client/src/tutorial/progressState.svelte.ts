@@ -10,10 +10,7 @@ import type { Api } from '../api/http.ts';
 import type { ChapterId } from '../protocol.gen.ts';
 import {
   EMPTY_PROGRESS,
-  forgetLegacyProgress,
   fromWire,
-  isEmptyProgress,
-  readLegacyProgress,
   toFlags,
   type HintId,
   type TutorialProgress,
@@ -22,19 +19,16 @@ import {
 export class TutorialProgressState {
   current = $state.raw<TutorialProgress>(EMPTY_PROGRESS);
   readonly #api: Api;
-  readonly #storage: () => Storage;
   #token: string | null = null;
   /** The sends in flight, one after the other: the last flags win. */
   #queue: Promise<void> = Promise.resolve();
 
-  constructor(api: Api, storage: () => Storage) {
+  constructor(api: Api) {
     this.#api = api;
-    this.#storage = storage;
   }
 
   /**
-   * Loads the progress of the account with `token` (a start, a login, a new guest). When the
-   * account has none and the browser holds the old `sbf.tutorial`, that is sent once and removed.
+   * Loads the progress of the account with `token` (a start, a login, a new guest).
    * Best effort: a server that cannot be reached leaves the empty progress.
    */
   async load(token: string): Promise<void> {
@@ -48,19 +42,6 @@ export class TutorialProgressState {
     }
     if (this.#token !== token) return; // another account loaded meanwhile
     this.current = loaded;
-    const legacy = readLegacyProgress(this.#storage);
-    if (legacy === null || !isEmptyProgress(loaded) || isEmptyProgress(legacy)) {
-      forgetLegacyProgress(this.#storage);
-      return;
-    }
-    // The old browser progress goes to the account once; the key stays until the server took it.
-    this.current = legacy;
-    try {
-      await this.#api.saveTutorialFlags(token, toFlags(legacy, legacy.done));
-      forgetLegacyProgress(this.#storage);
-    } catch {
-      // Not taken: the next start tries again.
-    }
   }
 
   /** The account left (log out, forgotten): the next one loads its own. */
@@ -69,10 +50,10 @@ export class TutorialProgressState {
     this.current = EMPTY_PROGRESS;
   }
 
-  #send(importDone: readonly ChapterId[] = []): void {
+  #send(): void {
     const token = this.#token;
     if (token === null) return;
-    const flags = toFlags(this.current, importDone);
+    const flags = toFlags(this.current);
     this.#queue = this.#queue
       .then(() => this.#api.saveTutorialFlags(token, flags))
       .then(

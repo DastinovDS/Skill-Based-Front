@@ -5,8 +5,7 @@ document, ``NULL``: nothing done yet). Two writers, so a client cannot claim a c
 
 - ``mark_done``: the server, when a chapter match reaches its goal (``MatchLifecycle.on_end``);
 - ``PUT /api/me/tutorial`` (``gow_server.tutorialmatch``): the flags of the interface only
-  (``TutorialFlags``). ``import_done`` carries the chapters of the progress an older client kept
-  in the browser (``localStorage``); it is taken once, while no chapter is done on the account.
+  (``TutorialFlags``).
 
 Plain functions over a session, no I/O of their own: callable from a thread.
 """
@@ -55,10 +54,6 @@ class TutorialFlags(BaseModel):
     first_match_id: str | None = Field(default=None, pattern=MATCH_ID)
     hints: list[HintId] = Field(max_length=len(HINT_IDS))
     hints_off: StrictBool
-    import_done: list[ChapterId] = Field(
-        default_factory=list[ChapterId], max_length=len(CHAPTER_IDS)
-    )
-    """Chapters of the old browser progress; taken only while the account has none done."""
 
 
 def _ordered(done: set[ChapterId]) -> list[ChapterId]:
@@ -84,13 +79,10 @@ def _store(player: Player, progress: TutorialProgress) -> None:
 
 
 def write_flags(session: Session, player: Player, flags: TutorialFlags) -> TutorialProgress:
-    """Replace the flags; take ``import_done`` once. Commits."""
+    """Replace the flags; the chapters done stay as they are. Commits."""
     current = read(player)
-    done = set(current.done)
-    if not done:
-        done = set(flags.import_done)
     progress = TutorialProgress(
-        done=_ordered(done),
+        done=current.done,
         offer_off=flags.offer_off,
         first_match=flags.first_match,
         first_match_id=flags.first_match_id,

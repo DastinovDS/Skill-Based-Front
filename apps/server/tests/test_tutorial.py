@@ -452,8 +452,7 @@ def test_progress_flags_are_saved_and_two_players_do_not_share(settings: Setting
         {"hints": ["H1"] * 6},
         {"first_match_id": "not-a-number"},
         {"first_match_id": "1" * 40},
-        {"import_done": ["nope"]},
-        {"import_done": ["units"] * 9},
+        {"import_done": ["units"]},  # the old browser import is gone
         {"done": ["units"]},  # a client cannot claim a chapter
         {"extra": 1},
         {"offer_off": "yes"},
@@ -465,20 +464,6 @@ def test_progress_rejects_bad_flags(settings: Settings, patch: dict[str, object]
         answer = client.put("/api/me/tutorial", json={**FLAGS, **patch}, headers=headers)
         assert answer.status_code == 422
         assert client.get("/api/me/tutorial", headers=headers).json() == EMPTY
-
-
-def test_progress_import_is_taken_once_and_only_while_nothing_is_done(settings: Settings) -> None:
-    with TestClient(create_app(settings)) as client:
-        headers = _guest(client, "pupil")
-        body = {**FLAGS, "import_done": ["economy", "units"]}
-        assert client.put("/api/me/tutorial", json=body, headers=headers).json()["done"] == [
-            "units",
-            "economy",
-        ]
-        again = {**FLAGS, "import_done": ["attack"], "hints_off": True}
-        saved = client.put("/api/me/tutorial", json=again, headers=headers).json()
-        assert saved["done"] == ["units", "economy"]  # the chapters stay
-        assert saved["hints_off"] is True
 
 
 def test_a_chapter_goal_marks_it_done_and_a_left_chapter_does_not(

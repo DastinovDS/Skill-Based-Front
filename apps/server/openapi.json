@@ -1066,7 +1066,7 @@
           "tutorial"
         ],
         "summary": "Put Progress",
-        "description": "Replace the interface flags; the chapters done stay the server's (``import_done`` is taken\nonce, while none is done).",
+        "description": "Replace the interface flags; the chapters done stay the server's.",
         "operationId": "put_progress_api_me_tutorial_put",
         "requestBody": {
           "content": {
@@ -3206,14 +3206,6 @@
           "hints_off": {
             "type": "boolean",
             "title": "Hints Off"
-          },
-          "import_done": {
-            "items": {
-              "$ref": "#/components/schemas/ChapterId"
-            },
-            "type": "array",
-            "maxItems": 8,
-            "title": "Import Done"
           }
         },
         "additionalProperties": false,

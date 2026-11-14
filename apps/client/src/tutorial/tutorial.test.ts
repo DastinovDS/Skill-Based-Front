@@ -13,9 +13,7 @@ import {
   defaultSeat,
   EMPTY_PROGRESS,
   fromWire,
-  isEmptyProgress,
   offerAllowed,
-  readLegacyProgress,
   sealStates,
   toFlags,
   type TutorialProgress,
@@ -23,26 +21,6 @@ import {
 import { richText } from './rich.ts';
 
 const KEYS = { label: (action: string) => action.toUpperCase().slice(0, 1), shift: 'Shift' };
-
-function memoryStorage(): Storage {
-  const data = new Map<string, string>();
-  return {
-    get length() {
-      return data.size;
-    },
-    clear: () => {
-      data.clear();
-    },
-    getItem: (key) => data.get(key) ?? null,
-    key: (i) => [...data.keys()][i] ?? null,
-    removeItem: (key) => {
-      data.delete(key);
-    },
-    setItem: (key, value) => {
-      data.set(key, value);
-    },
-  };
-}
 
 describe('chapter files and texts', () => {
   it('bundles the eight chapters with their maps', () => {
@@ -642,38 +620,13 @@ describe('progress (section 7.8) and Charter (section 3)', () => {
       hints: ['H1', 'H3'],
       hintsOff: true,
     });
-    // The chapters done never go back to the server, only the one-time import does.
     expect(toFlags(progress)).toEqual({
       offer_off: true,
       first_match: false,
       first_match_id: '7',
       hints: ['H1', 'H3'],
       hints_off: true,
-      import_done: [],
     });
-    expect(toFlags(progress, ['economy']).import_done).toEqual(['economy']);
-    expect(isEmptyProgress(EMPTY_PROGRESS)).toBe(true);
-    expect(isEmptyProgress({ ...EMPTY_PROGRESS, hintsOff: true })).toBe(false);
-  });
-
-  it('reads the progress an older version kept in the browser, dropping unknown entries', () => {
-    const storage = memoryStorage();
-    expect(readLegacyProgress(() => storage)).toBeNull();
-    storage.setItem(
-      'sbf.tutorial',
-      JSON.stringify({ done: ['units', 'nope'], hints: ['H9', 'H2'], firstMatchId: 'x y' }),
-    );
-    expect(readLegacyProgress(() => storage)).toEqual({
-      ...EMPTY_PROGRESS,
-      done: ['units'],
-      hints: ['H2'],
-    });
-    storage.setItem('sbf.tutorial', '{broken');
-    expect(readLegacyProgress(() => storage)).toBeNull();
-    const throwing = (): Storage => {
-      throw new Error('blocked');
-    };
-    expect(readLegacyProgress(throwing)).toBeNull();
   });
 
   it('offers the tutorial until a chapter is done, the first match played or the box ticked', () => {
