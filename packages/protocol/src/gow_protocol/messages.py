@@ -33,7 +33,7 @@ from gow_protocol.tutorial import BeatId, ChapterId
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 55
+PROTOCOL_VERSION: Final = 56
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -538,8 +538,8 @@ class TutorialMsg(WireModel):
     type: Literal["tutorial"] = "tutorial"
     chapter: ChapterId
     beat: BeatId | None
-    """The current beat of the chapter file (``F``: its failure beat); ``None`` before the first
-    one (chapter V starts with the opponent's march)."""
+    """The current beat of the chapter file (``F``: a failure beat); ``None`` before the first
+    one."""
     paused: bool
     """The simulation waits: for ``resume`` (Continue) on a ``continue`` beat, for an allowed
     command on an ``action`` beat. No tick passes meanwhile."""
@@ -551,6 +551,11 @@ class TutorialMsg(WireModel):
     tick: NonNegInt
     """The tick the beat began (0 before the first one): the client shows its card once the map
     it draws has reached this tick (review 4, P1: the card speaks only about what is seen)."""
+    clock_end: NonNegInt | None
+    """The tick the chapter's clock runs out (a beat's ``clock``, IV.10: the match timer shows the
+    time left to it); ``None``: no clock. When it runs out the chapter ends as won by VP."""
+    by_clock: bool
+    """The chapter ended because its clock ran out (won by VP), not by its goal."""
 
 
 type ServerMsg = Annotated[

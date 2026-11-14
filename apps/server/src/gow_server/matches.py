@@ -353,8 +353,10 @@ class MatchRunner:
         """The chapter's goal holds: the next step applies the scripted side's ``Forfeit``."""
         self._leaving = False
         """The chapter's player forfeited (left): no card pauses the match any more."""
-        if tutorial is not None and tutorial.paused:
-            self.pause()  # the first card waits before tick 1
+        if tutorial is not None:
+            tutorial.prepare(self.match)  # the chapter's CP progress at the start
+            if tutorial.paused:
+                self.pause()  # the first card waits before tick 1
 
     def __repr__(self) -> str:
         return f"MatchRunner({self.match_id!r}, map={self.map_id!r}, tick={self.match.tick})"

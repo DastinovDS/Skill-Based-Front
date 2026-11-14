@@ -23,13 +23,17 @@ runner (``gow_server.matches.MatchRunner``) with what the player receives anyway
 - **Locks.** ``admit`` matches a command of the player against the ``allow`` of the current
   beat on the state when it is sent (the node a group stands in): a command no entry allows, or
   one past its ``max``, is refused (the runner answers ``INVALID_ARGUMENT`` and the simulation
-  never sees it). ``Forfeit`` (leaving) is always allowed; the scripted side is never locked.
+  never sees it). ``Forfeit`` (leaving) is always allowed, and so are the chapter's ``always``
+  commands (the stance after chapter III), which end no pause; the scripted side is never
+  locked.
 - **Pauses.** A beat with ``pause`` stops the simulation at the end of the tick it began:
   ``continue`` until ``continue_`` (the client's ``resume``), ``action`` until a command its
   ``allow`` admits (applied at the next tick; refused by the simulation, the pause comes back).
 - **Goal.** When every condition holds the director is ``done``: the runner queues the
   ``Forfeit`` of the scripted side and the match ends with ``match_end`` (the player wins,
-  ``reason = forfeit``; chapter IV ends by itself, ``reason = capital``).
+  ``reason = forfeit``; chapter IV ends by itself, ``reason = capital``). A beat with a
+  ``clock`` (IV.10) starts the chapter's clock: when it runs out before the goal, the chapter is
+  done all the same, won by VP (``by_clock``).
 
 The endpoint that starts a chapter is ``gow_server.tutorialmatch``.
 """
@@ -71,6 +75,7 @@ from gow_sim.commands import (
     SetStance,
 )
 from gow_sim.maps import MapDef
+from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import AtNode, GameState, IntentKind
 from gow_sim.view import PlayerView
@@ -241,10 +246,14 @@ def pattern_matches(pattern: CommandPattern, facts: CommandFacts, ids: dict[str,
 
 @dataclass(frozen=True, slots=True)
 class Admission:
-    """An admitted command: the ``allow`` entry it used, in the ``allow`` it was admitted by."""
+    """An admitted command: the ``allow`` entry it used, in the ``allow`` it was admitted by;
+    ``entry`` ``ALWAYS``: one of the chapter's ``always`` commands (no count, no pause ends)."""
 
     entry: int
     generation: int
+
+
+ALWAYS: Final = -1
 
 
 @dataclass(slots=True)
@@ -296,6 +305,10 @@ class TutorialDirector:
         """Event kind -> the own groups (wire ids) named by such events (``group_of``)."""
         self._goal_counts = [0] * len(chapter.goal.all)
         self.done = False
+        self._clock_end: int | None = None
+        """The tick the chapter's clock runs out (a beat's ``clock``); ``None``: no clock yet."""
+        self.by_clock = False
+        """The chapter is done because its clock ran out (won by VP), not by its goal."""
         self._now = _Tick()
         """The facts of the last step; a Continue tries the next beats on them again."""
         self._accepted: list[CommandFacts] = []
@@ -321,13 +334,33 @@ class TutorialDirector:
             used=tuple(self._used),
             done=self.done,
             tick=self._began,
+            clock_end=self._clock_end,
+            by_clock=self.by_clock,
         )
+
+    def prepare(self, match: Match) -> None:
+        """The chapter's starting state beyond its map: the player's CP progress
+        (``cp_ticks_start``). Raises ``ChapterError`` when it is not below the CP period."""
+        start = self.chapter.cp_ticks_start
+        if not start:
+            return
+        player = match.state.players[self.player]
+        period = match.rules.stances.cp_period_ticks.of(player.stance)
+        if start >= period:
+            raise ChapterError(
+                f"{self.chapter.id}: cp_ticks_start {start} is not below the CP period {period}"
+            )
+        player.cp_ticks = start
 
     # Locks -------------------------------------------------------------------------------
 
     def admit(self, facts: CommandFacts) -> Admission | None:
         """The ``allow`` entry of the current beat ``facts`` uses, counted as pending; ``None``:
-        refused. The first admitted command of an ``action`` beat ends its pause."""
+        refused. The first admitted command of an ``action`` beat ends its pause; one of the
+        chapter's ``always`` commands does not (it is no answer to the card)."""
+        for entry in self.chapter.always:
+            if pattern_matches(entry, facts, self._ids):
+                return Admission(ALWAYS, self._generation)
         for i, entry in enumerate(self._allow):
             if not pattern_matches(entry, facts, self._ids):
                 continue
@@ -343,7 +376,7 @@ class TutorialDirector:
         """The simulation applied (``accepted``) or rejected an admitted command."""
         if accepted:
             self._accepted.append(facts)
-        if admission.generation != self._generation:
+        if admission.entry == ALWAYS or admission.generation != self._generation:
             return
         self._pending[admission.entry] -= 1
         if accepted:
@@ -377,6 +410,9 @@ class TutorialDirector:
         self._count_goal_events(now)
         if not self.done and not self._armed and self._goal_holds(now):
             self.done = True
+        if not self.done and self._clock_end is not None and tick >= self._clock_end:
+            self.done = True
+            self.by_clock = True
 
     def continue_(self) -> bool:
         """Continue on the card (the client's ``resume``); ``False``: the beat does not wait
@@ -449,6 +485,8 @@ class TutorialDirector:
             self._generation += 1
             self._used = [0] * len(beat.allow)
             self._pending = [0] * len(beat.allow)
+        if beat.clock is not None:
+            self._clock_end = self.tick + beat.clock
         self._pause_kind = beat.pause
         self._acted = False
         self.paused = beat.pause is not None

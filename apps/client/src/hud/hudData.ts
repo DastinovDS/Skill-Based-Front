@@ -269,6 +269,11 @@ export interface HudExtras {
   readonly pending: readonly PendingWalk[];
   readonly paid: readonly WalkPaid[];
   readonly credit: VpCredit | null;
+  /**
+   * The tick the clock runs out instead of the match's end: a tutorial chapter's own clock (#1054,
+   * IV.10); absent, the match length.
+   */
+  readonly clockEnd?: number | null;
 }
 
 const NO_EXTRAS: HudExtras = { pending: [], paid: [], credit: null };
@@ -539,7 +544,9 @@ export function buildHudData(
       credit: extras.credit,
     },
     rally: rallyInfo(rules, view, me, extras),
-    secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
+    secondsLeft: Math.ceil(
+      Math.max(0, (extras.clockEnd ?? rules.match_ticks) - tick) / rules.tick_hz,
+    ),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),
     node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups, tick),
     groups: view.groups.map((g) => ({

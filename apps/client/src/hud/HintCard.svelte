@@ -43,6 +43,7 @@
   const keys = $derived({
     label: (action: Parameters<typeof keyBindings.label>[0]) => keyBindings.label(action),
     shift: t('tutorial.shift'),
+    esc: t('tutorial.esc'),
   });
   const title = $derived(hint === null ? '' : t(`${keyOf(hint)}.title` as MessageKey));
   const say = $derived<Segment[]>(

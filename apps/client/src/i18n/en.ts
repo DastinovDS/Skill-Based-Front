@@ -602,6 +602,7 @@ export const en = {
   'tutorial.rules': 'Rules',
   'tutorial.result.title': 'Complete',
   'tutorial.result.replay': 'Replay chapter',
+  'tutorial.result.byClock': 'Time ran out, and you won on victory points.',
   'tutorial.card.kicker': '{n} · {name}',
   'tutorial.card.kickerAdvanced': 'Advanced {n} · {name}',
   'tutorial.card.steps': 'Step {n} of {total}',
@@ -616,6 +617,7 @@ export const en = {
   'tutorial.exit.leave': 'Leave the chapter',
   'tutorial.mouse': 'click',
   'tutorial.shift': 'Shift',
+  'tutorial.esc': 'Esc',
   'tutorial.sealAdv': 'ADV',
   // The hints of the first match (#806, docs/design/tutorial.md section 5; the owner's texts).
   'hint.kicker': 'Hint · {title}',
@@ -664,7 +666,7 @@ export const en = {
     'In Balance, CP come {cp} every {cpEvery}, up to {cap}, and your capital makes a charge every {chargeEvery}. Your roads carry charges to the front on their own. A place cut off from your capital gets none and soon starts losing them.',
   'rules.flow.title': 'Supply in detail',
   'rules.flow.text':
-    'The front is your places that touch an enemy (before contact, the farthest from your capital). Places with room call the nearest spare charges, the front first; an army short of charges, an unpaid building and a gathering plan call before the others. Charges move one road at a time between your own places; a lost road loses its charge. A full factory sends its new charge to the nearest room; a factory cut off from your capital stops.',
+    'The front is your places that touch an enemy (before contact, the farthest from your capital). Places with room call the nearest spare charges, the front first; an army short of charges, an unpaid building and a gathering plan call before the others. Charges move one road at a time between your own places; a lost road loses its charge. A full factory sends its new charge to the nearest room. A factory cut off from your capital stops making charges, but its pocket does not starve.',
   'rules.build.title': 'Buildings and stances',
   'rules.build.text':
     'A factory makes charges like your capital; a barracks lets a city recruit. The warehouse pays for a building first, then the units standing there. Economy: more charges, fewer CP. War: the other way. Balance: between. Switching is free.',
@@ -698,21 +700,22 @@ export const en = {
   'tutorial.units.why': 'March, take places, change your mind, and see what your army sees.',
   'tutorial.units.goal1': 'Take Ashford, Elmstead and Fordham',
   'tutorial.units.lesson1': 'A capture costs one charge.',
-  'tutorial.units.lesson2': 'A place holds only so many units.',
+  'tutorial.units.lesson2': 'A place fits one unit per segment of its ring.',
   'tutorial.units.lesson3': 'Terrain sets your speed and your sight.',
   'tutorial.units.length': 'About a minute',
   'tutorial.units.1': 'This is your **army**. The number on the helmet is how many units it has.',
   'tutorial.units.1.act': '{click} Click on the helmet to select it',
-  'tutorial.units.2': 'To march, click a **city** or a **province**.',
+  'tutorial.units.2':
+    'To march, click a **city** or a **province**. Press {esc} to drop the selection.',
   'tutorial.units.2.act': '{click} Click on Ashford',
   'tutorial.units.3':
-    'Each city or province has its own **capacity**: how many units fit there, shown by the segmented ring around it.',
+    'Each city or province has a **capacity**: one unit fits in each segment of the ring around it.',
   'tutorial.units.4':
     'Every capture costs a **charge**. The helmet’s fill shows your charges, and it just dropped.',
   'tutorial.units.5':
     'Next, take **Elmstead**. If you change your mind on the way, press {cancel_key}: the army turns back.',
   'tutorial.units.6':
-    'You see only the places next to your groups. From this forest, Kestrel shows **a range** of units, Brackenfold only **that someone is there**.',
+    'You see only the places next to your army. From this forest, Kestrel shows **a range** of units, and Brackenfold only **that someone is there**.',
   'tutorial.units.7':
     '**Terrain** sets your speed: fast on **plains**, normal in **forest**, slow in **mountains**.',
   'tutorial.units.7.act': '{click} Now take Fordham',
@@ -728,37 +731,38 @@ export const en = {
   'tutorial.economy.1':
     'These are your **command points** (CP). Every order costs some, and they refill over time.',
   'tutorial.economy.2':
-    'Your capital makes **charges**, and they are distributed along your roads automatically.',
+    'Your capital makes **charges**. Your roads carry them to your places on their own.',
   'tutorial.economy.3':
     'Each city or province stores **charges**, shown as the diamonds under it. Units there take them to recharge; when there are none to take, you see {warn_sign}.',
-  'tutorial.economy.4':
-    'The enemy took Coldwell, so **Westmarch is cut off**. No charges reach it, and soon it starts losing them.',
-  'tutorial.economy.4.act': '{click} Retake Coldwell with Millbrook’s group',
+  'tutorial.economy.4': 'The enemy is marching on **Coldwell**.',
+  'tutorial.economy.5':
+    'The enemy took Coldwell, so **Westmarch is cut off**: no charges reach it, and soon it starts losing its own.',
+  'tutorial.economy.5.act': '{click} Retake Coldwell with Millbrook’s group',
   // Chapter III: Building (tut-build).
   'tutorial.building.name': 'Building',
-  'tutorial.building.why':
-    'Build with your units’ own charges, recruit, and set the pace of your economy.',
-  'tutorial.building.goal1': 'Build a factory in Millbrook',
-  'tutorial.building.goal2': 'Build barracks in Fernhill and recruit a unit',
+  'tutorial.building.why': 'Build, recruit, and set the pace of your economy.',
+  'tutorial.building.goal1': 'Build barracks in Fernhill and recruit a unit',
+  'tutorial.building.goal2': 'Build a factory in Millbrook',
   'tutorial.building.goal3': 'Switch to Economy',
-  'tutorial.building.lesson1': 'Units pay what the warehouse lacks.',
-  'tutorial.building.lesson2': 'Barracks let a city recruit.',
+  'tutorial.building.lesson1': 'Barracks let a city recruit.',
+  'tutorial.building.lesson2': 'Units pay what the warehouse lacks.',
   'tutorial.building.lesson3': 'Stances set the pace.',
   'tutorial.building.length': 'About a minute',
-  'tutorial.building.1': 'A **factory** makes charges, like your capital.',
-  'tutorial.building.1.act': '{click} Click on Millbrook, then choose Factory',
-  'tutorial.building.2':
-    'The warehouse was empty, so **the units there paid** with their own charges, which refill over time.',
-  'tutorial.building.3': 'With **barracks**, a city can recruit new units.',
-  'tutorial.building.3.act': '{click} Click on Fernhill, then choose Barracks',
+  'tutorial.building.1': 'A city needs **barracks** to recruit new units.',
+  'tutorial.building.1.act': '{click} Click on the ring around Fernhill to open its menu',
+  'tutorial.building.2': 'Choose **Barracks** to build it.',
+  'tutorial.building.3':
+    'The warehouse was empty, so **the units there paid** with their own charges. They refill over time.',
   'tutorial.building.4':
-    'Nice job! Your **factory** is built and now makes charges. The counter here shows how many factories you have, and the maximum.',
-  'tutorial.building.5':
     'Fernhill can recruit now. New units start without charges and fill up over time.',
-  'tutorial.building.5.act': '{click} Click on Fernhill and press {recruit_key}',
+  'tutorial.building.4.act': '{click} Click on Fernhill and press {recruit_key}',
+  'tutorial.building.5': 'A **factory** makes charges, like your capital.',
+  'tutorial.building.5.act': '{click} Click on Millbrook, then choose Factory',
   'tutorial.building.6':
+    'Nice job! Your **factory** now makes charges. The counter here shows how many you have, and the most you can build.',
+  'tutorial.building.7':
     'Your **stance** sets the pace: **Economy** for more charges, **War** for more CP, and you start each game in **Balance**.',
-  'tutorial.building.6.act': 'Press {stance_key} and pick Economy',
+  'tutorial.building.7.act': 'Press {stance_key} and pick Economy',
   // Chapter IV: Attack and fight (tut-attack).
   'tutorial.attack.name': 'Attack and fight',
   'tutorial.attack.why': 'Gather a bonus in the open, strike with it, then take their capital.',
@@ -769,61 +773,56 @@ export const en = {
   'tutorial.attack.lesson3': 'Their capital wins the match.',
   'tutorial.attack.length': 'About a minute and a half',
   'tutorial.attack.1':
-    'In a fight, every charge your units hold is a **shot**. Two shots from opposite sides cancel out; a shot that meets none kills a unit.',
-  'tutorial.attack.2.1':
-    'Ashwood shows **1-2**: the enemy may have up to two units there. Count on two.',
-  'tutorial.attack.2.2':
-    'Your 3 units hold 3 charges. Attack now, and two of your shots cancel their two; your last shot kills one unit.',
-  'tutorial.attack.2.3':
-    'One defender is left, and you have **no charge left** to take the city. Don’t worry if this takes a while to sink in: it gets easier with every match.',
-  'tutorial.attack.2.act': '{click} Click on your group in Fernhold',
-  'tutorial.attack.3':
-    'To solve this, use a **planned order**: it gathers **bonus shots**, which fight like extra charges.',
-  'tutorial.attack.3.act':
-    'Hold {planned_key} over Ashwood, turn the wheel to +3, then {click} click',
-  'tutorial.attack.4':
-    'Your group gathers its bonus from the warehouse here, then sets off on its own.',
+    'In a fight, each charge is a **shot**. Two shots from opposite sides cancel out; a shot that meets none kills a unit.',
+  'tutorial.attack.2': 'Attack **Ashwood** with your group in Fernhold.',
+  'tutorial.attack.2.act': '{click} Click on your group, then on Ashwood',
+  'tutorial.attack.3': 'Your charges ran out before Ashwood fell, so your group turned back.',
+  'tutorial.attack.4': 'Your group is full again. This time, plan the attack.',
+  'tutorial.attack.4.act': '{click} Click on your group in Fernhold',
   'tutorial.attack.5':
-    'That arrow is an enemy **plan**. You see where it goes, but never how strong it is, and they see yours the same way.',
+    'A **planned order** gathers **bonus shots** before it sets off. They fire first and fight like extra charges.',
+  'tutorial.attack.5.act':
+    'Hold {planned_key} over Ashwood, turn the wheel to +3, then {click} click',
   'tutorial.attack.6':
-    'A fight runs in **rounds**: each side fires one shot a round, **bonus shots first**.',
+    'Your group gathers its bonus from the warehouse here, then sets off on its own.',
   'tutorial.attack.7':
-    'Be careful: once in a fight, you **cannot leave** until it ends, but reinforcements can join to help.',
+    'That arrow is an enemy **plan**. You see where it goes, but never how strong it is, and they see yours the same way.',
   'tutorial.attack.8':
-    'Ashwood is yours, but one battle does not win the war. Take their **capital**, or hold the most **victory points** (VP) when time runs out. Each city earns VP, shown by the gold number at its upper right.',
-  'tutorial.attack.8.act': 'Let your group refill',
-  'tutorial.attack.9': 'Your group is full again. Take **Stormcrown**, their capital.',
-  'tutorial.attack.F':
-    'As the math showed, your charges ran out before Ashwood fell, so the group turned back. Let it refill, then use a **planned order**.',
+    'A fight runs in **rounds**: each side fires one shot a round, **bonus shots first**.',
+  'tutorial.attack.9':
+    'Be careful: once in a fight, you **cannot leave** until it ends, but reinforcements can join to help.',
+  'tutorial.attack.10':
+    'Ashwood is yours. Take their **capital** to win, or hold the most **victory points** (VP) when the clock runs out. Each city earns VP, shown by the gold number at its upper right.',
+  'tutorial.attack.11': 'Your group is full again. Take **Stormcrown**, their capital.',
   // Chapter V: Defence (tut-defence).
   'tutorial.defence.name': 'Defence',
   'tutorial.defence.why': 'Watch the mountains hold, then answer an attack on the plains.',
   'tutorial.defence.goal1': 'Fortify the road from Eastfield into Flatford',
   'tutorial.defence.goal2': 'Hold Flatford',
-  'tutorial.defence.lesson1': 'Mountains help the defender, plains hurt it.',
-  'tutorial.defence.lesson2': 'A road fort takes a toll.',
+  'tutorial.defence.lesson1': 'Defenders gain in the mountains and lose on the plains.',
+  'tutorial.defence.lesson2': 'A road fort weakens attackers.',
   'tutorial.defence.lesson3': 'Answer a plan early.',
   'tutorial.defence.length': 'About a minute',
-  'tutorial.defence.1': 'The enemy is coming for **Highcrag**, up in the **mountains**.',
-  'tutorial.defence.2':
-    '**Mountains** give the defender a bonus shot; **plains** take a charge from the defender when the fight starts. The chevron on the helmet shows it: up helps, down hurts.',
+  'tutorial.defence.1':
+    '**Terrain** changes a fight for the defender: **mountains** help, **plains** hurt. The chevron on a helmet shows which.',
+  'tutorial.defence.2': 'The enemy is coming for **Highcrag**, up in the mountains.',
   'tutorial.defence.3': 'Highcrag held against a bigger army, and nobody died.',
   'tutorial.defence.4':
-    'A planned attack is coming for **Flatford**, on the plains. A **road fort** takes charges from enemies crossing it.',
+    'A planned attack is coming for **Flatford**. A **road fort** weakens enemies on their way in.',
   'tutorial.defence.4.act':
     '{click} Click on Flatford, choose Fortify road, then click on the road to Eastfield',
   'tutorial.defence.5': 'Now send Millbrook’s group to help Flatford.',
   'tutorial.defence.6':
-    'The fort took its toll. With Millbrook’s group there, Flatford can afford the charge the plains take.',
+    'The fort took charges from the attackers. With Millbrook’s group there, Flatford can spare the charge the plains take.',
   // Advanced I: Group orders (tut-group).
   'tutorial.group-orders.name': 'Group orders',
   'tutorial.group-orders.why': 'Two groups, one order, one arrival.',
   'tutorial.group-orders.goal1': 'Take Ashwood with one order for both groups',
   'tutorial.group-orders.lesson1': 'One order, one arrival.',
   'tutorial.group-orders.lesson2': 'Strike together.',
-  'tutorial.group-orders.lesson3': 'A rally costs half.',
+  'tutorial.group-orders.lesson3': 'Gathering at your own place costs half.',
   'tutorial.group-orders.length': 'Under a minute',
-  'tutorial.group-orders.1': 'Sent one at a time, these groups would arrive apart and fight alone.',
+  'tutorial.group-orders.1': 'Sent one at a time, these groups would not reach Ashwood together.',
   'tutorial.group-orders.1.act': '{click} Click on one of them',
   'tutorial.group-orders.2': 'One **group order** sends both, and they arrive together.',
   'tutorial.group-orders.2.act': '{shift}-click the other group, then {click} click on Ashwood',
@@ -831,23 +830,23 @@ export const en = {
     '**Fernhold waits** so both arrive together. The hourglass shows the wait.',
   'tutorial.group-orders.4': 'Together, they far outnumber the defenders.',
   'tutorial.group-orders.5':
-    'The same order to your own place is a **rally**: the groups gather there for **half the price**.',
+    'The same order to one of your own places **gathers** the groups there for **half the price**.',
   // Advanced II: Rally points (tut-rally).
   'tutorial.rally-points.name': 'Rally points',
   'tutorial.rally-points.why': 'Recruits that walk to the front by themselves.',
   'tutorial.rally-points.goal1': 'Set a rally point on Highhold',
   'tutorial.rally-points.goal2': 'Get two recruits to Fernhold',
-  'tutorial.rally-points.lesson1': 'Your capital has a barracks.',
-  'tutorial.rally-points.lesson2': 'A rally point sends recruits on.',
-  'tutorial.rally-points.lesson3': 'Each walk costs CP.',
+  'tutorial.rally-points.lesson1': 'A rally point sends recruits to the front by themselves.',
+  'tutorial.rally-points.lesson2': 'Each walk costs half a move.',
+  'tutorial.rally-points.lesson3': 'Set it once, and every new recruit follows.',
   'tutorial.rally-points.length': 'Under a minute',
   'tutorial.rally-points.1':
     'Give your capital a **rally point**, and its recruits walk to the front by themselves.',
   'tutorial.rally-points.1.act':
     '{click} Click on Highhold, choose Rally point, then click on Fernhold',
   'tutorial.rally-points.2':
-    'Highhold’s new units will now walk to Fernhold. Each walk costs a little CP.',
-  'tutorial.rally-points.2.act': 'Recruit two: press {recruit_key} twice',
+    'Highhold’s recruits now walk to Fernhold on their own, each for **half the price** of a move.',
+  'tutorial.rally-points.2.act': 'Press {recruit_key} twice to recruit two',
   'tutorial.rally-points.3': 'Your first recruit is walking to Fernhold. The second will follow.',
   // Advanced III: Supply distribution (tut-flow).
   'tutorial.supply-distribution.name': 'Supply distribution',
@@ -864,7 +863,8 @@ export const en = {
     'Each place with room calls the **nearest spare charges** behind it. A road carries one at a time.',
   'tutorial.supply-distribution.3':
     'The enemy took **Lowfield**, and the charge on its road was lost. **Coldwell** touches the enemy now, so it is your front there.',
-  'tutorial.supply-distribution.4': 'Fernhold is full. Now move the front: take **Ashwood**.',
+  'tutorial.supply-distribution.4':
+    'Fernhold is full. Capture **Ashwood** to move your front line forward.',
   'tutorial.supply-distribution.5':
     'Ashwood is your new front. Its **empty army calls first**, and Fernhold passes its charges on.',
 };

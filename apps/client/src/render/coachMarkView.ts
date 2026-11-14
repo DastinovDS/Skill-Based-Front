@@ -38,6 +38,8 @@ export interface CoachGeometry {
   warehouseRow(node: number): { x0: number; x1: number; y: number } | null;
   /** The count under the group in `node` (an enemy's range, "1-2"). */
   countBox(node: number): Box | null;
+  /** Where the enemy figure on a road that touches `node` is drawn this frame (#1054). */
+  enemyNear?(node: number): Point | null;
   /** The area of `node` (its cell of the territory). */
   cell(node: number): readonly Point[] | null;
   /** Where the charges moving on the road between `a` and `b` (either way) are drawn this frame. */
@@ -196,6 +198,11 @@ export class CoachMarkView {
       for (const id of marks.groupsAt) {
         const at = map.groupAt(id);
         if (at !== null) place(at, ringRadius(this.radiusOf(id)) + COMPASS.gap);
+      }
+      // An enemy figure on a road into a place: a Compass of its own, following it (#1054).
+      for (const id of marks.enemies ?? []) {
+        const at = map.enemyNear?.(id) ?? null;
+        if (at !== null) place(at, COMPASS.figure);
       }
       for (const id of marks.vpBadges) {
         const node = this.map.nodes[id];

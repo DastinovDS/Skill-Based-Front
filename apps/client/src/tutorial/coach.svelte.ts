@@ -12,6 +12,10 @@
  * card speaks about what is seen; the map reports its tick through `onRender`); a card goes once
  * the player did what it asks (P2: Continue, or the orders it asks for standing); a focus beat
  * shows no card, only the places it lights (P5).
+ *
+ * Review 5 (#1054): a UI beat may begin on an open city menu (III.2), the chapter's `always`
+ * commands are allowed at every beat (the stance after chapter III), and the chapter's clock
+ * (IV.10) is the tick it runs out (`clockEnd`).
  */
 import type {
   Allow,
@@ -67,6 +71,10 @@ export interface CoachView {
   readonly used: readonly number[];
   /** The goal holds: the chapter ends with the next tick. */
   readonly done: boolean;
+  /** The tick the chapter's clock runs out (IV.10), or null: the match timer shows the time to it. */
+  readonly clockEnd: number | null;
+  /** The chapter ended because its clock ran out: won by VP (the Seal says so). */
+  readonly byClock: boolean;
   /** Bumped whenever another card shows: the card and the marks start their motion again. */
   readonly seq: number;
 }
@@ -130,6 +138,8 @@ export class TutorialCoach {
     allow: [],
     used: [],
     done: false,
+    clockEnd: null,
+    byClock: false,
     seq: 0,
   });
   /** The page of the card on screen (0-based: its slide, or its terrain in turn); a new card starts at 0. */
@@ -147,7 +157,7 @@ export class TutorialCoach {
   /** The tick the map has drawn (the base snapshot of its frame). */
   #rendered = -Infinity;
   #fallback: ReturnType<typeof setTimeout> | undefined;
-  /** The UI beat shown between two server beats (a selection), or null. */
+  /** The UI beat shown between two server beats (a selection, an open menu), or null. */
   #uiBeat: string | null = null;
   /** The last main beat the server named: a failure card does not move it. */
   #lastMain: string | null = null;
@@ -224,6 +234,21 @@ export class TutorialCoach {
     this.#publish();
   }
 
+  /**
+   * A city menu opened (`node`) or closed (null): a UI beat after the current one that waits for
+   * this city's menu begins (III.2). It stays until the server names another beat.
+   */
+  onMenu(node: number | null): void {
+    if (this.#uiBeat !== null || node === null || this.#shown === null) return;
+    const after = beatAt(this.chapter, this.#lastMain);
+    if (after === null) return;
+    const next = this.chapter.beats[after.index + 1];
+    if (next?.on.ui !== 'menu' || next.on.node == null) return;
+    if (nodeNamed(this.#o.context.map, next.on.node) !== node) return;
+    this.#uiBeat = next.id;
+    this.#publish();
+  }
+
   /** "Continue" on the card: the server resumes; on the last card of a goal the result shows. */
   continue(): void {
     const card = this.current.card;
@@ -269,16 +294,23 @@ export class TutorialCoach {
     return this.current.gate.has(flag);
   }
 
-  /** The command is allowed now (leaving always is). */
+  /** The command is allowed now (leaving always is, and the chapter's `always` commands). */
   allows(cmd: Command): boolean {
     const view = this.current;
-    return commandAllowed(view.allow, view.used, cmd, this.#o.context);
+    const always = this.chapter.always ?? [];
+    return (
+      commandAllowed(always, [], cmd, this.#o.context) ||
+      commandAllowed(view.allow, view.used, cmd, this.#o.context)
+    );
   }
 
   /** A command of these facts (unknown fields match any) is allowed now: a menu item's probe. */
   allowsFacts(facts: CommandFacts): boolean {
     const view = this.current;
-    return admits(view.allow, view.used, facts, this.#o.context.map);
+    const map = this.#o.context.map;
+    return (
+      admits(this.chapter.always ?? [], [], facts, map) || admits(view.allow, view.used, facts, map)
+    );
   }
 
   /** The HUD pieces the card (or the focus phase) marks. */
@@ -377,6 +409,8 @@ export class TutorialCoach {
       allow: allowOf(this.chapter, latest?.beat ?? null),
       used: latest?.used ?? [],
       done: latest?.done ?? false,
+      clockEnd: latest?.clock_end ?? null,
+      byClock: latest?.by_clock ?? false,
       seq: this.#seq,
     };
   }

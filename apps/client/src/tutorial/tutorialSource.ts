@@ -91,6 +91,7 @@ export class TutorialSource implements RenderSource {
     const nodes: { id: number; ring: boolean }[] = [];
     const groupsAt: number[] = [];
     const charges: (readonly [number, number])[] = [];
+    const enemies: number[] = [];
     const vpBadges: number[] = [];
     const capacities: number[] = [];
     const warehouses: number[] = [];
@@ -103,6 +104,7 @@ export class TutorialSource implements RenderSource {
       const node = id(mark.node);
       if (node !== undefined) nodes.push({ id: node, ring: mark.ring === true });
       add(groupsAt, mark.group);
+      add(enemies, mark.enemy);
       add(vpBadges, mark.vp_badge);
       add(capacities, mark.capacity);
       add(warehouses, mark.warehouse);
@@ -131,6 +133,7 @@ export class TutorialSource implements RenderSource {
       since: sameCard && this.#marks !== null ? this.#marks.since : performance.now(),
       nodes,
       groupsAt,
+      enemies,
       roads: [],
       charges,
       vpBadges,

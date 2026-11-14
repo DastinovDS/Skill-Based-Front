@@ -44,6 +44,7 @@
   const keys = $derived({
     label: (action: Parameters<typeof keyBindings.label>[0]) => keyBindings.label(action),
     shift: t('tutorial.shift'),
+    esc: t('tutorial.esc'),
   });
 
   const sayKey = $derived(
@@ -129,6 +130,7 @@
         mark.capacity ??
         mark.warehouse ??
         mark.count ??
+        mark.enemy ??
         null;
       const node = name === null ? undefined : nodeNamed(map, name);
       const a = node === undefined ? null : anchors.node(node);
