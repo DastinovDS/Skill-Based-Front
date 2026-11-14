@@ -249,6 +249,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(botmatch.router)
     app.include_router(tutorialmatch.router)
     app.include_router(tutorialmatch.ruleset_router)
+    app.include_router(tutorialmatch.progress_router)
     app.include_router(matchqueue.router)
     app.include_router(clientlog.router)
     app.include_router(ws.router)

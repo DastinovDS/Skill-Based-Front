@@ -27,6 +27,7 @@ that has a row is started with ``match_id=str(matches.id)``, so replay files car
 """
 
 import asyncio
+import dataclasses
 import logging
 import shutil
 from dataclasses import dataclass, field
@@ -39,6 +40,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from gow_protocol.messages import PlayerColour
+from gow_protocol.tutorial import ChapterId
 from gow_server.clock import Clock
 from gow_server.colours import colour_of, resolve_sides
 from gow_server.ladder import (
@@ -59,6 +61,7 @@ from gow_server.matches import (
 )
 from gow_server.models import KIND_MATCH, KIND_TUTORIAL, Match, MatchPlayer, Player, utcnow
 from gow_server.tutorial import TutorialDirector
+from gow_server.tutorialprogress import mark_done
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
 
@@ -142,6 +145,8 @@ class _Result:
     has_result: bool
     tick_hz: int = 10
     """Ticks per second of the match's ruleset (the early-resign threshold is in seconds)."""
+    chapter_done: tuple[int, ChapterId] | None = None
+    """A tutorial chapter whose goal was reached: the account and the chapter (#806)."""
 
 
 class MatchLifecycle:
@@ -339,6 +344,11 @@ class MatchLifecycle:
         record.advance(MatchState.FINISHED)
         self._release(record)
         result = _result_of(runner, failure)
+        director = runner.tutorial
+        if director is not None and director.done and record.accounts:
+            result = dataclasses.replace(
+                result, chapter_done=(record.accounts[0], director.chapter.id)
+            )
         task = asyncio.create_task(self._save(record, result), name=f"save-{runner.match_id}")
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -348,6 +358,8 @@ class MatchLifecycle:
         assert match_id is not None
         try:
             await asyncio.to_thread(self._write_result, int(match_id), result)
+            if result.chapter_done is not None:  # the server records the goal itself (#806)
+                await asyncio.to_thread(self._write_chapter, *result.chapter_done)
         except Exception:
             log.exception("match result not saved", extra={"match_id": match_id})
         else:
@@ -413,6 +425,10 @@ class MatchLifecycle:
                     )
                 )
             return match.id, plan, colours
+
+    def _write_chapter(self, account: int, chapter: ChapterId) -> None:
+        with self._sessions() as session:
+            mark_done(session, account, chapter)
 
     def _write_result(self, pk: int, result: _Result) -> None:
         with self._sessions.begin() as session:
