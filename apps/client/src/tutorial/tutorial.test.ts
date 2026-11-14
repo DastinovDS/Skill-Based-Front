@@ -2,12 +2,12 @@
 // their texts, the gate of each beat (section 4.9), the allow matcher (section 7.3, the server's
 // `pattern_matches`), the coach on recorded `tutorial` streams, the progress (section 7.8).
 // Expected values come from tutorial.md, not from the code.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { en } from '../i18n/en.ts';
 import type { Command, MapFile, TutorialMsg, UiFlag } from '../protocol.gen.ts';
 import { commandAllowed, type AllowContext } from './allow.ts';
 import { chapterMap, chapterOf, CHAPTER_IDS, GOAL_COUNT, nodeNamed } from './chapters.ts';
-import { TutorialCoach } from './coach.svelte.ts';
+import { BEAT_FALLBACK_MS, standingOrders, TutorialCoach } from './coach.svelte.ts';
 import { allowOf, FULL_GATE, gateOf, UI_FLAGS } from './gate.ts';
 import {
   defaultSeat,
@@ -58,7 +58,8 @@ describe('chapter files and texts', () => {
     const META = /^(name|why|length|goal\d|lesson\d)$/;
     for (const id of CHAPTER_IDS) {
       const chapter = chapterOf(id);
-      const beats = [...chapter.beats, ...(chapter.fails ?? [])];
+      // A focus beat (review 4, P5) has no card and no text.
+      const beats = [...chapter.beats, ...(chapter.fails ?? [])].filter((b) => b.focus == null);
       const want = new Set<string>();
       for (const beat of beats) {
         const base = `tutorial.${id}.${beat.id}`;
@@ -369,7 +370,8 @@ describe('coach on recorded tutorial streams', () => {
     paused: boolean,
     used: number[] = [],
     done = false,
-  ): TutorialMsg => ({ type: 'tutorial', chapter, beat, paused, used, done });
+    tick = 0,
+  ): TutorialMsg => ({ type: 'tutorial', chapter, beat, paused, used, done, tick });
 
   function coachOf(id: Parameters<typeof chapterOf>[0], at: Record<string, string | null> = {}) {
     const chapter = chapterOf(id);
@@ -387,6 +389,8 @@ describe('coach on recorded tutorial streams', () => {
         },
       },
     });
+    // The map has drawn the chapter's first tick: the beats of tick 0 show at once.
+    coach.onRender(0);
     return { coach, map, resumed: () => resumed };
   }
 
@@ -422,14 +426,22 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.current.card?.canContinue).toBe(true);
     coach.continue();
     expect(resumed()).toBe(1);
+    // Continued: the card and its marks go while the army walks (review 4, P2).
     coach.onMessage(msg('units', '3', false, []));
-    expect(coach.current.card?.canContinue).toBe(false);
+    expect(coach.current.card).toBeNull();
     expect(coach.current.paused).toBe(false);
     coach.onMessage(msg('units', '4', true, []));
     coach.onMessage(msg('units', '5', true, [0, 0]));
+    expect(coach.current.card?.id).toBe('5');
     expect(coach.allows({ type: 'cancel_order', group: 'g' })).toBe(true);
+    // The move stands: the card goes; called back, it comes again; sent again, it goes.
+    coach.onMessage(msg('units', '5', false, [1, 0]));
+    expect(coach.current.card).toBeNull();
     coach.onMessage(msg('units', '5', false, [1, 1]));
+    expect(coach.current.card?.id).toBe('5');
     expect(coach.allows({ type: 'cancel_order', group: 'g' })).toBe(false);
+    coach.onMessage(msg('units', '5', false, [2, 1]));
+    expect(coach.current.card).toBeNull();
     coach.onMessage(msg('units', '7', true, [0]));
     expect(coach.current.card?.turns?.map((t) => t.word)).toEqual([
       'plains',
@@ -499,6 +511,86 @@ describe('coach on recorded tutorial streams', () => {
     coach.continue();
     expect(resumed()).toBe(0);
     expect(coach.sealed).toBe(true);
+  });
+
+  it('shows a beat only once the map has drawn its tick (review 4, P1)', () => {
+    const { coach } = coachOf('units', { g: 'Highhold' });
+    coach.onMessage(msg('units', '3', true, [], false, 1));
+    coach.onRender(1);
+    expect(coach.current.card?.id).toBe('3');
+    coach.onMessage(msg('units', '3', false, [], false, 1));
+    // I.4 begins at 77; the map is still at 75: nothing shows, the pause is the server's already.
+    coach.onRender(75);
+    coach.onMessage(msg('units', '4', true, [], false, 77));
+    expect(coach.current.card).toBeNull();
+    expect(coach.current.paused).toBe(true);
+    coach.onRender(76);
+    expect(coach.current.card).toBeNull();
+    coach.onRender(77);
+    expect(coach.current.card?.id).toBe('4');
+    expect(coach.current.card?.canContinue).toBe(true);
+  });
+
+  it('shows a beat anyway when the map draws nothing for a while', () => {
+    vi.useFakeTimers();
+    try {
+      const { coach } = coachOf('units', { g: 'Highhold' });
+      coach.onMessage(msg('units', '4', true, [], false, 77));
+      expect(coach.current.card).toBeNull();
+      vi.advanceTimersByTime(BEAT_FALLBACK_MS - 1);
+      expect(coach.current.card).toBeNull();
+      vi.advanceTimersByTime(1);
+      expect(coach.current.card?.id).toBe('4');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a card that asks for two orders until both stand (A2.2)', () => {
+    const { coach } = coachOf('rally-points');
+    coach.onMessage(msg('rally-points', '2', true, [0]));
+    expect(coach.current.card?.id).toBe('2');
+    coach.onMessage(msg('rally-points', '2', false, [1]));
+    expect(coach.current.card?.id).toBe('2');
+    coach.onMessage(msg('rally-points', '2', false, [2]));
+    expect(coach.current.card).toBeNull();
+  });
+
+  it('keeps the failure card after Continue until the plan is given (IV.F)', () => {
+    const { coach } = coachOf('attack', { g: 'Fernhold' });
+    coach.onMessage(msg('attack', 'F', true, [0]));
+    coach.onMessage(msg('attack', 'F', false, [0]));
+    expect(coach.current.card?.id).toBe('F');
+    expect(coach.current.card?.canContinue).toBe(false);
+    coach.onMessage(msg('attack', 'F', false, [1]));
+    expect(coach.current.card).toBeNull();
+  });
+
+  it('walks a focus phase: no card, its marks, no step lozenge (review 4, P5)', () => {
+    const { coach } = coachOf('economy');
+    coach.onMessage(msg('economy', '1', true, []));
+    expect(coach.current.card?.steps).toBe(4);
+    expect(coach.current.focus).toBeNull();
+    const seq = coach.current.seq;
+    coach.onMessage(msg('economy', '1W', false, []));
+    expect(coach.current.card).toBeNull();
+    expect(coach.current.focus).toEqual([{ hud: 'cp' }]);
+    expect(coach.hudMarks()).toEqual(['cp']);
+    expect(coach.current.seq).toBeGreaterThan(seq);
+    coach.onMessage(msg('economy', '2', true, [], false, 105));
+    expect(coach.current.focus).toBeNull();
+    coach.onRender(105);
+    expect(coach.current.card?.id).toBe('2');
+    expect(coach.current.card?.step).toBe(2);
+    expect(coach.shows('supply')).toBe(true);
+  });
+
+  it('counts the standing orders, a cancel taking one back', () => {
+    const allow = chapterOf('units').beats[4]?.allow ?? [];
+    expect(standingOrders(allow, [0, 0])).toBe(0);
+    expect(standingOrders(allow, [1, 0])).toBe(1);
+    expect(standingOrders(allow, [1, 1])).toBe(0);
+    expect(standingOrders(allow, [2, 1])).toBe(1);
   });
 
   it('shows no card before the first beat (chapter V) and allows nothing', () => {

@@ -313,6 +313,22 @@ export class Token {
   }
 
   /**
+   * The box of the count under the helmet (a range's pill, "1-2") in the coordinates of the token's
+   * parent (world units), or of the number in the dome; `null`: no count is shown. The tutorial
+   * lights it (review 4, P3).
+   */
+  countBox(): { x: number; y: number; w: number; h: number } | null {
+    if (!this.view.visible || !this.label.visible || !this.counted) return null;
+    const pill = this.pill.width > 0;
+    const w = pill ? this.pill.width : this.count.width;
+    const h = pill ? UNIT_LABEL.height : this.count.height;
+    const lx = this.label.x - w / 2;
+    const ly = pill ? this.label.y : this.label.y - h / 2;
+    const s = this.view.scale.x;
+    return { x: this.view.x + lx * s, y: this.view.y + ly * s, w: w * s, h: h * s };
+  }
+
+  /**
    * Screen px per unit of the token's drawing (the camera times every scale above it): the badges
    * grow so that they are never under `BADGE.minPx` on screen (ui-style 32, the exception to 22).
    */

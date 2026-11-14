@@ -217,6 +217,11 @@ export class MatchSession implements RenderSource {
       case 'ack':
         this.orders.onAck(msg);
         break;
+      case 'tutorial':
+        // A chapter waiting at a card holds the match still: the map plays out to the newest
+        // snapshot, so the card is seen over the frame of its tick (#1047, P1).
+        this.buffer.held = msg.paused;
+        break;
       case 'match_end':
         this.orders.undo.clear();
         // The last snapshot is drawn too (#819: a capital's capture is seen before the result).

@@ -146,7 +146,14 @@
         }
         continue;
       }
-      const name = mark.node ?? mark.group ?? mark.vp_badge ?? null;
+      const name =
+        mark.node ??
+        mark.group ??
+        mark.vp_badge ??
+        mark.capacity ??
+        mark.warehouse ??
+        mark.count ??
+        null;
       const node = name === null ? undefined : nodeNamed(map, name);
       const a = node === undefined ? null : anchors.node(node);
       if (a !== null)

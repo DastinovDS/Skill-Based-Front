@@ -187,6 +187,26 @@ describe('SnapshotBuffer', () => {
     expect(buffer.sample()?.tick).toBe(201);
   });
 
+  it('plays out to the newest snapshot while held, and never runs back after (#1047)', () => {
+    const buffer = new SnapshotBuffer({ delayTicks: 2 });
+    for (const tick of [100, 101, 102]) buffer.push(moving(tick));
+    buffer.sample();
+    // A chapter waits at a card: no snapshot comes, the map reaches the card's tick.
+    buffer.held = true;
+    vi.advanceTimersByTime(10_000);
+    expect(buffer.sample()?.base.tick).toBe(102);
+    buffer.held = false;
+    buffer.push(moving(103));
+    vi.advanceTimersByTime(100);
+    expect(buffer.sample()?.tick).toBe(102);
+    buffer.push(moving(104));
+    vi.advanceTimersByTime(100);
+    expect(buffer.sample()?.tick).toBe(103);
+    buffer.push(moving(105));
+    vi.advanceTimersByTime(100);
+    expect(buffer.sample()?.tick).toBe(104);
+  });
+
   it('jumps into the window after a long pause of rendering', () => {
     const buffer = new SnapshotBuffer({ delayTicks: 2 });
     buffer.push(moving(100));

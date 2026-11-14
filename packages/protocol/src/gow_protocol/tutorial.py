@@ -50,7 +50,8 @@ type ChapterId = Literal[
 ]
 
 BeatId = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9]{1,8}$")]
-"""``1`` .. ``9`` for the beats of a chapter, ``F`` for its failure (IV.F)."""
+"""``1`` .. ``9`` for the beats of a chapter, ``F`` for its failure (IV.F), ``<n>W`` for the focus
+phase after beat ``<n>`` (review 4, P5)."""
 
 type UiFlag = Literal[
     "terrainMode",
@@ -234,8 +235,13 @@ class Trigger(TutorialModel):
     Exactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,
     with filters), ``accepted`` (an own command the server accepted, by its pattern; the places
     are those at the moment it was sent), ``view`` (a fact of the own view), ``continued``
-    (Continue on that beat, ``after`` ticks later), ``ui`` (client only: a selection) or ``any``
-    (the first of several that fires).
+    (Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several
+    that fires).
+
+    ``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal
+    condition): the beat begins that many ticks after its trigger fired, so the map has drawn
+    what the card names (a capture's flood, the shots of a round) before the card shows (review
+    4, P1).
     """
 
     start: Literal[True] | None = None
@@ -261,7 +267,8 @@ class Trigger(TutorialModel):
     view: ViewFact | None = None
     continued: BeatId | None = None
     after: NonNegInt = 0
-    """With ``continued``: ticks after the Continue."""
+    """Ticks from the trigger to the beginning of the beat (with ``continued``: after the
+    Continue)."""
     ui: Literal["select"] | None = None
     group: NodeName | None = None
     """With ``ui``: the own group standing in this node; ``None``: any own group."""
@@ -282,8 +289,11 @@ class Trigger(TutorialModel):
                 raise ValueError(f"event filters without an event: {used}")
         elif self.event not in EVENT_FIELDS:
             raise ValueError(f"unknown event kind {self.event!r}")
-        if self.after and self.continued is None:
-            raise ValueError("after goes with continued")
+        if self.after and (self.start is not None or self.ui is not None):
+            raise ValueError("after goes with a trigger the server fires")
+        for inner in self.any or ():
+            if inner.after:
+                raise ValueError("after goes on the outer trigger of any")
         if self.group is not None and self.ui is None:
             raise ValueError("group goes with ui")
         if self.any is not None and not self.any:
@@ -297,9 +307,23 @@ type HudPiece = Literal["cp", "stance", "vp", "clock", "alerts", "factories"]
 type MenuItem = Literal["factory", "barracks", "recruit", "fortify", "rally"]
 
 
+_MARKS: Final = (
+    "node",
+    "group",
+    "road",
+    "hud",
+    "menu",
+    "vp_badge",
+    "capacity",
+    "warehouse",
+    "count",
+)
+
+
 class Mark(TutorialModel):
     """The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item
-    of a node or the VP badge of a city."""
+    of a node or the VP badge of a city; or the element of a place the card names, lit itself
+    (review 4, P3): its capacity ring, its warehouse row, the count under its group."""
 
     node: NodeName | None = None
     ring: bool = False
@@ -312,10 +336,16 @@ class Mark(TutorialModel):
     at: NodeName | None = None
     """With ``menu``: the node whose menu holds the item."""
     vp_badge: NodeName | None = None
+    capacity: NodeName | None = None
+    """The segments of the place's capacity ring."""
+    warehouse: NodeName | None = None
+    """The row of lozenges under the place (its warehouse)."""
+    count: NodeName | None = None
+    """The number or range under the group in the place (an enemy's ``1-2``)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        _one_of(self, ("node", "group", "road", "hud", "menu", "vp_badge"), "a mark")
+        _one_of(self, _MARKS, "a mark")
         if (self.menu is None) != (self.at is None):
             raise ValueError("menu and at go together")
         if self.ring and self.node is None:
@@ -334,7 +364,10 @@ type Pause = Literal["continue", "action"]
 
 
 class Beat(TutorialModel):
-    """One hint card (section 4.0): it shows when its trigger fires and stays until the next."""
+    """One hint card (section 4.0): it shows when its trigger fires (``on.after`` ticks later)
+    and stays until the next, or until the player did what it asks (review 4, P2). A ``focus``
+    beat has no card: for that many ticks the game runs with no text and its marks light the
+    places to watch (P5)."""
 
     id: BeatId
     on: Trigger
@@ -359,11 +392,31 @@ class Beat(TutorialModel):
     optional: bool = False
     """The beat after it may begin first, and this one is then passed over (IV.5: the enemy plan
     is seen only on the planned path; on the failure path it is over before the plan)."""
+    focus: PosInt | None = None
+    """A focus phase (review 4, P5): no card and no text for this many ticks, the game runs and
+    the marks light what makes or carries charges; the beat after it begins when its trigger has
+    fired and the focus is over."""
+    acts: PosInt = 1
+    """Client only: the commands of ``allow`` the card asks for; once that many stand (a cancel
+    takes one back), the card goes until the next beat (review 4, P2; A2.2: two recruits)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.on.ui is not None and (self.pause is not None or self.allow is not None):
             raise ValueError(f"beat {self.id}: a UI beat neither pauses nor sets allow")
+        if self.focus is not None:
+            card = (
+                self.pause is not None
+                or self.allow is not None
+                or self.on.ui is not None
+                or self.turns
+                or self.slides != 1
+                or self.with_goal
+                or self.optional
+                or self.acts != 1
+            )
+            if card:
+                raise ValueError(f"beat {self.id}: a focus beat is no card (no pause, allow, ...)")
         if self.on.since is not None or self.on.count != 1:
             raise ValueError(f"beat {self.id}: since and count are for the goal")
         return self
@@ -372,6 +425,11 @@ class Beat(TutorialModel):
     def client_only(self) -> bool:
         """A beat the server never sees fire (a selection)."""
         return self.on.ui is not None
+
+    @property
+    def card(self) -> bool:
+        """The beat shows a card (a focus beat does not): it has a text and a step lozenge."""
+        return self.focus is None
 
 
 # Opponent and goal ----------------------------------------------------------------------------
@@ -418,6 +476,8 @@ class Goal(TutorialModel):
         for cond in self.all:
             if cond.event is None and cond.view is None:
                 raise ValueError("a goal condition is an event or a view fact")
+            if cond.after:
+                raise ValueError("a goal condition has no after")
         return self
 
 
@@ -448,11 +508,11 @@ class Chapter(TutorialModel):
             raise ValueError(f"beat ids repeat: {ids}")
         if self.beats[0].allow is None and not self.beats[0].client_only:
             raise ValueError("the first beat sets allow")
-        if self.beats[0].client_only:
-            raise ValueError("the first beat is not a UI beat")
+        if self.beats[0].client_only or not self.beats[0].card:
+            raise ValueError("the first beat is a card, not a UI or focus beat")
         for beat in self.fails:
-            if beat.allow is None or beat.client_only:
-                raise ValueError(f"failure beat {beat.id}: sets allow, not a UI beat")
+            if beat.allow is None or beat.client_only or not beat.card:
+                raise ValueError(f"failure beat {beat.id}: sets allow, not a UI or focus beat")
         known = set(ids)
         for trigger in _triggers(self):
             if trigger.continued is not None and trigger.continued not in known:
@@ -531,7 +591,19 @@ def _names(chapter: Chapter) -> list[str]:
         for allow in beat.allow or ():
             pattern(allow)
         for mark in beat.mark:
-            names += [n for n in (mark.node, mark.group, mark.at, mark.vp_badge) if n is not None]
+            names += [
+                n
+                for n in (
+                    mark.node,
+                    mark.group,
+                    mark.at,
+                    mark.vp_badge,
+                    mark.capacity,
+                    mark.warehouse,
+                    mark.count,
+                )
+                if n is not None
+            ]
             names += list(mark.road or ())
         for turn in beat.turns:
             names += list(turn.nodes)

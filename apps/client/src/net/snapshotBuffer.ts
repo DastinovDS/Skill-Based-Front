@@ -31,6 +31,7 @@ export type PushResult = 'added' | 'duplicate' | 'stale';
 export class SnapshotBuffer {
   #delayTicks: number;
   #finished = false;
+  #held = false;
   readonly #capacity: number;
   readonly #tickMs: number;
   readonly #now: () => number;
@@ -96,6 +97,21 @@ export class SnapshotBuffer {
     this.#finished = true;
   }
 
+  /**
+   * The server holds the match still (a tutorial chapter waits at a card, #806): no snapshot comes
+   * until it resumes, so the render time may run on up to the newest one, like after `finish()`,
+   * and the card is seen over the frame of its own tick (review 4, P1). After the hold the render
+   * time waits there until the snapshots are `delayTicks` ahead again (the window's upper bound is
+   * at least the held tick then): it never runs back.
+   */
+  set held(on: boolean) {
+    this.#held = on;
+  }
+
+  get held(): boolean {
+    return this.#held;
+  }
+
   /** The frame to draw now; `null` until the first snapshot. */
   sample(): RenderFrame | null {
     const newest = this.newestTick;
@@ -106,7 +122,7 @@ export class SnapshotBuffer {
     this.#renderTick += (now - this.#lastSampleAt) / this.#tickMs;
     this.#lastSampleAt = now;
     const earliest = newest - this.#delayTicks;
-    const latest = this.#finished ? newest : Math.min(newest, earliest + 1);
+    const latest = this.#finished || this.#held ? newest : Math.min(newest, earliest + 1);
     this.#renderTick = Math.min(latest, Math.max(earliest, this.#renderTick));
 
     // `a`: the newest snapshot not after the render time (the oldest one if none is);

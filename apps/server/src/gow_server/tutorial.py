@@ -16,6 +16,10 @@ runner (``gow_server.matches.MatchRunner``) with what the player receives anyway
   Continue tries the next beats on the same tick again (two lessons of one tick, IV.7 and IV.8
   on the failure path). A failure beat (``fails``) fires once, from any beat, and the beats go
   on after it.
+- **Waits** (review 4). A trigger with ``after`` arms its beat, which begins that many ticks
+  later (the map draws a capture or a round first, P1); a focus beat (``focus``, P5) runs at
+  least that many ticks, and a beat whose trigger fires meanwhile begins when it is over. An
+  armed beat holds back the goal, so its card shows before the result (A1.5).
 - **Locks.** ``admit`` matches a command of the player against the ``allow`` of the current
   beat on the state when it is sent (the node a group stands in): a command no entry allows, or
   one past its ``max``, is refused (the runner answers ``INVALID_ARGUMENT`` and the simulation
@@ -266,7 +270,16 @@ class TutorialDirector:
         """The current beat of ``chapter.beats``; ``None`` before the first one."""
         self._fail: Beat | None = None
         """The failure beat shown now, over the main beat (``_index`` stays)."""
+        self._began = 0
+        """The tick the beat shown now began (``TutorialMsg.tick``)."""
+        self._armed: list[tuple[int, int]] = []
+        """The beats whose triggers fired, in order, with the tick each begins: ``(index,
+        tick)``."""
+        self._focus_end: int | None = None
+        """The tick the focus beat shown now is over; ``None``: no focus."""
         self._fired_fails: set[str] = set()
+        self._fails_at: dict[str, int] = {}
+        """A failure beat whose trigger fired -> the tick it begins (its ``after``)."""
         self._entered: set[str] = set()
         self._continued: dict[str, int] = {}
         """Beat id -> the tick of its Continue."""
@@ -307,6 +320,7 @@ class TutorialDirector:
             paused=self.paused,
             used=tuple(self._used),
             done=self.done,
+            tick=self._began,
         )
 
     # Locks -------------------------------------------------------------------------------
@@ -352,11 +366,16 @@ class TutorialDirector:
         for beat in self.chapter.fails:
             if beat.id not in self._fired_fails and self._fires(beat.on, now):
                 self._fired_fails.add(beat.id)
+                self._fails_at[beat.id] = tick + beat.on.after
+        for beat in self.chapter.fails:
+            at = self._fails_at.get(beat.id)
+            if at is not None and tick >= at:
+                del self._fails_at[beat.id]
                 self._enter(beat, fail=True)
         if not self.paused:
             self._advance()
         self._count_goal_events(now)
-        if not self.done and self._goal_holds(now):
+        if not self.done and not self._armed and self._goal_holds(now):
             self.done = True
 
     def continue_(self) -> bool:
@@ -371,30 +390,60 @@ class TutorialDirector:
         return True
 
     def _advance(self) -> None:
-        """Begin the next beats whose triggers fire now, until one pauses."""
+        """Begin the next beats whose triggers fire now, until one pauses. A beat whose trigger
+        fired before its time (``after``, a focus not over, an armed beat before it) is armed;
+        the beats after it go on being tried in order, and each begins in turn."""
         beats = self.chapter.beats
         while not self.paused:
-            start = 0 if self._index is None else self._index + 1
-            fired = None
+            if self._armed:
+                index, at = self._armed[0]
+                if self.tick >= at:
+                    self._armed.pop(0)
+                    self._begin(index)
+                    continue
+            last = self._armed[-1][0] if self._armed else self._index
+            start = 0 if last is None else last + 1
+            fired: tuple[int, int] | None = None
             for j in range(start, len(beats)):
                 beat = beats[j]
                 if beat.client_only:
                     continue
-                if self._fires(beat.on, self._now):
-                    fired = j
+                at = self._fired_at(beat.on, self._now)
+                if at is not None:
+                    fired = (j, at + beat.on.after)
                     break
                 if not beat.optional:
                     break
             if fired is None:
                 return
-            self._index = fired
-            self._fail = None
-            self._enter(beats[fired], fail=False)
+            index, at = fired
+            at = max(at, self._ready_at())
+            if at > self.tick or self._armed:
+                self._armed.append((index, at))
+                continue
+            self._begin(index)
+
+    def _ready_at(self) -> int:
+        """The first tick a beat that fires now may begin: after the beats armed before it and
+        after the focus before it."""
+        if not self._armed:
+            return self._focus_end or 0
+        index, at = self._armed[-1]
+        focus = self.chapter.beats[index].focus
+        return at + (focus or 0)
+
+    def _begin(self, index: int) -> None:
+        self._index = index
+        self._fail = None
+        self._enter(self.chapter.beats[index], fail=False)
 
     def _enter(self, beat: Beat, *, fail: bool) -> None:
         if fail:
             self._fail = beat
         self._entered.add(beat.id)
+        self._began = self.tick
+        if not fail:
+            self._focus_end = None if beat.focus is None else self.tick + beat.focus
         if beat.allow is not None:
             self._allow = beat.allow
             self._generation += 1
@@ -407,21 +456,27 @@ class TutorialDirector:
     # Triggers ----------------------------------------------------------------------------
 
     def _fires(self, trigger: Trigger, now: _Tick) -> bool:
+        return self._fired_at(trigger, now) is not None
+
+    def _fired_at(self, trigger: Trigger, now: _Tick) -> int | None:
+        """The tick ``trigger`` fired (now, or the tick of the Continue it names); ``None``: it
+        has not."""
         if trigger.start is not None:
-            return self._starting
-        if trigger.any is not None:
-            return any(self._fires(inner, now) for inner in trigger.any)
-        if trigger.event is not None:
-            return any(self._event_matches(trigger, e) for e in now.events)
-        if trigger.accepted is not None:
-            pattern = trigger.accepted
-            return any(pattern_matches(pattern, f, self._ids) for f in now.accepted)
-        if trigger.view is not None:
-            return now.view is not None and self._view_holds(trigger.view, now.view)
+            return 0 if self._starting else None
         if trigger.continued is not None:
-            at = self._continued.get(trigger.continued)
-            return at is not None and self.tick >= at + trigger.after
-        return False  # ``ui``: the client's
+            return self._continued.get(trigger.continued)
+        if trigger.any is not None:
+            fired = any(self._fires(inner, now) for inner in trigger.any)
+        elif trigger.event is not None:
+            fired = any(self._event_matches(trigger, e) for e in now.events)
+        elif trigger.accepted is not None:
+            pattern = trigger.accepted
+            fired = any(pattern_matches(pattern, f, self._ids) for f in now.accepted)
+        elif trigger.view is not None:
+            fired = now.view is not None and self._view_holds(trigger.view, now.view)
+        else:
+            fired = False  # ``ui``: the client's
+        return self.tick if fired else None
 
     def _side(self, side: Side) -> int:
         return self.player if side == "you" else 1 - self.player

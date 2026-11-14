@@ -204,6 +204,11 @@ export class EntityView implements EnemyAnchors {
     return this.icons;
   }
 
+  /** The box of the count under the enemy token in `node` (world units); `null`: none shown. */
+  enemyCountBox(node: number): { x: number; y: number; w: number; h: number } | null {
+    return this.enemyNodes[node]?.countBox() ?? null;
+  }
+
   nodePoint(node: number): Point | undefined {
     const token = this.enemyNodes[node];
     return token?.view.visible === true ? { x: token.view.x, y: token.view.y } : undefined;

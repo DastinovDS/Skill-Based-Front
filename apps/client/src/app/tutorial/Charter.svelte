@@ -898,7 +898,7 @@
     top: 478px;
     width: 660px;
     margin: 0;
-    padding-top: 22px;
+    padding-top: 16px;
   }
 
   .dt::before {
@@ -931,6 +931,8 @@
   .dt .why {
     margin: 0;
     max-width: 640px;
+    /* Two lines are kept for every chapter, so the buttons below stand still (review 4, P6). */
+    min-height: calc(2 * 1.35em);
     font: italic 500 19px/1.35 var(--font-text);
     color: var(--ink-soft);
   }
@@ -945,7 +947,7 @@
     display: flex;
     align-items: center;
     gap: 22px;
-    margin-top: 18px;
+    margin-top: 12px;
   }
 
   .tab {

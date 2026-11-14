@@ -456,6 +456,26 @@ export class CityView {
   }
 
   /**
+   * The warehouse row under the city `id`, world units: the centres of its first and last lozenge
+   * and their height; `null`: no row is drawn there (the tutorial lights it, review 4, P3).
+   */
+  warehouseRow(id: number): { x0: number; x1: number; y: number } | null {
+    const state = this.states[id];
+    if (state === null || state === undefined || state.warehouse === null) return null;
+    const count = state.warehouseCap ?? state.warehouse;
+    if (count <= 0) return null;
+    const first = this.warehouseSlot(id, 0);
+    const last = this.warehouseSlot(id, count - 1);
+    if (first === null || last === null) return null;
+    return { x0: first.x, x1: last.x, y: first.y };
+  }
+
+  /** The capacity of the node `id` as the snapshot gives it; `null`: not known. */
+  capacityOf(id: number): number | null {
+    return this.states[id]?.capacity ?? null;
+  }
+
+  /**
    * Per node, how long (ms) a capture in the next snapshot keeps the old body before it fades, so that
    * the city flips with the flood as the winner walks in (Walk in, #856); set before `update`.
    */

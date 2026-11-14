@@ -515,12 +515,18 @@ export class MapScene {
     const points = this.entities.groupPoints();
     this.coach.update(
       this.source.coachMarks?.() ?? null,
-      (node) => {
-        for (const group of frame.base.view.groups) {
-          if (group.location.kind !== 'node' || group.location.node !== node) continue;
-          return points.get(group.id) ?? null;
-        }
-        return null;
+      {
+        groupAt: (node) => {
+          for (const group of frame.base.view.groups) {
+            if (group.location.kind !== 'node' || group.location.node !== node) continue;
+            return points.get(group.id) ?? null;
+          }
+          return null;
+        },
+        capacityOf: (node) => this.cities.capacityOf(node),
+        warehouseRow: (node) => this.cities.warehouseRow(node),
+        countBox: (node) => this.entities.enemyCountBox(node),
+        cell: (node) => this.view.cells[node] ?? null,
       },
       performance.now(),
     );
