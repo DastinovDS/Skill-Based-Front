@@ -74,6 +74,8 @@ export class HudState {
   /** Charged walks the map has not drawn leaving yet: their flight waits for the render tick. */
   #paidWaiting: { walk: WalkPaid; tick: number; timer: ReturnType<typeof setTimeout> }[] = [];
   #credit: VpCredit | null = null;
+  /** A tutorial chapter's clock (#1054): the tick it runs out, or null. */
+  #clockEnd: number | null = null;
   #extraSeq = 0;
   /** Told after each change of `current` (the order controller steps on them, ARC-C01). */
   #listeners: (() => void)[] = [];
@@ -163,6 +165,13 @@ export class HudState {
    * event arrived, so the news does not run ahead of the picture (the map renders a few ticks
    * behind the newest snapshot).
    */
+  /** A tutorial chapter's clock runs out at `tick` (#1054, IV.10); null: the match's own end. */
+  setClockEnd(tick: number | null): void {
+    if (tick === this.#clockEnd) return;
+    this.#clockEnd = tick;
+    this.#publish();
+  }
+
   onRender(tick: number): void {
     this.toasts.release(tick);
     for (const entry of [...this.#paidWaiting]) {
@@ -324,6 +333,7 @@ export class HudState {
       pending: this.#pending,
       paid: this.#paid,
       credit: this.#credit,
+      clockEnd: this.#clockEnd,
     });
     this.#tell();
   }

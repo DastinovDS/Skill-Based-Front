@@ -231,6 +231,14 @@ export class EntityView implements EnemyAnchors {
     return token?.view.visible === true ? { x: token.view.x, y: token.view.y } : undefined;
   }
 
+  /** The first enemy figure drawn on one of `edges`, or null (#1054: a coach mark follows it). */
+  enemyFigureOn(edges: readonly number[]): Point | null {
+    for (const spot of this.figures.spots()) {
+      if (edges.includes(spot.edge) && spot.view.visible) return spot.at;
+    }
+    return null;
+  }
+
   nearestOnEdge(edge: number, to: Point): Point | undefined {
     let best: Point | undefined;
     let bestDistance = Infinity;

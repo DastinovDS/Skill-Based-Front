@@ -5,6 +5,7 @@
   "map": "tut-rally",
   "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
          "planned", "vp", "terrainMarks", "alerts", "fort"],
+  "always": [{"set_stance": {}}],
   "opponent": [],
   "beats": [
     {"id": "1", "on": {"start": true}, "pause": "action", "ui": ["rally"],

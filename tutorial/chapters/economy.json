@@ -3,6 +3,7 @@
   "road": "main",
   "number": 2,
   "map": "tut-supply",
+  "cp_ticks_start": 70,
   "ui": ["terrainMode"],
   "opponent": [
     {"at": 200, "move": {"from": "Ridgeway", "to": "Coldwell"}},
@@ -11,10 +12,10 @@
   "beats": [
     {"id": "1", "on": {"start": true}, "pause": "continue", "allow": [], "ui": ["cp", "notices"],
      "mark": [{"hud": "cp"}]},
-    {"id": "1W", "on": {"continued": "1"}, "focus": 105,
+    {"id": "1W", "on": {"continued": "1"}, "focus": 35,
      "mark": [{"hud": "cp"}]},
     {"id": "2", "on": {"continued": "1"}, "pause": "continue", "allow": [], "ui": ["supply"],
-     "mark": [{"road": ["Highhold", "Coldwell"]}]},
+     "mark": [{"node": "Highhold"}]},
     {"id": "2W", "on": {"continued": "2"}, "focus": 60,
      "mark": [{"node": "Highhold"}, {"road": ["Highhold", "Coldwell"]}, {"road": ["Highhold", "Millbrook"]},
               {"road": ["Millbrook", "Coldwell"]}, {"road": ["Coldwell", "Westmarch"]}, {"node": "Westmarch"}]},
@@ -23,10 +24,12 @@
      "mark": [{"warehouse": "Westmarch"}]},
     {"id": "3W", "on": {"continued": "3"}, "focus": 80,
      "mark": [{"warehouse": "Westmarch"}, {"road": ["Coldwell", "Westmarch"]}]},
-    {"id": "4", "on": {"view": {"starving": "Westmarch"}, "after": 12}, "pause": "action",
+    {"id": "4", "on": {"view": {"enemy_road": "Coldwell"}}, "allow": [],
+     "mark": [{"enemy": "Coldwell"}]},
+    {"id": "5", "on": {"view": {"starving": "Westmarch"}, "after": 12}, "pause": "action",
      "allow": [{"move": {"from": "Millbrook", "to": "Coldwell", "planned": false}}],
-     "mark": [{"node": "Westmarch"}, {"node": "Coldwell"}]}
+     "mark": [{"group": "Millbrook"}, {"node": "Coldwell"}, {"node": "Westmarch"}]}
   ],
   "fails": [],
-  "goal": {"all": [{"event": "node_captured", "node": "Coldwell", "by": "you", "since": "4"}]}
+  "goal": {"all": [{"event": "node_captured", "node": "Coldwell", "by": "you", "since": "5"}]}
 }

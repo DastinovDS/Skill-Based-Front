@@ -567,6 +567,10 @@ export class MapScene {
         capacityOf: (node) => this.cities.capacityOf(node),
         warehouseRow: (node) => this.cities.warehouseRow(node),
         countBox: (node) => this.entities.enemyCountBox(node),
+        enemyNear: (node) =>
+          this.entities.enemyFigureOn(
+            this.map.edges.filter((e) => e.a === node || e.b === node).map((e) => e.id),
+          ),
         cell: (node) => this.view.cells[node] ?? null,
         charges: (a, b) => this.entities.chargesOn(a, b),
         arenas: () => {

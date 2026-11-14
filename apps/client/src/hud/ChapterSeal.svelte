@@ -9,13 +9,15 @@
 
   interface Props {
     chapter: Chapter;
+    /** The chapter's clock ran out (IV): won by VP, said under the title (#1054). */
+    byClock?: boolean;
     /** "All chapters" (primary): the chapter select. */
     onchapters: () => void;
     /** "Replay chapter" (secondary): the chapter again at once. */
     onreplay: () => void;
   }
 
-  let { chapter, onchapters, onreplay }: Props = $props();
+  let { chapter, byClock = false, onchapters, onreplay }: Props = $props();
 
   let primary: HTMLButtonElement | undefined = $state();
   $effect(() => {
@@ -38,6 +40,9 @@
     <SealMark n={numeral(chapter)} advanced={chapter.road === 'advanced'} />
     <p class="lab">{chapterKicker(chapter)} · {chapterName(chapter)}</p>
     <h2 id="seal-title">{t('tutorial.result.title')}</h2>
+    {#if byClock}
+      <p class="by-clock">{t('tutorial.result.byClock')}</p>
+    {/if}
     <ul class="lesson">
       {#each lessonsOf(chapter) as lesson, i (i)}
         <li><span class="lz" aria-hidden="true"></span>{lesson}</li>
@@ -108,6 +113,12 @@
     margin: 6px 0 10px;
     font: 500 34px/1.1 var(--font-display);
     letter-spacing: 0.06em;
+  }
+
+  .by-clock {
+    margin: 0;
+    font: italic 500 17px/1.35 var(--font-text);
+    color: var(--ink);
   }
 
   .lesson {

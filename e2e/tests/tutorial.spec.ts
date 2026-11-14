@@ -16,8 +16,8 @@ async function shot(page: Page, name: string, settle = 900): Promise<void> {
 }
 
 /** The card on screen says `text`. */
-async function card(page: Page, text: string | RegExp): Promise<void> {
-  await expect(page.locator('.coach .plate')).toContainText(text, { timeout: 30_000 });
+async function card(page: Page, text: string | RegExp, timeout = 30_000): Promise<void> {
+  await expect(page.locator('.coach .plate')).toContainText(text, { timeout });
 }
 
 /** The group standing in `from` to `to`: select it, then click the place. */
@@ -89,7 +89,7 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Next, take Elmstead');
   await march(player, map, 'Ashford', 'Elmstead');
-  await card(page, 'You see only the places next to your groups');
+  await card(page, 'You see only the places next to your army');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Terrain sets your speed');
   // The marks in turn: a page a terrain, turned by the player (review 5, P9); the action line
@@ -134,7 +134,7 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await player.close();
 });
 
-test('the chapter select in progress, the slides of IV.2 and leaving a chapter', async ({
+test('the chapter select in progress, the head-on attack of IV.2 and leaving a chapter', async ({
   browser,
   baseURL,
 }) => {
@@ -158,17 +158,13 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   await expect(page.getByRole('heading', { name: 'Attack and fight' })).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
-  await card(page, 'every charge your units hold is a shot');
+  await card(page, 'each charge is a shot');
+  await shot(page, '11-shot');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'Count on two');
-  await expect(page.locator('.coach .plate')).toContainText('1 of 3');
-  await shot(page, '11-slides-1');
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await card(page, 'Your 3 units hold 3 charges');
-  await page.getByRole('button', { name: 'Next', exact: true }).click();
-  await card(page, 'no charge left');
-  await expect(page.locator('.coach .plate')).toContainText('Click on your group in Fernhold');
-  await shot(page, '12-slides-3');
+  // Review 5 (#1054): show, do not tell. The head-on attack first, no slides of math.
+  await card(page, 'Attack Ashwood');
+  await expect(page.locator('.coach .plate')).toContainText('Click on your group, then on Ashwood');
+  await shot(page, '12-head-on');
 
   // Leaving a chapter loses nothing: the chapter select.
   await page.getByRole('button', { name: 'Exit', exact: true }).click();
@@ -281,7 +277,7 @@ test('the rules from the chapter select, and the first match with its hints acro
   await player.close();
 });
 
-test('the cards that answer an order show nothing while the army walks (P2: A1.3, A2.3, IV.4)', async ({
+test('the cards that answer an order show nothing while the army walks (P2: A1.3, A2.3, IV.6)', async ({
   browser,
   baseURL,
 }) => {
@@ -339,7 +335,7 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await player.clickNode(rally, node(rally, 'Highhold'));
   await page.keyboard.press('KeyP');
   await player.clickNode(rally, node(rally, 'Fernhold'));
-  await card(page, 'Recruit two');
+  await card(page, 'to recruit two');
   await player.clickNode(rally, node(rally, 'Highhold'));
   await page.keyboard.press('KeyR');
   await page.keyboard.press('KeyR');
@@ -348,22 +344,27 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await shot(page, '15-a2-walking', 0);
   await leave();
 
-  // IV.4: the planned order is given, the card "gathers its bonus" is not shown.
+  // IV.6: the head-on attack bounces (IV.3), the planned order is given, the card "gathers its
+  // bonus" is not shown.
   await page.getByRole('button', { name: 'How to play' }).click();
   await page.getByRole('radio', { name: /Chapter IV/ }).click();
   await page.getByRole('button', { name: /^(Replay|Play again)$/ }).click();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   const attack = await mapOf('tut-attack');
-  await card(page, 'every charge your units hold is a shot');
+  await card(page, 'each charge is a shot');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'Count on two');
-  for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await card(page, 'Attack Ashwood');
+  await march(player, attack, 'Fernhold', 'Ashwood');
+  await card(page, 'charges ran out', 60_000);
+  await shot(page, '16-iv-bounce');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await card(page, 'full again', 60_000);
   await player.clickNode(attack, node(attack, 'Fernhold'));
   await card(page, 'planned order');
   await player.clickNode(attack, node(attack, 'Ashwood'), ['KeyE']);
   await page.waitForTimeout(1200);
   await expect(plate.filter({ hasText: 'gathers its bonus' })).toHaveCount(0);
-  await shot(page, '16-iv-walking', 0);
+  await shot(page, '17-iv-walking', 0);
   expect(errors).toEqual([]);
   await player.close();
 });

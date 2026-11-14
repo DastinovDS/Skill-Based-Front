@@ -24,6 +24,11 @@ export interface CoachMarks {
   /** The own group standing in each of these places is ringed. */
   readonly groupsAt: readonly number[];
   /**
+   * The enemy figure seen on a road that touches each of these places is ringed, followed as it
+   * walks (#1054, II.4: the raid on Coldwell).
+   */
+  readonly enemies?: readonly number[];
+  /**
    * Roads ruled by two rails and a chevron, by their two end nodes (the chevron points from the
    * first to the second): the first match's hints. A chapter's road marks light the charges
    * moving on the road instead (`charges`, review 5 P8: the map draws its own arrows there).
@@ -65,6 +70,8 @@ export const COMPASS = {
   wide: 5,
   /** Around a VP badge. */
   badge: 9,
+  /** Around an enemy figure on a road. */
+  figure: 15,
   /** The rails of a road mark stand this far either side of the road. */
   rail: 9,
   /** The compass points: half length and half width. */

@@ -1,9 +1,9 @@
 {
-  "meta": {"name": "tut-build", "version": 1, "symmetry": "none", "width": 1200, "height": 700},
+  "meta": {"name": "tut-build", "version": 2, "symmetry": "none", "width": 1200, "height": 700},
   "nodes": [
     {"id": 0, "name": "Highhold", "x": 170, "y": 350, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 6},
     {"id": 1, "name": "Millbrook", "x": 420, "y": 220, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 0},
-    {"id": 2, "name": "Fernhill", "x": 430, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 0},
+    {"id": 2, "name": "Fernhill", "x": 430, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 0},
     {"id": 3, "name": "Wyre", "x": 650, "y": 140, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 4, "name": "Lowfield", "x": 670, "y": 560, "terrain": "forest", "vp": 0, "kind": "province", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 5, "name": "Ashwood", "x": 820, "y": 350, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 1, "start_charged": 1, "start_stock": 0},

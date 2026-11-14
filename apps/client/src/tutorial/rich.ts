@@ -2,8 +2,8 @@
  * The text of a tutorial card (`docs/design/tutorial.md`, section 4.0): a dictionary string with a
  * little markup, cut into segments the card draws, so no markup string reaches the page
  * (`AGENTS.md` 7.4: no `{@html}`). `**word**` is bold; `{click}` the mouse glyph; `{warn_sign}` the
- * amber "waiting for charges" sign of the map; `{shift}` and `{<action>_key}` a key cap with the
- * player's own binding.
+ * amber "waiting for charges" sign of the map; `{shift}`, `{esc}` and `{<action>_key}` a key cap
+ * with the player's own binding (Shift and Esc are fixed keys).
  */
 import type { KeyAction } from '../app/keyBindings.ts';
 
@@ -30,6 +30,8 @@ export interface RichKeys {
   label(action: KeyAction): string;
   /** The readable name of Shift. */
   readonly shift: string;
+  /** The readable name of Esc (it lets go of the selection). */
+  readonly esc: string;
 }
 
 /** The segments of `source`; an unknown placeholder stays as text. */
@@ -52,6 +54,7 @@ export function richText(source: string, keys: RichKeys): Segment[] {
     else if (name === 'click') push({ kind: 'mouse' });
     else if (name === 'warn_sign') push({ kind: 'warn' });
     else if (name === 'shift') push({ kind: 'key', text: keys.shift });
+    else if (name === 'esc') push({ kind: 'key', text: keys.esc });
     else if (name !== undefined && Object.hasOwn(KEY_PLACEHOLDERS, name)) {
       push({ kind: 'key', text: keys.label(KEY_PLACEHOLDERS[name] as KeyAction) });
     } else push({ kind: 'text', text: match[0] });

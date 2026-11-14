@@ -333,6 +333,19 @@
     return state.listen(look);
   });
 
+  // A UI beat may begin on an open city menu (III.2, #1054): the coach looks at each one.
+  $effect(() => {
+    const tutor = coach;
+    const menu = orders?.cityMenu.current;
+    if (tutor === null || menu === undefined) return;
+    tutor.onMenu(menu.open ? menu.target : null);
+  });
+
+  // A chapter's clock (IV.10, #1054): the match timer shows the time left to it.
+  $effect(() => {
+    hud?.setClockEnd(coach?.current.clockEnd ?? null);
+  });
+
   // In a chapter the map draws what the beat shows, and the goal marks of its card (#806).
   const source = $derived.by<RenderSource | null>(() => {
     const live = session;
@@ -471,7 +484,7 @@
         }}
       />
     {:else if coach.sealed}
-      <ChapterSeal chapter={chapterFile} {onchapters} {onreplay} />
+      <ChapterSeal chapter={chapterFile} byClock={coach.current.byClock} {onchapters} {onreplay} />
     {/if}
   {/if}
 

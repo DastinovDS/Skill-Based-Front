@@ -1491,8 +1491,8 @@ export interface TutorialMsg {
   type: 'tutorial';
   chapter: ChapterId;
   /**
-   * The current beat of the chapter file (``F``: its failure beat); ``None`` before the first
-   * one (chapter V starts with the opponent's march).
+   * The current beat of the chapter file (``F``: a failure beat); ``None`` before the first
+   * one.
    */
   beat: string | null;
   /**
@@ -1514,6 +1514,15 @@ export interface TutorialMsg {
    * it draws has reached this tick (review 4, P1: the card speaks only about what is seen).
    */
   tick: number;
+  /**
+   * The tick the chapter's clock runs out (a beat's ``clock``, IV.10: the match timer shows the
+   * time left to it); ``None``: no clock. When it runs out the chapter ends as won by VP.
+   */
+  clock_end: number | null;
+  /**
+   * The chapter ended because its clock ran out (won by VP), not by its goal.
+   */
+  by_clock: boolean;
 }
 export interface MapFile {
   meta: MapMetaFile;
@@ -1612,6 +1621,19 @@ export interface Chapter {
    */
   cp_start?: 'cap' | number | null;
   /**
+   * The player's progress toward the next CP income at the start (``PlayerState.cp_ticks``,
+   * below the CP period of the start stance): the first income comes that many ticks earlier
+   * (II: about 3 s after its first card, review 5). A starting state, like a garrison, not a
+   * rule.
+   */
+  cp_ticks_start?: number;
+  /**
+   * Commands allowed at every beat of the chapter, besides each beat's ``allow`` (review 5,
+   * P10: the stance stays open after chapter III). They never end a card's pause and count
+   * against no ``max`` (none may be given).
+   */
+  always?: Allow[];
+  /**
    * The pieces shown at the start: those of the chapters before it (``check_chapters``).
    */
   ui?: UiFlag[];
@@ -1625,6 +1647,67 @@ export interface Chapter {
    */
   fails?: Beat[];
   goal: Goal;
+}
+/**
+ * A command a beat allows; ``max`` bounds how often it is accepted while the beat (or a
+ * beat that keeps its ``allow``) lasts. Leaving (``forfeit``) is always allowed.
+ */
+export interface Allow {
+  move?: MovePattern | null;
+  cancel_order?: GroupPattern | null;
+  build_factory?: NodePattern | null;
+  build_barracks?: NodePattern | null;
+  recruit?: NodePattern | null;
+  set_stance?: StancePattern | null;
+  fortify_road?: RoadPattern | null;
+  group_move?: GroupMovePattern | null;
+  set_rally_point?: RallyPattern | null;
+  max?: number | null;
+}
+export interface MovePattern {
+  /**
+   * The node the group stands in; ``None``: any.
+   */
+  from?: string | null;
+  to?: string | null;
+  /**
+   * ``True`` a planned order only, ``False`` an ordinary one only, ``None`` either.
+   */
+  planned?: boolean | null;
+}
+export interface GroupPattern {
+  /**
+   * The node the group stands in; ``None``: any own group.
+   */
+  from?: string | null;
+}
+export interface NodePattern {
+  node?: string | null;
+}
+export interface StancePattern {
+  stance?: Stance | null;
+}
+export interface RoadPattern {
+  node?: string | null;
+  /**
+   * The other end of the fortified road.
+   */
+  toward?: string | null;
+}
+export interface GroupMovePattern {
+  /**
+   * The nodes the groups stand in, one per group, in any order.
+   */
+  groups?: string[] | null;
+  to?: string | null;
+  planned?: boolean | null;
+}
+export interface RallyPattern {
+  node?: string | null;
+  /**
+   * The rally point; ``None``: any.
+   */
+  to?: string | null;
 }
 /**
  * One command of the scripted opponent (section 7.4), given once: at a tick (``at``: it
@@ -1675,7 +1758,7 @@ export interface Beat {
    */
   ui?: UiFlag[];
   /**
-   * HUD pieces the beat hides again (IV.9 hides the clock IV.8 showed).
+   * HUD pieces the beat hides again.
    */
   hide?: UiFlag[];
   mark?: Mark[];
@@ -1708,6 +1791,12 @@ export interface Beat {
    * takes one back), the card goes until the next beat (review 4, P2; A2.2: two recruits).
    */
   acts?: number;
+  /**
+   * The chapter's clock starts with this beat: the chapter ends that many ticks after the beat
+   * began, as won by VP, unless its goal came first (IV.10, review 5: the match timer shows it to
+   * the end of the chapter).
+   */
+  clock?: number | null;
 }
 /**
  * When a beat begins, or a condition of the goal (section 7.3, ``on``).
@@ -1715,8 +1804,11 @@ export interface Beat {
  * Exactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,
  * with filters), ``accepted`` (an own command the server accepted, by its pattern; the places
  * are those at the moment it was sent), ``view`` (a fact of the own view), ``continued``
- * (Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several
- * that fires).
+ * (Continue on that beat), ``ui`` (client only: a selection or an open city menu) or ``any``
+ * (the first of several that fires).
+ *
+ * ``ui`` is ``select`` (a selection: ``group`` the node the own group stands in) or ``menu`` (the
+ * city menu of ``node`` opens, III.2).
  *
  * ``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal
  * condition): the beat begins that many ticks after its trigger fired, so the map has drawn
@@ -1730,7 +1822,7 @@ export interface Trigger {
    */
   event?: string | null;
   /**
-   * The event's ``node``.
+   * The event's ``node``; with ``ui = "menu"``: the city whose menu opens.
    */
   node?: string | null;
   /**
@@ -1773,7 +1865,7 @@ export interface Trigger {
    * Continue).
    */
   after?: number;
-  ui?: 'select' | null;
+  ui?: ('select' | 'menu') | null;
   /**
    * With ``ui``: the own group standing in this node; ``None``: any own group.
    */
@@ -1801,51 +1893,6 @@ export interface CommandPattern {
   fortify_road?: RoadPattern | null;
   group_move?: GroupMovePattern | null;
   set_rally_point?: RallyPattern | null;
-}
-export interface MovePattern {
-  /**
-   * The node the group stands in; ``None``: any.
-   */
-  from?: string | null;
-  to?: string | null;
-  /**
-   * ``True`` a planned order only, ``False`` an ordinary one only, ``None`` either.
-   */
-  planned?: boolean | null;
-}
-export interface GroupPattern {
-  /**
-   * The node the group stands in; ``None``: any own group.
-   */
-  from?: string | null;
-}
-export interface NodePattern {
-  node?: string | null;
-}
-export interface StancePattern {
-  stance?: Stance | null;
-}
-export interface RoadPattern {
-  node?: string | null;
-  /**
-   * The other end of the fortified road.
-   */
-  toward?: string | null;
-}
-export interface GroupMovePattern {
-  /**
-   * The nodes the groups stand in, one per group, in any order.
-   */
-  groups?: string[] | null;
-  to?: string | null;
-  planned?: boolean | null;
-}
-export interface RallyPattern {
-  node?: string | null;
-  /**
-   * The rally point; ``None``: any.
-   */
-  to?: string | null;
 }
 /**
  * A fact of the player's own view (``PlayerView``), compared, never computed.
@@ -1876,22 +1923,6 @@ export interface ViewFact {
    * An enemy planned intent targets the node.
    */
   enemy_plan?: string | null;
-}
-/**
- * A command a beat allows; ``max`` bounds how often it is accepted while the beat (or a
- * beat that keeps its ``allow``) lasts. Leaving (``forfeit``) is always allowed.
- */
-export interface Allow {
-  move?: MovePattern | null;
-  cancel_order?: GroupPattern | null;
-  build_factory?: NodePattern | null;
-  build_barracks?: NodePattern | null;
-  recruit?: NodePattern | null;
-  set_stance?: StancePattern | null;
-  fortify_road?: RoadPattern | null;
-  group_move?: GroupMovePattern | null;
-  set_rally_point?: RallyPattern | null;
-  max?: number | null;
 }
 /**
  * The goal mark (Compass) of a beat: a place, an own group, a road, a HUD piece, a menu item
@@ -1928,6 +1959,11 @@ export interface Mark {
    * The number or range under the group in the place (an enemy's ``1-2``).
    */
   count?: string | null;
+  /**
+   * The enemy figure seen on a road that touches this place (the fact of ``enemy_road``),
+   * followed as it walks (II.4: the raid on Coldwell).
+   */
+  enemy?: string | null;
 }
 /**
  * One group of places the marks in turn ring (I.7), with the word of the card it lights.
@@ -1950,7 +1986,7 @@ export interface Goal {
   all: [Trigger, ...Trigger[]];
 }
 
-export const PROTOCOL_VERSION = 55;
+export const PROTOCOL_VERSION = 56;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

@@ -55,7 +55,7 @@ def test_the_hud_of_section_4_9() -> None:
     assert by_id["units"].ui == ()
     assert by_id["units"].ui_after() == ("terrainMode",)
     attack = by_id["attack"].ui_after()
-    assert "clock" not in attack and {"planned", "vp"} <= set(attack)  # IV.9 hides the clock
+    assert "clock" not in attack and {"planned", "vp"} <= set(attack)  # the clock is IV's own
     advanced = set(by_id["defence"].ui_after())
     assert {"terrainMarks", "alerts", "fort"} <= advanced
     for chapter_id in ("group-orders", "rally-points", "supply-distribution"):
@@ -71,6 +71,18 @@ type Change = Callable[[dict[str, Any]], object]
 
 BROKEN: Final[list[tuple[Change, str]]] = [
     (lambda d: d["beats"][1].update(pause="continue"), "a UI beat"),
+    (lambda d: d["beats"][1].update(clock=600), "a UI beat"),
+    (lambda d: d["beats"][1].update(on={"ui": "menu"}), "ui menu names the node"),
+    (lambda d: d["beats"][1]["on"].update(ui="menu", node="Ashford"), "group goes with ui select"),
+    (
+        lambda d: d.update(always=[{"set_stance": {}, "max": 1}]),
+        "always-allowed command has no max",
+    ),
+    (
+        lambda d: [d["beats"][i].update(clock=100) for i in (2, 3)],
+        "at most one beat starts the chapter's clock",
+    ),
+    (lambda d: d.update(cp_ticks_start=-1), "cp_ticks_start"),
     (lambda d: d["beats"][2]["on"].update(event="nothing"), "a trigger"),
     (lambda d: d["beats"][3]["on"].update(start=True), "exactly one of"),
     (lambda d: d["beats"][4]["on"].update(continued="9"), "continued names no beat"),
@@ -124,7 +136,16 @@ def test_a_chapter_must_start_with_the_hud_before_it() -> None:
 
 
 def test_the_tutorial_message_and_the_schema() -> None:
-    msg = TutorialMsg(chapter="attack", beat="F", paused=True, used=(0,), done=False, tick=148)
+    msg = TutorialMsg(
+        chapter="attack",
+        beat="10",
+        paused=True,
+        used=(),
+        done=False,
+        tick=469,
+        clock_end=1069,
+        by_clock=False,
+    )
     assert decode_server(encode(msg)) == msg
     with pytest.raises(ValidationError):
         TutorialMsg.model_validate(
@@ -136,6 +157,8 @@ def test_the_tutorial_message_and_the_schema() -> None:
                 "used": [],
                 "done": False,
                 "tick": 0,
+                "clock_end": None,
+                "by_clock": False,
             }
         )
     defs = protocol_json_schema()["$defs"]
@@ -153,7 +176,25 @@ def test_the_waits_of_review_4() -> None:
     assert units.beats[2].mark[0].capacity == "Ashford"
     economy = by_id["economy"]
     focus = [b for b in economy.beats if not b.card]
-    assert [(b.id, b.focus) for b in focus] == [("1W", 105), ("2W", 60), ("3W", 80)]
+    assert [(b.id, b.focus) for b in focus] == [("1W", 35), ("2W", 60), ("3W", 80)]
     assert economy.beats[4].mark[0].warehouse == "Westmarch"
     assert by_id["rally-points"].beats[1].acts == 2
-    assert by_id["attack"].beats[1].mark[0].count == "Ashwood"
+    assert by_id["units"].beats[5].mark[0].count == "Kestrel"
+
+
+def test_the_content_of_review_5() -> None:
+    """#1054: the CP progress at the start of II, the enemy mark, the menu beat of III, the clock
+    of IV and the stance open after III."""
+    by_id = {c.id: c for c in chapters()}
+    economy = by_id["economy"]
+    assert economy.cp_ticks_start == 70
+    assert economy.beats[6].mark[0].enemy == "Coldwell"
+    menu = by_id["building"].beats[1]
+    assert (menu.on.ui, menu.on.node, menu.client_only) == ("menu", "Fernhill", True)
+    clocks = [(b.id, b.clock) for b in by_id["attack"].beats if b.clock is not None]
+    assert clocks == [("10", 600)]
+    for chapter_id in ("units", "economy", "building"):
+        assert by_id[chapter_id].always == ()
+    for chapter_id in CHAPTER_IDS[3:]:
+        (entry,) = by_id[chapter_id].always
+        assert entry.set_stance is not None and entry.set_stance.stance is None

@@ -3,7 +3,9 @@ student (#806, ``docs/design/tutorial.md``, section 4).
 
 The expected ticks are the "Verified" lines of section 4 (AGENTS.md, 0.4), with the corrections
 the implementation recorded there (V: the fort a tick earlier, A3.2 at 30) and the waits of review
-4 (#1047: a beat ``after`` its trigger, the focus phases). The runner is stepped
+4 (#1047: a beat ``after`` its trigger, the focus phases) and of review 5 (#1054: chapter III's new
+order, chapter IV's head-on attack first and its clock, the stance open after chapter III). The
+runner is stepped
 by hand (``MatchRunner.step``, no loop): the student acts between two steps, as a client between
 two ticks, and a pause stops the stepping (the loop itself: ``test_tutorial.py``).
 
@@ -54,6 +56,11 @@ def only(*labels: Label) -> Allowed:
     return lambda label: label in labels
 
 
+def stance(label: Label) -> bool:
+    """The stance, open at every beat after chapter III (review 5, P10)."""
+    return label[0] == "set_stance"
+
+
 @dataclass
 class Play:
     """One chapter on a hand-stepped runner, and what its player received."""
@@ -61,6 +68,8 @@ class Play:
     chapter_id: str
     allowed: dict[str, Allowed]
     """The document's ``allow`` of each beat (section 4), for the probes."""
+    free: Allowed = none
+    """What the chapter allows at every beat besides (the stance after chapter III)."""
     runner: MatchRunner = field(init=False)
     beats: list[tuple[int, str | None]] = field(default_factory=list[tuple[int, str | None]])
     """``(tick, beat)`` of every beat change the player was told about."""
@@ -255,7 +264,7 @@ class Play:
         allowed = self.allowed.get(self.beat or "", none)
         for cmd in self.probes():
             label = self.label(cmd)
-            if label is not None and allowed(label):
+            if label is not None and (allowed(label) or self.free(label)):
                 continue
             self.deny(cmd)
 
@@ -374,16 +383,20 @@ def test_units_with_the_offered_cancel() -> None:
 
 # II. Map and economy -----------------------------------------------------------------------
 
+ECONOMY_ALLOWED: Final[dict[str, Allowed]] = {"5": only(("move", "Millbrook", "Coldwell", False))}
+
 
 def test_economy_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
         continues(p, "1", "2", "3")
         view = p.view()
         westmarch = view.nodes[p.ids["Westmarch"]]
+        if p.tick == 0:
+            assert p.runner.match.state.players[0].cp_ticks == 70  # cp_ticks_start
         if p.tick == 30:
             assert view.packets  # the first charges on the roads (shown from beat II.2)
-        if p.tick in (99, 100):
-            assert view.me.cp == {99: 300, 100: 350}[p.tick]  # II.1W sees the first income
+        if p.tick in (29, 30):
+            assert view.me.cp == {29: 300, 30: 350}[p.tick]  # II.1W sees the first income
         if p.tick == 124:
             assert p.size("Westmarch") == (3, 1)
         if p.tick == 244:
@@ -392,20 +405,21 @@ def test_economy_plays_at_the_documented_ticks() -> None:
             assert westmarch.starve_in is None
         if p.tick == 267:
             assert westmarch.flow_pocket and westmarch.starve_in == 100
-        if p.beat == "4" and p.runner.paused:
+        if p.beat == "5" and p.runner.paused:
             assert p.tick == 279
             p.move("Millbrook", "Coldwell")
 
-    p = Play("economy", {"4": only(("move", "Millbrook", "Coldwell", False))})
+    p = Play("economy", ECONOMY_ALLOWED)
     p.play(student)
     assert p.beats == [
         (0, "1"),
         (0, "1W"),
-        (105, "2"),
-        (105, "2W"),
-        (165, "3"),
-        (165, "3W"),
-        (279, "4"),
+        (35, "2"),
+        (35, "2W"),
+        (124, "3"),
+        (124, "3W"),
+        (204, "4"),  # the raid set off at 200, seen during II.3W
+        (279, "5"),
     ]
     assert min(e.tick for e in p.seen("packet_sent", player=0)) == 10
     westmarch = p.ids["Westmarch"]
@@ -417,7 +431,7 @@ def test_economy_plays_at_the_documented_ticks() -> None:
 
 
 def test_economy_raiders_leave_at_once() -> None:
-    p = Play("economy", {"4": only(("move", "Millbrook", "Coldwell", False))})
+    p = Play("economy", ECONOMY_ALLOWED)
     raiders: list[int] = []
 
     def student(p: Play) -> None:
@@ -426,7 +440,7 @@ def test_economy_raiders_leave_at_once() -> None:
         for g in state.groups.values():
             if g.owner == 1 and g.order is not None and 200 <= p.tick <= 270:
                 raiders.append(p.tick)
-        if p.beat == "4" and p.runner.paused:
+        if p.beat == "5" and p.runner.paused:
             p.move("Millbrook", "Coldwell")
 
     p.play(student)
@@ -440,132 +454,134 @@ def test_economy_raiders_leave_at_once() -> None:
 
 def test_building_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
-        continues(p, "2", "4")
+        continues(p, "3", "6")
         if not p.runner.paused:
-            if p.tick in (166, 200):
-                assert p.size("Millbrook") == (3, 2)
+            if p.tick == 21:
+                assert p.size("Fernhill") == (3, 0)  # the units paid the barracks
             return
         if p.beat == "1":
-            p.order(wire.BuildFactoryCmd(node=p.ids["Millbrook"]))
-        elif p.beat == "3":
             p.order(wire.BuildBarracksCmd(node=p.ids["Fernhill"]))
-        elif p.beat == "5":
+        elif p.beat == "4":
             p.order(wire.RecruitCmd(node=p.ids["Fernhill"]))
             p.deny(wire.RecruitCmd(node=p.ids["Fernhill"]))  # once
-        elif p.beat == "6":
+        elif p.beat == "5":
+            p.order(wire.BuildFactoryCmd(node=p.ids["Millbrook"]))
+            p.deny(wire.BuildFactoryCmd(node=p.ids["Millbrook"]))  # once
+        elif p.beat == "7":
             p.order(wire.SetStanceCmd(stance=Stance.ECONOMY))
 
     allowed = {
-        "1": only(("build_factory", "Millbrook")),
-        "3": only(("build_barracks", "Fernhill")),
-        "5": only(("recruit", "Fernhill")),
-        "6": only(("set_stance", Stance.ECONOMY)),
+        "1": only(("build_barracks", "Fernhill")),
+        "4": only(("recruit", "Fernhill")),
+        "5": only(("build_factory", "Millbrook")),
+        "7": only(("set_stance", Stance.ECONOMY)),
     }
     p = Play("building", allowed)
     p.play(student)
     assert p.beats == [
         (0, "1"),
-        (1, "2"),
-        (1, "2W"),
-        (66, "3"),
-        (166, "4"),
-        (170, "5"),
-        (200, "6"),
+        (21, "3"),  # 20 ticks after the payment, so the empty helmet is seen
+        (21, "3W"),
+        (101, "4"),
+        (131, "5"),
+        (132, "5W"),
+        (232, "6"),
+        (232, "7"),
     ]
-    factory = [
-        (e.tick, e.data["units"], e.data["owed"]) for e in p.seen("build_paid", kind="factory")
-    ]
-    assert factory == [(1, 3, 1), (66, 1, 0)]
-    barracks = [
-        (e.tick, e.data["units"], e.data["owed"]) for e in p.seen("build_paid", kind="barracks")
-    ]
-    assert barracks[0] == (67, 2, 1) and barracks[-1][0] == 70 and barracks[-1][2] == 0
-    assert [e.tick for e in p.seen("factory_built")] == [166]
-    assert [e.tick for e in p.seen("barracks_built")] == [170]
-    assert [e.tick for e in p.seen("recruited", player=0)] == [200]
-    assert [e.tick for e in p.seen("stance_changed", player=0)] == [201]
-    assert p.end is not None and p.end.tick == 202 and p.end.winner == 0
+    paid = [(e.tick, e.data["kind"], e.data["units"], e.data["owed"]) for e in p.seen("build_paid")]
+    assert paid == [(1, "barracks", 3, 0), (132, "factory", 2, 0)]
+    assert [e.tick for e in p.seen("barracks_built")] == [101]
+    assert [e.tick for e in p.seen("recruited", player=0)] == [131]
+    assert [e.tick for e in p.seen("factory_built")] == [232]
+    assert [e.tick for e in p.seen("stance_changed", player=0)] == [233]
+    assert p.end is not None and p.end.tick == 234 and p.end.winner == 0
 
 
 # IV. Attack and fight -----------------------------------------------------------------------
 
 ATTACK_ALLOWED: Final[dict[str, Allowed]] = {
-    "2": lambda lb: lb[:3] == ("move", "Fernhold", "Ashwood"),
-    "9": only(("move", "Ashwood", "Stormcrown", False)),
-    "F": only(("move", "Fernhold", "Ashwood", True)),
+    "2": only(("move", "Fernhold", "Ashwood", False)),
+    "4": only(("move", "Fernhold", "Ashwood", True)),
+    "11": lambda lb: lb[:3] == ("move", "Ashwood", "Stormcrown"),
 }
 
 
-def test_attack_plays_at_the_documented_ticks() -> None:
+def attack_student(stormcrown_bonus: int) -> Callable[[Play], None]:
     def student(p: Play) -> None:
-        continues(p, "1", "5", "6", "7", "8")
+        continues(p, "1", "3", "7", "8", "9", "10")
         if p.beat == "2" and p.runner.paused:
+            p.move("Fernhold", "Ashwood")  # head-on: it bounces, the lesson of the plan
+        elif p.beat == "4" and p.runner.paused:
+            assert p.size("Fernhold") == (3, 3)
             p.move("Fernhold", "Ashwood", bonus=3)
-        elif p.beat == "9" and p.runner.paused:
+        elif p.beat == "11" and p.runner.paused:
             assert p.size("Ashwood") == (3, 3)
-            p.move("Ashwood", "Stormcrown")
-        if p.tick == 278:
-            assert p.size("Ashwood") == (3, 1)
+            p.move("Ashwood", "Stormcrown", bonus=stormcrown_bonus)
+        if p.tick == 444:
+            assert p.size("Ashwood") == (3, 2)
 
-    p = Play("attack", ATTACK_ALLOWED)
-    p.play(student)
+    return student
+
+
+def test_attack_plays_at_the_documented_ticks() -> None:
+    p = Play("attack", ATTACK_ALLOWED, free=stance)
+    p.play(attack_student(0))
     assert p.beats == [
         (0, "1"),
         (0, "2"),
-        (1, "4"),
-        (20, "5"),
-        (198, "6"),
-        (268, "7"),
-        (303, "8"),
-        (303, "8W"),
-        (502, "9"),
+        (148, "3"),
+        (218, "4"),
+        (219, "6"),
+        (230, "7"),
+        (404, "8"),
+        (454, "9"),
+        (469, "10"),
+        (469, "10W"),
+        (502, "11"),
     ]
-    assert [e.tick for e in p.seen("plan_charged", player=0)] == [60, 90, 120]
     ashwood, stormcrown = p.ids["Ashwood"], p.ids["Stormcrown"]
-    assert [e.tick for e in p.seen("fight_round", node=ashwood)] == [218, 238, 258, 278]
-    assert p.seen("node_captured", 278, player=0, node=ashwood)
+    rounds = [e.tick for e in p.seen("fight_round", node=ashwood)]
+    assert rounds == [98, 118, 138, 424, 444]
+    (lost, won) = p.seen("fight_ended", node=ashwood)
+    assert (lost.tick, lost.data["winner"], lost.data["captured"]) == (138, 1, False)
+    assert (won.tick, won.data["winner"]) == (444, 0)
+    assert [e.tick for e in p.seen("plan_charged", player=0)] == [266, 296, 326]
+    assert p.seen("node_captured", 333, player=1, node=p.ids["Old Mill"])  # the enemy plan
+    assert p.seen("node_captured", 444, player=0, node=ashwood)
     assert [e.tick for e in p.seen("fight_round", node=stormcrown)] == [621, 641]
-    assert p.runner.match.state.nodes[p.ids["Old Mill"]].owner == 1  # the enemy plan, at 138
+    assert p.director.message().clock_end == 1069  # IV.10 at 469, a minute
     assert p.end is not None and p.end.tick == 641
     assert (p.end.reason, p.end.winner) == (EndReason.CAPITAL_CAPTURED, 0)
+    assert not p.director.by_clock
 
 
-def test_attack_failure_branch() -> None:
+def test_attack_plan_on_the_capital_ends_by_the_clock() -> None:
+    """A planned order on Stormcrown is allowed (review 5): Ashwood's warehouse is empty, so the
+    plan gathers nothing before the clock runs out, and the chapter ends as won by VP."""
+    p = Play("attack", ATTACK_ALLOWED, free=stance)
+    p.play(attack_student(3))
+    assert p.director.done and p.director.by_clock
+    assert not p.seen("node_captured", player=0, node=p.ids["Stormcrown"])
+    assert p.end is not None and p.end.tick == 1070  # the Forfeit of the tick after 1069
+    assert (p.end.reason, p.end.winner) == (EndReason.FORFEIT, 0)
+    assert p.end.vp[0] > p.end.vp[1]  # the player leads on VP: the Seal says so truly
+
+
+def test_attack_stance_is_open_and_ends_no_pause() -> None:
     def student(p: Play) -> None:
-        continues(p, "1", "F", "6", "7", "8")
-        if p.beat == "2" and p.runner.paused:
-            p.move("Fernhold", "Ashwood")  # ordinary: allowed on purpose
-        elif p.beat == "F" and p.groups("Fernhold") and p.size("Fernhold") == (3, 3):
-            if p.once("plan"):
-                assert p.tick == 218  # home and full
-                p.move("Fernhold", "Ashwood", bonus=3)
-        elif p.beat == "9" and p.runner.paused:
-            p.move("Ashwood", "Stormcrown")
+        if p.beat == "1" and p.runner.paused and p.once("stance"):
+            p.order(wire.SetStanceCmd(stance=Stance.ECONOMY))
+            assert p.runner.paused  # no answer to the card: it still waits
+            p.resume()
+        elif p.beat == "2" and p.runner.paused:
+            p.move("Fernhold", "Ashwood")
+        elif p.beat == "3":
+            p.order(wire.ForfeitCmd())
 
-    p = Play("attack", ATTACK_ALLOWED)
+    p = Play("attack", ATTACK_ALLOWED, free=stance)
     p.play(student)
-    ashwood = p.ids["Ashwood"]
-    assert [e.tick for e in p.seen("fight_round", node=ashwood)][:3] == [98, 118, 138]
-    (lost,) = p.seen("fight_ended", 138, node=ashwood)
-    assert lost.data["winner"] == 1 and lost.data["captured"] is False
-    assert [e.tick for e in p.seen("plan_charged", player=0)] == [264, 294, 324]
-    assert p.seen("node_captured", 442, player=0, node=ashwood)
-    # IV.5 is passed over: the enemy plan was over before the player's plan
-    ticks = dict((beat, tick) for tick, beat in p.beats)
-    assert "5" not in ticks
-    assert p.beats == [
-        (0, "1"),
-        (0, "2"),
-        (148, "F"),
-        (219, "4"),
-        (402, "6"),
-        (452, "7"),
-        (467, "8"),  # armed at 442 with IV.7, it waits its 25 ticks after IV.7's Continue
-        (467, "8W"),
-        (502, "9"),
-    ]
-    assert p.end is not None and p.end.tick == 641
-    assert (p.end.reason, p.end.winner) == (EndReason.CAPITAL_CAPTURED, 0)
+    assert [e.tick for e in p.seen("stance_changed", player=0)] == [1]
+    assert p.runner.match.state.players[0].stance is Stance.ECONOMY
 
 
 # V. Defence ---------------------------------------------------------------------------------
@@ -574,6 +590,10 @@ def test_attack_failure_branch() -> None:
 def test_defence_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
         continues(p, "1", "2")
+        if p.beat == "1":
+            nodes = p.view().nodes
+            assert nodes[p.ids["Highcrag"]].terrain_mark == 1  # the chevrons the card names
+            assert nodes[p.ids["Flatford"]].terrain_mark == -1
         if p.beat == "4" and p.runner.paused:
             road = next(
                 e
@@ -590,10 +610,10 @@ def test_defence_plays_at_the_documented_ticks() -> None:
         "4": only(("fortify_road", "Flatford", "Eastfield")),
         "5": only(("move", "Millbrook", "Flatford", False)),
     }
-    p = Play("defence", allowed)
+    p = Play("defence", allowed, free=stance)
     p.play(student)
-    assert p.beats[0] == (0, None)  # no card until the march
-    assert p.beats[1:] == [(10, "1"), (129, "2"), (169, "3"), (200, "4"), (201, "5"), (384, "6")]
+    # the chevrons first, then the march on Highcrag
+    assert p.beats == [(0, "1"), (10, "2"), (169, "3"), (200, "4"), (201, "5"), (384, "6")]
     highcrag, flatford = p.ids["Highcrag"], p.ids["Flatford"]
     rounds = p.seen("fight_round", node=highcrag)
     assert [e.tick for e in rounds] == [119, 139, 159] and rounds[0].data["virtual_0"] == 1
@@ -623,7 +643,7 @@ def test_group_orders_plays_at_the_documented_ticks() -> None:
     allowed = {
         "1": only(("group_move", frozenset({"Fernhold", "Lowfield"}), "Ashwood", False)),
     }
-    p = Play("group-orders", allowed)
+    p = Play("group-orders", allowed, free=stance)
     p.play(student)
     assert p.beats == [(0, "1"), (1, "3"), (141, "4"), (246, "5")]  # A1.5 25 ticks after 221
     ashwood = p.ids["Ashwood"]
@@ -653,7 +673,7 @@ def test_rally_points_plays_at_the_documented_ticks() -> None:
         "2": only(("recruit", "Highhold")),
         "3": only(("recruit", "Highhold")),
     }
-    p = Play("rally-points", allowed)
+    p = Play("rally-points", allowed, free=stance)
     p.play(student)
     assert p.beats == [(0, "1"), (1, "2"), (32, "3")]
     assert [e.tick for e in p.seen("recruited", player=0)] == [31, 61]
@@ -677,7 +697,9 @@ def test_supply_distribution_plays_at_the_documented_ticks() -> None:
         if p.tick == 346:
             assert p.size("Ashwood") == (3, 1)
 
-    p = Play("supply-distribution", {"4": only(("move", "Fernhold", "Ashwood", False))})
+    p = Play(
+        "supply-distribution", {"4": only(("move", "Fernhold", "Ashwood", False))}, free=stance
+    )
     p.play(student)
     assert p.beats == [
         (0, "1"),

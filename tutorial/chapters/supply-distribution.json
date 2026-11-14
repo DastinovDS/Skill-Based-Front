@@ -5,6 +5,7 @@
   "map": "tut-flow",
   "ui": ["terrainMode", "cp", "notices", "supply", "warehouse", "buildings", "factories", "recruit", "stance",
          "planned", "vp", "terrainMarks", "alerts", "fort"],
+  "always": [{"set_stance": {}}],
   "opponent": [
     {"at": 20, "move": {"from": "Gullmoor", "to": "Lowfield"}}
   ],

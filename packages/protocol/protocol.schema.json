@@ -17,7 +17,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 55,
+    "PROTOCOL_VERSION": 56,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -434,7 +434,7 @@
         },
         "hide": {
           "default": [],
-          "description": "HUD pieces the beat hides again (IV.9 hides the clock IV.8 showed).",
+          "description": "HUD pieces the beat hides again.",
           "items": {
             "$ref": "#/$defs/UiFlag"
           },
@@ -492,6 +492,20 @@
           "maximum": 2147483647,
           "minimum": 1,
           "type": "integer"
+        },
+        "clock": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The chapter's clock starts with this beat: the chapter ends that many ticks after the beat\nbegan, as won by VP, unless its goal came first (IV.10, review 5: the match timer shows it to\nthe end of the chapter)."
         }
       },
       "required": [
@@ -701,6 +715,21 @@
           ],
           "default": null,
           "description": "The starting CP of the chapter: ``cap`` or hundredths up to ``cp.cap``; ``None``: the\nruleset's ``cp.start``. The only ruleset value a chapter replaces (section 7.3)."
+        },
+        "cp_ticks_start": {
+          "default": 0,
+          "description": "The player's progress toward the next CP income at the start (``PlayerState.cp_ticks``,\nbelow the CP period of the start stance): the first income comes that many ticks earlier\n(II: about 3 s after its first card, review 5). A starting state, like a garrison, not a\nrule.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "always": {
+          "default": [],
+          "description": "Commands allowed at every beat of the chapter, besides each beat's ``allow`` (review 5,\nP10: the stance stays open after chapter III). They never end a card's pause and count\nagainst no ``max`` (none may be given).",
+          "items": {
+            "$ref": "#/$defs/Allow"
+          },
+          "type": "array"
         },
         "ui": {
           "default": [],
@@ -2489,6 +2518,20 @@
           ],
           "default": null,
           "description": "The number or range under the group in the place (an enemy's ``1-2``)."
+        },
+        "enemy": {
+          "anyOf": [
+            {
+              "maxLength": 24,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The enemy figure seen on a road that touches this place (the fact of ``enemy_road``),\nfollowed as it walks (II.4: the raid on Coldwell)."
         }
       },
       "title": "Mark",
@@ -4667,7 +4710,7 @@
     },
     "Trigger": {
       "additionalProperties": false,
-      "description": "When a beat begins, or a condition of the goal (section 7.3, ``on``).\n\nExactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,\nwith filters), ``accepted`` (an own command the server accepted, by its pattern; the places\nare those at the moment it was sent), ``view`` (a fact of the own view), ``continued``\n(Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several\nthat fires).\n\n``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal\ncondition): the beat begins that many ticks after its trigger fired, so the map has drawn\nwhat the card names (a capture's flood, the shots of a round) before the card shows (review\n4, P1).",
+      "description": "When a beat begins, or a condition of the goal (section 7.3, ``on``).\n\nExactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,\nwith filters), ``accepted`` (an own command the server accepted, by its pattern; the places\nare those at the moment it was sent), ``view`` (a fact of the own view), ``continued``\n(Continue on that beat), ``ui`` (client only: a selection or an open city menu) or ``any``\n(the first of several that fires).\n\n``ui`` is ``select`` (a selection: ``group`` the node the own group stands in) or ``menu`` (the\ncity menu of ``node`` opens, III.2).\n\n``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal\ncondition): the beat begins that many ticks after its trigger fired, so the map has drawn\nwhat the card names (a capture's flood, the shots of a round) before the card shows (review\n4, P1).",
       "properties": {
         "start": {
           "anyOf": [
@@ -4705,7 +4748,7 @@
             }
           ],
           "default": null,
-          "description": "The event's ``node``."
+          "description": "The event's ``node``; with ``ui = \"menu\"``: the city whose menu opens."
         },
         "to": {
           "anyOf": [
@@ -4860,7 +4903,10 @@
         "ui": {
           "anyOf": [
             {
-              "const": "select",
+              "enum": [
+                "select",
+                "menu"
+              ],
               "type": "string"
             },
             {
@@ -4968,7 +5014,7 @@
               "type": "null"
             }
           ],
-          "description": "The current beat of the chapter file (``F``: its failure beat); ``None`` before the first\none (chapter V starts with the opponent's march)."
+          "description": "The current beat of the chapter file (``F``: a failure beat); ``None`` before the first\none."
         },
         "paused": {
           "description": "The simulation waits: for ``resume`` (Continue) on a ``continue`` beat, for an allowed\ncommand on an ``action`` beat. No tick passes meanwhile.",
@@ -4992,6 +5038,23 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "clock_end": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tick the chapter's clock runs out (a beat's ``clock``, IV.10: the match timer shows the\ntime left to it); ``None``: no clock. When it runs out the chapter ends as won by VP."
+        },
+        "by_clock": {
+          "description": "The chapter ended because its clock ran out (won by VP), not by its goal.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -5001,7 +5064,9 @@
         "paused",
         "used",
         "done",
-        "tick"
+        "tick",
+        "clock_end",
+        "by_clock"
       ],
       "title": "TutorialMsg",
       "type": "object"

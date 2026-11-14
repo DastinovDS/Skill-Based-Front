@@ -235,8 +235,11 @@ class Trigger(TutorialModel):
     Exactly one kind: ``start`` (the chapter start), ``event`` (an event the player receives,
     with filters), ``accepted`` (an own command the server accepted, by its pattern; the places
     are those at the moment it was sent), ``view`` (a fact of the own view), ``continued``
-    (Continue on that beat), ``ui`` (client only: a selection) or ``any`` (the first of several
-    that fires).
+    (Continue on that beat), ``ui`` (client only: a selection or an open city menu) or ``any``
+    (the first of several that fires).
+
+    ``ui`` is ``select`` (a selection: ``group`` the node the own group stands in) or ``menu`` (the
+    city menu of ``node`` opens, III.2).
 
     ``after`` (a beat's trigger, not ``start``, ``ui``, an inner trigger of ``any`` or a goal
     condition): the beat begins that many ticks after its trigger fired, so the map has drawn
@@ -248,7 +251,7 @@ class Trigger(TutorialModel):
     event: str | None = None
     """An event kind of ``gow_protocol.convert.EVENT_FIELDS``."""
     node: NodeName | None = None
-    """The event's ``node``."""
+    """The event's ``node``; with ``ui = "menu"``: the city whose menu opens."""
     to: NodeName | None = None
     """The event's ``to_node`` (``packet_sent``)."""
     edge: tuple[NodeName, NodeName] | None = None
@@ -269,7 +272,7 @@ class Trigger(TutorialModel):
     after: NonNegInt = 0
     """Ticks from the trigger to the beginning of the beat (with ``continued``: after the
     Continue)."""
-    ui: Literal["select"] | None = None
+    ui: Literal["select", "menu"] | None = None
     group: NodeName | None = None
     """With ``ui``: the own group standing in this node; ``None``: any own group."""
     any: tuple["Trigger", ...] | None = None
@@ -285,6 +288,8 @@ class Trigger(TutorialModel):
         _one_of(self, _TRIGGERS, "a trigger")
         if self.event is None:
             used = [name for name in _EVENT_FILTERS if getattr(self, name) is not None]
+            if self.ui == "menu" and "node" in used:
+                used.remove("node")
             if used:
                 raise ValueError(f"event filters without an event: {used}")
         elif self.event not in EVENT_FIELDS:
@@ -294,8 +299,10 @@ class Trigger(TutorialModel):
         for inner in self.any or ():
             if inner.after:
                 raise ValueError("after goes on the outer trigger of any")
-        if self.group is not None and self.ui is None:
-            raise ValueError("group goes with ui")
+        if self.group is not None and self.ui != "select":
+            raise ValueError("group goes with ui select")
+        if self.ui == "menu" and self.node is None:
+            raise ValueError("ui menu names the node whose menu opens")
         if self.any is not None and not self.any:
             raise ValueError("any lists at least one trigger")
         return self
@@ -317,6 +324,7 @@ _MARKS: Final = (
     "capacity",
     "warehouse",
     "count",
+    "enemy",
 )
 
 
@@ -342,6 +350,9 @@ class Mark(TutorialModel):
     """The row of lozenges under the place (its warehouse)."""
     count: NodeName | None = None
     """The number or range under the group in the place (an enemy's ``1-2``)."""
+    enemy: NodeName | None = None
+    """The enemy figure seen on a road that touches this place (the fact of ``enemy_road``),
+    followed as it walks (II.4: the raid on Coldwell)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -380,7 +391,7 @@ class Beat(TutorialModel):
     ui: tuple[UiFlag, ...] = ()
     """HUD pieces the beat shows from now on."""
     hide: tuple[UiFlag, ...] = ()
-    """HUD pieces the beat hides again (IV.9 hides the clock IV.8 showed)."""
+    """HUD pieces the beat hides again."""
     mark: tuple[Mark, ...] = ()
     turns: tuple[Turn, ...] = ()
     """Client only: the marks in turn (I.7)."""
@@ -399,11 +410,17 @@ class Beat(TutorialModel):
     acts: PosInt = 1
     """Client only: the commands of ``allow`` the card asks for; once that many stand (a cancel
     takes one back), the card goes until the next beat (review 4, P2; A2.2: two recruits)."""
+    clock: PosInt | None = None
+    """The chapter's clock starts with this beat: the chapter ends that many ticks after the beat
+    began, as won by VP, unless its goal came first (IV.10, review 5: the match timer shows it to
+    the end of the chapter)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if self.on.ui is not None and (self.pause is not None or self.allow is not None):
-            raise ValueError(f"beat {self.id}: a UI beat neither pauses nor sets allow")
+        if self.on.ui is not None and (
+            self.pause is not None or self.allow is not None or self.clock is not None
+        ):
+            raise ValueError(f"beat {self.id}: a UI beat neither pauses, sets allow nor a clock")
         if self.focus is not None:
             card = (
                 self.pause is not None
@@ -414,6 +431,7 @@ class Beat(TutorialModel):
                 or self.with_goal
                 or self.optional
                 or self.acts != 1
+                or self.clock is not None
             )
             if card:
                 raise ValueError(f"beat {self.id}: a focus beat is no card (no pause, allow, ...)")
@@ -493,6 +511,15 @@ class Chapter(TutorialModel):
     cp_start: Literal["cap"] | NonNegInt | None = None
     """The starting CP of the chapter: ``cap`` or hundredths up to ``cp.cap``; ``None``: the
     ruleset's ``cp.start``. The only ruleset value a chapter replaces (section 7.3)."""
+    cp_ticks_start: NonNegInt = 0
+    """The player's progress toward the next CP income at the start (``PlayerState.cp_ticks``,
+    below the CP period of the start stance): the first income comes that many ticks earlier
+    (II: about 3 s after its first card, review 5). A starting state, like a garrison, not a
+    rule."""
+    always: tuple[Allow, ...] = ()
+    """Commands allowed at every beat of the chapter, besides each beat's ``allow`` (review 5,
+    P10: the stance stays open after chapter III). They never end a card's pause and count
+    against no ``max`` (none may be given)."""
     ui: tuple[UiFlag, ...] = ()
     """The pieces shown at the start: those of the chapters before it (``check_chapters``)."""
     opponent: tuple[OpponentStep, ...] = ()
@@ -513,6 +540,10 @@ class Chapter(TutorialModel):
         for beat in self.fails:
             if beat.allow is None or beat.client_only or not beat.card:
                 raise ValueError(f"failure beat {beat.id}: sets allow, not a UI or focus beat")
+        if any(entry.max is not None for entry in self.always):
+            raise ValueError("an always-allowed command has no max")
+        if sum(1 for beat in self.beats if beat.clock is not None) > 1:
+            raise ValueError("at most one beat starts the chapter's clock")
         known = set(ids)
         for trigger in _triggers(self):
             if trigger.continued is not None and trigger.continued not in known:
@@ -522,12 +553,13 @@ class Chapter(TutorialModel):
         return self
 
     def ui_after(self) -> tuple[UiFlag, ...]:
-        """The pieces shown at the end of the chapter: the next chapter starts with them."""
+        """The pieces shown at the end of the chapter: the next chapter starts with them. The
+        clock is the chapter's own (IV): it never carries over."""
         shown: list[UiFlag] = list(self.ui)
         for beat in self.beats:
             shown.extend(flag for flag in beat.ui if flag not in shown)
             shown = [flag for flag in shown if flag not in beat.hide]
-        return tuple(shown)
+        return tuple(flag for flag in shown if flag != "clock")
 
 
 def _triggers(chapter: Chapter) -> list[Trigger]:
@@ -587,6 +619,8 @@ def _names(chapter: Chapter) -> list[str]:
             names += [v for v in trigger.view.model_dump().values() if v is not None]
         if trigger.accepted is not None:
             pattern(trigger.accepted)
+    for allow in chapter.always:
+        pattern(allow)
     for beat in (*chapter.beats, *chapter.fails):
         for allow in beat.allow or ():
             pattern(allow)
@@ -601,6 +635,7 @@ def _names(chapter: Chapter) -> list[str]:
                     mark.capacity,
                     mark.warehouse,
                     mark.count,
+                    mark.enemy,
                 )
                 if n is not None
             ]

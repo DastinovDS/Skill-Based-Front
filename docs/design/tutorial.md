@@ -11,7 +11,8 @@ on the intro, and a note per screen). The defaults of section 9 are in force unt
 section 7.10 (server, bots, data) is in the code; section 7 records what it built, and where it had to differ from the plan
 (each such place says so). PR 2 (the client's chapters) is in the code too; section 7.11 records where it had to differ.
 PR 3 (the first match's hints and the rules reference, How to play v1 removed) is in the code; section 7.12 records
-where it had to differ. The mockup is
+where it had to differ. The player feedback of 2026-11-14 (review 5) is built in: its chapter content (texts, beat
+order, maps, scripts, chapter IV's clock) in #1054 (section 7.15), its presentation in #1053. The mockup is
 [`mockups/tutorial.html`](mockups/tutorial.html) (the chosen look); the whole tutorial, screen by screen with the final
 copy and the gating, is the walkthrough [`mockups/tutorial-walkthrough.html`](mockups/tutorial-walkthrough.html)
 (section 8). The texts of section 4 and section 5 are the final copy; the walkthrough shows them on the real frames.
@@ -118,6 +119,31 @@ and the reference.
    correct; where it stated a rule wrongly it was corrected against `mechanics.md` (IV.2: against one defender the
    ordinary attack would win, so the slides do the math for the most the range allows).
 
+**Review 5 (2026-11-14, player feedback relayed by the owner), the content.** The owner's decisions:
+
+1. **Chapter IV shows, it does not tell** (P11): the three slides of IV.2 go. The player first attacks Ashwood
+   head-on (the ordinary order is the asked action), the group bounces, one short card says why (its charges ran out
+   before the capture), then the planned order. The shot rule of IV.1 stays, short.
+2. **A clock in chapter IV:** from IV.10 (Ashwood taken) the match timer stays to the end of the chapter, one minute;
+   when it runs out the chapter ends as won by VP (the director ends it like a reached goal; the Seal says so). The
+   capital stays the main goal, and IV.11 allows the ordinary and the planned order on it.
+3. **The stance stays open after chapter III** (P10) in IV, V and the Advanced chapters; recruiting and forts stay
+   locked where they were.
+4. **A pocket with a factory:** its garrison does not starve (DEC-43 item H3), but the factory stops (item H2); one line
+   in the rules reference (the first match has no pocket hint).
+5. The look of build and recruit progress and of the capital's next-charge indicator is a separate design decision,
+   not part of the tutorial's content.
+
+The rest of the feedback, per chapter (section 4): I teaches dropping the selection ({esc}) and its Seal lesson on
+capacity is concrete; II's first CP come 3 s after its first card (a starting CP progress), the raid that cuts Coldwell
+is lit as it sets off, the starvation card stands by Millbrook's group; III builds the barracks and recruits first,
+the factory last, the stance at the end, its first build card in two steps (why, then the item in the open menu), the
+payment card a little later; V shows the terrain chevrons from its start and explains them before the fight, and its
+road fort weakens attackers (no "toll"); A1 says the real problem (the groups would not arrive together) and "gather"
+instead of "rally"; A2 drops "Your capital has a barracks." and says the recruits walk for half a move; A3 says what
+moving the front means. Every card, action line and Seal lesson had a "cut, do not add" pass (`design:ux-copy`); the
+before and after texts are in #1054's PR.
+
 ---
 
 ## 2. What is taught, and where
@@ -140,16 +166,16 @@ that explains the rule; nothing of it is on screen or in a text before that beat
 | R7 | CP pay for orders and come back at a flat rate up to a cap | DEC-02; DEC-44 | II.1 | `cost.move`, `cp.per_period`, `stances.cp_period_ticks`, `cp.cap` |
 | R8 | The capital makes charges; the roads carry them toward the front by themselves | DEC-41 items 2, 9; DEC-43 item A; DEC-50 | II.2 | `stances.capital_period_ticks` |
 | R9 | Each place stores charges in its warehouse (the diamonds under it); units standing there fill up from it; the amber sign means they wait for charges | DEC-41 item 13; DEC-43 item C | II.3 | `NodeView.warehouse_cap` |
-| R10 | A place cut off from the capital gets no charges; without a factory its units starve after a grace | DEC-43 item H; DEC-19 | II.4 | `NodeView.starve_in` (the countdown mark; no number in the text) |
-| R11 | A factory makes charges like the capital; it is paid in charges, first from the warehouse, then by the units standing there; the top bar counts factories, at most a few | DEC-41 items 2, 7; DEC-47 | III.1, III.2, III.4 | `factory.cost`, `stances.capital_period_ticks`, `factory.max` |
-| R12 | A barracks lets a city recruit, paid the same way; a recruit costs CP and arrives empty | DEC-26; DEC-41 item 7; DEC-25 | III.3, III.5 | `city_upgrades.barracks_charges`, `cost.recruit`, `recruit.unit_ticks` |
-| R13 | Stances: Economy more charges and fewer CP, War the other way, Balance between; free | DEC-44; DEC-47 | III.6 | `stances.*` (no number in the text) |
-| R14 | In a fight a charge is a shot; two shots cancel each other; a shot that meets none kills a unit, empty ones first; a capture after the fight still costs a charge, so 3 charges cannot take a place of 2 charged defenders | DEC-07 rules 1 to 3; DEC-38 | IV.1, IV.2 (the math, three slides) | none |
-| R15 | A planned order costs as much as an ordinary one, waits and gathers +1 bonus shot per warehouse charge at a fixed pace, then sets off; bonus shots fire first; the enemy sees where, never how strong | DEC-41 item 10; DEC-48; mechanics 5; `AGENTS.md` 4.4 | IV.3, IV.4, IV.5 | `cost.planned_move`, `orders.plan_ticks_per_bonus` |
-| R16 | A fight runs in rounds, one shot a side a round | DEC-24 items B, F1; DEC-32 | IV.6 | `combat.round_ticks` |
-| R17 | No retreat: a group in a fight stays until it ends; groups that arrive join it | DEC-40; DEC-24 item D | IV.7 | `combat.retreat` |
-| R18 | Winning: the enemy capital wins at once; otherwise every 30 s each city gives VP (the gilt number at the upper right of the city, ui-style 9.5) and more VP wins when the clock runs out | DEC-03 | IV.8 | `victory.vp_period_ticks`, `match_ticks`; `View.vp_gain` |
-| R19 | Terrain helps or hurts only the defender of a place that has a charged unit: mountains a bonus shot, plains burn a charge at the first round, forest nothing; the chevron by a helmet shows it | DEC-07 rule 1; DEC-45 | V.2 | `combat.terrain_defense_mod`; `NodeView.terrain_mark` |
+| R10 | A place cut off from the capital gets no charges; without a factory its units starve after a grace (with one they do not, but the factory stops: the rules reference) | DEC-43 item H; DEC-19 | II.5 | `NodeView.starve_in` (the countdown mark; no number in the text) |
+| R11 | A factory makes charges like the capital; it is paid in charges, first from the warehouse, then by the units standing there; the top bar counts factories, at most a few | DEC-41 items 2, 7; DEC-47 | III.3, III.5, III.6 | `factory.cost`, `stances.capital_period_ticks`, `factory.max` |
+| R12 | A barracks lets a city recruit, paid the same way; a recruit costs CP and arrives empty | DEC-26; DEC-41 item 7; DEC-25 | III.1, III.2, III.4 | `city_upgrades.barracks_charges`, `cost.recruit`, `recruit.unit_ticks` |
+| R13 | Stances: Economy more charges and fewer CP, War the other way, Balance between; free | DEC-44; DEC-47 | III.7 | `stances.*` (no number in the text) |
+| R14 | In a fight a charge is a shot; two shots cancel each other; a shot that meets none kills a unit, empty ones first; a capture after the fight still costs a charge, so 3 charges cannot take a place of 2 charged defenders | DEC-07 rules 1 to 3; DEC-38 | IV.1, IV.2, IV.3 (the head-on attack bounces, review 5) | none |
+| R15 | A planned order costs as much as an ordinary one, waits and gathers +1 bonus shot per warehouse charge at a fixed pace, then sets off; bonus shots fire first; the enemy sees where, never how strong | DEC-41 item 10; DEC-48; mechanics 5; `AGENTS.md` 4.4 | IV.4 to IV.7 | `cost.planned_move`, `orders.plan_ticks_per_bonus` |
+| R16 | A fight runs in rounds, one shot a side a round | DEC-24 items B, F1; DEC-32 | IV.8 | `combat.round_ticks` |
+| R17 | No retreat: a group in a fight stays until it ends; groups that arrive join it | DEC-40; DEC-24 item D | IV.9 | `combat.retreat` |
+| R18 | Winning: the enemy capital wins at once; otherwise every 30 s each city gives VP (the gilt number at the upper right of the city, ui-style 9.5) and more VP wins when the clock runs out | DEC-03 | IV.10 (the chapter's own clock of one minute, review 5) | `victory.vp_period_ticks`, `match_ticks`; `View.vp_gain` |
+| R19 | Terrain helps or hurts only the defender of a place that has a charged unit: mountains a bonus shot, plains burn a charge at the first round, forest nothing; the chevron by a helmet shows it | DEC-07 rule 1; DEC-45 | V.1 (before the fight, review 5) | `combat.terrain_defense_mod`; `NodeView.terrain_mark` |
 | R20 | A road fort costs CP, works after a build time, and takes a charge per started 3 units from an enemy crossing it toward its place; a capture destroys it | DEC-43 item D | V.4, V.5 | `fort.cost`, `fort.build_ticks`, `fort.toll_units`, `fort.toll_charges` |
 | R21 | A group order: several groups, one order; to an enemy place they arrive in one tick (full price), to an own place they rally (half price) | DEC-48 items A to E | Advanced 1 | `cost.move`, `group_order.rally_pct` |
 | R22 | A rally point: the new units of a city with a barracks walk to an own place by themselves, for half a CP each when they leave | DEC-48 item H | Advanced 2 | `recruit.rally_cost` |
@@ -160,7 +186,8 @@ that explains the rule; nothing of it is on screen or in a text before that beat
 Left to the rules reference only: splitting a group (the client's split tip explains itself once capacity is known),
 the engagement zone (DEC-37), enemy buildings seen from a neighbouring place (DEC-31), and the supply nuances Advanced 3
 does not stage: a full factory sends its new charge to the nearest room (DEC-43 item M8), a building being paid and a
-gathering plan call like a tired army (items A4, J), a factory cut off from the capital stops (item H2), the front
+gathering plan call like a tired army (items A4, J), a factory cut off from the capital stops (item H2) while its
+pocket does not starve (item H3), the front
 before contact is the places farthest from the capital (item I2), along the front charges move only away from the
 capital (item L2).
 
@@ -257,7 +284,7 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   the player something the card and the screen do not, what to click or press: never "watch" or "look at" (the Compass
   mark points), never a repeat of the card; a target is named "Click on <place>" (round 5). **No number** the HUD, a
   menu or a mark shows, and none a newcomer does not need (round 4); IV.2 keeps the counts its math needs.
-- **Slides** (round 5, IV.2): a card may have two or three slides; "Next" at its foot pages them in the client (no
+- **Slides** (round 5, IV.2; no chapter uses them since review 5, the client keeps them): a card may have two or three slides; "Next" at its foot pages them in the client (no
   command, no server message), the step lozenges stay those of the beat, and a small "1 of 3" sits beside "Next". The
   beat's pause and `allow` hold for all its slides; the action line is on the last slide only. A command the beat allows
   given on an earlier slide is accepted as on the last one.
@@ -285,11 +312,17 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   - none: the simulation runs (a card that only comments on what is happening).
   Nothing on the screen says "Paused" (review 5: the card holds the player; the plate of PR 2 is gone). A pause adds
   no tick: the "Verified" ticks below are the simulation's, with the player acting on the tick after each pause.
-- **Failures.** A failure branch stays only where the failure is the lesson: chapter IV's ordinary attack that
-  bounces (beat IV.F). Every other mistake is prevented: by `allow` (no wrong target, no wrong group, a bounded number
+- **Failures.** Since review 5 no chapter has a failure branch: chapter IV's ordinary attack that bounces is its main
+  path (IV.2, IV.3), the lesson of the plan shown rather than told. Every other mistake is prevented: by `allow` (no wrong target, no wrong group, a bounded number
   of cancels, recruits, orders), by `pause: action` (no time pressure: a cut-off place, a coming strike), by the chapter
-  data (chapter I's capital starts with an empty warehouse, so no unexplained refill). A failure card shows "Try again"
-  in its head instead of the step lozenges.
+  data (chapter I's capital starts with an empty warehouse, so no unexplained refill). A failure card (the format keeps
+  `fails`) shows "Try again" in its head instead of the step lozenges.
+- **Always allowed** (review 5, P10): what an earlier chapter taught stays usable unless it breaks the script. From
+  chapter IV on the stance is allowed at every beat (`always`, section 7.3); it never ends a card's pause and counts
+  against no `max`. Recruiting, forts and rally points stay locked outside their chapters.
+- **The chapter's clock** (review 5, IV.10): a beat may start a clock (`clock`); the match timer then shows the time
+  left to it until the chapter ends, and when it runs out before the goal, the chapter ends as won by VP (the Seal says
+  so). Only chapter IV has one.
 - **A beat that fires with the goal** (A1.5) would be hidden at once by the Seal: when the goal holds, the client keeps
   the last frame and that card, with a "Continue" button, and shows the Seal on Continue. Other chapters go to the Seal
   at once.
@@ -342,15 +375,17 @@ enemy is there".
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
 | I.1 | chapter start | "This is your **army**. The number on the helmet is how many units it has." | "Click on the helmet to select it" | `action` | move Highhold to Ashford | |
-| I.2 | the group is selected (UI) | "To march, click a **city** or a **province**." | "Click on Ashford" | (as before) | as before | |
-| I.3 | the move to Ashford accepted | "Each city or province has its own **capacity**: how many units fit there, shown by the segmented ring around it." Mark: Ashford's capacity segments | none | `continue` | none | |
+| I.2 | the group is selected (UI) | "To march, click a **city** or a **province**. Press {esc} to drop the selection." | "Click on Ashford" | (as before) | as before | |
+| I.3 | the move to Ashford accepted | "Each city or province has a **capacity**: one unit fits in each segment of the ring around it." Mark: Ashford's capacity segments | none | `continue` | none | |
 | I.4 | `node_captured` Ashford by you, 12 ticks later | "Every capture costs a **charge**. The helmet's fill shows your charges, and it just dropped." | none | `continue` | none | |
 | I.5 | Continue on I.4 | "Next, take **Elmstead**. If you change your mind on the way, press **{cancel_key}**: the army turns back." | none | `action` | move Ashford to Elmstead; cancel that order (once); after a cancel, move Ashford to Elmstead again | |
-| I.6 | `node_captured` Elmstead by you, 12 ticks later | "You see only the places next to your groups. From this forest, Kestrel shows **a range** of units, Brackenfold only **that someone is there**." Marks: the count under Kestrel's group, Brackenfold; in turn: the forest (Elmstead) | none | `continue` | none | |
+| I.6 | `node_captured` Elmstead by you, 12 ticks later | "You see only the places next to your army. From this forest, Kestrel shows **a range** of units, and Brackenfold only **that someone is there**." Marks: the count under Kestrel's group, Brackenfold; in turn: the forest (Elmstead) | none | `continue` | none | |
 | I.7 | Continue on I.6 | "**Terrain** sets your speed: fast on **plains**, normal in **forest**, slow in **mountains**." Marks in turn (the areas flash): the plains (Ashford, Fordham, Kestrel), the forests (Elmstead, Reedwick, Thornby), the mountains (Highhold, Brackenfold, Stormcrown); then Fordham | "Now take Fordham" | `action` | move Elmstead to Fordham | terrain mode (`{terrain_key}`) |
 | done | Ashford, Elmstead and Fordham are yours (`NodeView.owner` of each) | Seal | | | | |
 
-`{cancel_key}` is the player's `cancel` binding (default X). With nothing selected it undoes the last order; with the
+`{esc}` (review 5) is Esc, a fixed key: it drops the selection (the player asked how to deselect). The Seal lesson on
+capacity says what the ring means: "A place fits one unit per segment of its ring." (it was "A place holds only so many
+units.", which a newcomer did not understand). `{cancel_key}` is the player's `cancel` binding (default X). With nothing selected it undoes the last order; with the
 marching group selected it cancels that group's order (`help.key.cancel`): both turn the army back here, so the card
 names neither. Round 5: the cancel is offered on the way to a goal, never asked for, so no beat sends the army
 somewhere only to call it back (the owner: "go to Elmstead, cancel, go there again" read strangely); a player who
@@ -394,37 +429,44 @@ Westmarch starts with 3 empty units, so the player watches the roads fill them. 
 Coldwell, so a raid on Coldwell cuts it off. No order is allowed before the cut, so no fight happens in this chapter
 (fights are chapter IV).
 
+**Chapter data:** `cp_ticks_start` = 70 (review 5): the player's CP progress starts 70 ticks into its period (100 ticks
+in Balance on this map), so the first CP income comes at tick 30, 3 s after Continue on II.1, and II.1W watches it.
+
 **Shown at the start:** chapter I's, plus the CP gauge and the notices (toasts).
 
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
 | II.1 | chapter start | "These are your **command points** (CP). Every order costs some, and they refill over time." | none | `continue` | none | CP gauge, notices |
-| II.1W | Continue on II.1 | focus, 105 ticks: the CP gauge outlined, the map dimmed; the first income comes at 100 | | | as before | |
-| II.2 | Continue on II.1, after II.1W | "Your capital makes **charges**, and they are distributed along your roads automatically." | none | `continue` | none | charges on roads |
-| II.2W | Continue on II.2 | focus, 60 ticks: Highhold, the roads Highhold-Coldwell and Coldwell-Westmarch, Westmarch; the first charge reaches Westmarch at 124 | | | as before | |
+| II.1W | Continue on II.1 | focus, 35 ticks: the CP gauge outlined, the map dimmed; the first income comes at 30 | | | as before | |
+| II.2 | Continue on II.1, after II.1W | "Your capital makes **charges**. Your roads carry them to your places on their own." Mark: Highhold | none | `continue` | none | charges on roads |
+| II.2W | Continue on II.2 | focus, 60 ticks: Highhold, the roads Highhold-Coldwell and Coldwell-Westmarch, Westmarch | | | as before | |
 | II.3 | the first own `packet_delivered` at Westmarch, after II.2W | "Each city or province stores **charges**, shown as the diamonds under it. Units there take them to recharge; when there are none to take, you see {warn_sign}." Mark: Westmarch's warehouse row | none | `continue` | none | warehouses |
 | II.3W | Continue on II.3 | focus, 80 ticks: Westmarch's warehouse row and the road to it, the group refilling | | | as before | |
-| II.4 | Westmarch has `starve_in` set (the enemy took Coldwell), 12 ticks later | "The enemy took Coldwell, so **Westmarch is cut off**. No charges reach it, and soon it starts losing them." | "Retake Coldwell with Millbrook's group" | `action` | move Millbrook to Coldwell | pocket and starvation marks |
-| done | `node_captured` Coldwell by you after II.4 | Seal | | | | |
+| II.4 | an enemy group seen on a road into Coldwell (`enemy_road`), after II.3W | "The enemy is marching on **Coldwell**." Mark: the enemy figure on the road, followed as it walks (`enemy`) | none | none | none | |
+| II.5 | Westmarch has `starve_in` set (the enemy took Coldwell), 12 ticks later | "The enemy took Coldwell, so **Westmarch is cut off**: no charges reach it, and soon it starts losing its own." Marks: Millbrook's group (the card stands by it), Coldwell, Westmarch | "Retake Coldwell with Millbrook's group" | `action` | move Millbrook to Coldwell | pocket and starvation marks |
+| done | `node_captured` Coldwell by you after II.5 | Seal | | | | |
 
 `{warn_sign}` in II.3 is the amber "waiting for charges" sign of the map, drawn inline in the card: the client shows it
 at an own place with an empty warehouse where units short of charges stand, or at the front with nothing on the way
-(`render/flowLayout.ts`, `starvingNodes`).
+(`render/flowLayout.ts`, `starvingNodes`). II.4 (review 5) lights the raid as it sets off, so the player sees who cuts
+Westmarch off before II.5 says so; it comments and does not stop the game. II.5's card stands by Millbrook's group, the
+one the player must send (the starving group draws the eye by its own mark).
 
 **Opponent script:** at tick 200 the group of Ridgeway to Coldwell (an ordinary order); when Coldwell becomes its own,
 that group goes back to Ridgeway (a step with a `when`, section 7.4).
 
-**Verified** (`mvp-7`; review 4: the focus phases and II.4's 12 ticks): the first packets leave Highhold at tick 10;
-II.1W runs from 0 to 105 (the first CP income at 100), beat II.2 at 105, II.2W to 165; the first charge reaches
-Westmarch at 124 (its group 3/1; 3/3 at 244), so beat II.3 begins at 165, II.3W to 245. The raid leaves Ridgeway at 200
-and captures Coldwell at 267: Westmarch is a pocket at once (`flow_pocket = true`, `starve_in = 100`), the raiders leave
-at 268; beat II.4 at 279. The player's order at 280 retakes the empty Coldwell at 340, before any `starvation` (the
-first would come at 367). (Before review 4: II.2 at 30, II.3 at 124, II.4 at 267, Coldwell retaken at 328.)
+**Verified** (`mvp-7`; review 5: `cp_ticks_start` 70, II.1W 35 ticks, II.4 the march): the first packets leave Highhold
+at tick 10; the first CP income comes at 30 (3 to 3.5 CP); II.1W runs from 0 to 35, beat II.2 at 35, II.2W to 95; the
+first charge reaches Westmarch at 124 (its group 3/1; 3/3 at 244), so beat II.3 begins at 124, II.3W to 204. The raid
+leaves Ridgeway at 200 (seen at once, during II.3W: II.4 at 204) and captures Coldwell at 267: Westmarch is a pocket at
+once (`flow_pocket = true`, `starve_in = 100`), the raiders leave at 268; beat II.5 at 279. The player's order at 280
+retakes the empty Coldwell at 340, before any `starvation` (the first would come at 367). (Review 4: II.2 at 105, II.3 at
+165; before review 4: II.2 at 30, II.3 at 124, II.4 at 267, Coldwell retaken at 328.)
 
 ### 4.3 Chapter III: Building (about 1 minute)
 
-**Intro:** "Build with your units' own charges, recruit, and set the pace of your economy." **Goal:** build a factory
-in Millbrook; build barracks in Fernhill and recruit a unit; switch to Economy.
+**Intro:** "Build, recruit, and set the pace of your economy." **Goal:** build barracks in Fernhill and recruit a unit;
+build a factory in Millbrook; switch to Economy.
 
 **Map `tut-build`** (7 nodes):
 
@@ -432,7 +474,7 @@ in Millbrook; build barracks in Fernhill and recruit a unit; switch to Economy.
 |---|---|---|---|---|---|---|
 | Highhold | 170, 350 | mountains | capital | you | | 6 |
 | Millbrook | 420, 220 | forest | medium city | you | 3/3 | |
-| Fernhill | 430, 500 | plains | small city | you | 2/2 | |
+| Fernhill | 430, 500 | plains | small city | you | 3/3 | |
 | Wyre | 650, 140 | plains | province | none | | |
 | Lowfield | 670, 560 | forest | province | none | | |
 | Ashwood | 820, 350 | forest | small city | enemy | 1/1 | |
@@ -441,33 +483,40 @@ in Millbrook; build barracks in Fernhill and recruit a unit; switch to Economy.
 Roads (travel ticks): Highhold-Millbrook 85, Highhold-Fernhill 90, Millbrook-Fernhill 84, Millbrook-Wyre 73,
 Fernhill-Lowfield 74, Wyre-Ashwood 81, Lowfield-Ashwood 77, Ashwood-Stormcrown 66, Wyre-Stormcrown 133.
 
-The warehouses of Millbrook and Fernhill start empty (only a capital keeps its stock, DEC-41 item 9), so both
-buildings are paid by the units standing there first: that is the lesson of progressive payment.
+The warehouses of Millbrook and Fernhill start empty (only a capital keeps its stock, DEC-41 item 9), so the barracks
+is paid by the units standing in Fernhill: that is the lesson of progressive payment. Fernhill starts 3/3 since review
+5 (2/2 before), so its units pay the whole barracks at once and it is built 10 s later, while the card and the focus
+after it run; Fernhill holds 4, so the recruit fits.
 
 **Shown at the start:** chapter II's (CP, notices, charges on roads, warehouses, pocket marks). The city menu shows
 only the item the beat allows; the others are locked (section 4.0).
 
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
-| III.1 | chapter start | "A **factory** makes charges, like your capital." | "Click on Millbrook, then choose Factory" | `action` | build a factory in Millbrook | buildings (marks, the menu's Factory and Barracks) |
-| III.2 | the first own `build_paid` with `units > 0` | "The warehouse was empty, so **the units there paid** with their own charges, which refill over time." | none | `continue` | none | |
-| III.2W | Continue on III.2 | focus, 60 ticks: Millbrook and the road Highhold-Millbrook, the charges that pay and refill | | | as before | |
-| III.3 | `build_paid` of the factory with `owed = 0` | "With **barracks**, a city can recruit new units." | "Click on Fernhill, then choose Barracks" | `action` | build a barracks in Fernhill | |
-| III.4 | `factory_built` | "Nice job! Your **factory** is built and now makes charges. The counter here shows how many factories you have, and the maximum." | none | `continue` | none | the factory counter |
-| III.5 | `barracks_built` | "Fernhill can recruit now. New units start without charges and fill up over time." | "Click on Fernhill and press {recruit_key}" | `action` | recruit in Fernhill (once) | recruiting (the menu item, the key, the queue marks) |
-| III.6 | `recruited` | "Your **stance** sets the pace: **Economy** for more charges, **War** for more CP, and you start each game in **Balance**." | "Press {stance_key} and pick Economy" | `action` | set the stance to Economy | the stance chip and menu |
-| done | `factory_built` Millbrook, `barracks_built` Fernhill, a `recruited`, a `stance_changed` | Seal | | | | |
+| III.1 | chapter start | "A city needs **barracks** to recruit new units." Mark: the Barracks item of Fernhill (Fernhill until its menu is open) | "Click on the ring around Fernhill to open its menu" (a click on the helmet selects the group) | `action` | build a barracks in Fernhill | buildings (marks, the menu's Factory and Barracks) |
+| III.2 | Fernhill's city menu opens (UI, `ui: menu`) | "Choose **Barracks** to build it." Mark: the Barracks item | none | (as before) | as before | |
+| III.3 | the first own `build_paid` with `units > 0`, 20 ticks later | "The warehouse was empty, so **the units there paid** with their own charges. They refill over time." Mark: Fernhill's group | none | `continue` | none | |
+| III.3W | Continue on III.3 | focus, 60 ticks: Fernhill and the road Highhold-Fernhill, the charges that refill | | | as before | |
+| III.4 | `barracks_built` | "Fernhill can recruit now. New units start without charges and fill up over time." | "Click on Fernhill and press {recruit_key}" | `action` | recruit in Fernhill (once) | recruiting (the menu item, the key, the queue marks) |
+| III.5 | `recruited` | "A **factory** makes charges, like your capital." | "Click on Millbrook, then choose Factory" | `action` | build a factory in Millbrook (once) | |
+| III.5W | your `BuildFactory` accepted | focus, 100 ticks: Millbrook (its build mark) and the road Highhold-Millbrook | | | as before | |
+| III.6 | `factory_built` | "Nice job! Your **factory** now makes charges. The counter here shows how many you have, and the most you can build." | none | `continue` | none | the factory counter |
+| III.7 | Continue on III.6 | "Your **stance** sets the pace: **Economy** for more charges, **War** for more CP, and you start each game in **Balance**." | "Press {stance_key} and pick Economy" | `action` | set the stance to Economy | the stance chip and menu |
+| done | `barracks_built` Fernhill, a `recruited`, `factory_built` Millbrook, a `stance_changed` | Seal | | | | |
 
-No failure branch: every command the beats ask for is the only one allowed, and its place is fixed. III.3 says nothing
-about the price (round 5): after the factory the menu and the payment marks show it the same way, and "barracks" is
-written without an article (one word for one and many; the owner read "A barracks" as a plural).
+Review 5 put the barracks and the recruit first, the factory last and the stance at the end; the first build card is
+two steps, why (III.1, which asks to open the menu) and the item (III.2, a UI beat on the open menu); the payment card
+waits 20 ticks so the emptied helmet and the build mark are seen first (P1). No failure branch: every command the beats
+ask for is the only one allowed, and its place is fixed. III.1 says nothing about the price: the menu and the payment
+marks show it. "barracks" is written without an article (round 5).
 
 **Opponent script:** none.
 
-**Verified** (`mvp-7`): `BuildFactory(Millbrook)` at tick 1: `build_paid` at once with `units = 3` (the group 3/0)
-and `owed = 1`, the last charge from the roads at 66 (`owed = 0`), `factory_built` at 166. `BuildBarracks(Fernhill)`
-at 67: `units = 2` at once, paid at 70, `barracks_built` at 170. `Recruit(Fernhill)` at 171: `recruited` at 200.
-`SetStance(economy)` at 201. Millbrook's group is 3/2 at 166 and at 200.
+**Verified** (`mvp-7`; review 5): `BuildBarracks(Fernhill)` at tick 1: `build_paid` at once with `units = 3` and
+`owed = 0` (the group 3/0), beat III.3 at 21, III.3W to 81; `barracks_built` at 101 (III.4). `Recruit(Fernhill)` at
+102: `recruited` at 131 (III.5). `BuildFactory(Millbrook)` at 132: `build_paid` at once with `units = 2`, `owed = 0`
+(Millbrook's warehouse had the rest), III.5W 132 to 232; `factory_built` at 232 (III.6). `SetStance(economy)` at 233,
+the chapter ends at 234. (Before review 5: the factory first, built at 166; the barracks at 170; the recruit at 200.)
 
 ### 4.4 Chapter IV: Attack and fight (about 1.5 minutes)
 
@@ -493,52 +542,57 @@ Lowfield-Fernhold 69, Fernhold-Ashwood 78, Wyre-Old Mill 70, Old Mill-Thornwick 
 Thornwick-Stormcrown 93, Ashwood-Stormcrown 99, Ashwood-Gullmoor 70, Gullmoor-Stormcrown 98, Lowfield-Gullmoor 129.
 
 Ashwood and Stormcrown are forest: no terrain effect, so the plan and the charges are the only difference (terrain
-is chapter V; the terrain marks stay hidden). From Fernhold (forest) Ashwood (forest) shows a range, "1-2"; the
-cards count no defenders. The chapter ends by itself: taking the enemy capital ends the match (`match_ended`,
-`reason = capital`).
+is chapter V; the terrain marks stay hidden). The chapter ends by itself: taking the enemy capital ends the match
+(`match_ended`, `reason = capital`), or the chapter's clock runs out (review 5, below).
 
-**Shown at the start:** chapter III's (the stance chip shown locked: no beat here allows it).
+**Chapter data:** `always` = the stance (review 5, P10: what chapter III taught stays usable; it never ends a card's
+pause). IV.10 starts the chapter's clock (`clock` 600 ticks, one minute): the match timer shows the time left to it
+until the chapter ends, and when it runs out before the capital falls, the chapter is done all the same, won by VP
+(the director ends it like a reached goal; the Seal says "Time ran out, and you won on victory points.").
+
+**Shown at the start:** chapter III's (the stance chip open).
 
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
-| IV.1 | chapter start | "In a fight, every charge your units hold is a **shot**. Two shots from opposite sides cancel out; a shot that meets none kills a unit." | none | `continue` | none | |
-| IV.2 | Continue on IV.1 (mark: the count under Ashwood's enemy, "1-2") | three slides (section 4.0): 1. "Ashwood shows **1-2**: the enemy may have up to two units there. Count on two." 2. "Your 3 units hold 3 charges. Attack now, and two of your shots cancel their two; your last shot kills one unit." 3. "One defender is left, and you have **no charge left** to take the city. Don't worry if this takes a while to sink in: it gets easier with every match." | on slide 3: "Click on your group in Fernhold" | `action` | move Fernhold to Ashwood (ordinary or planned) | |
-| IV.3 | the group is selected (UI) | "To solve this, use a **planned order**: it gathers **bonus shots**, which fight like extra charges." | "Hold {planned_key} over Ashwood, turn the wheel to +3, then click" | (as before) | as before | planned orders (`{planned_key}`, the wheel) |
-| IV.4 | your planned order accepted | "Your group gathers its bonus from the warehouse here, then sets off on its own." (not shown: P2, the army walks) | none | none | none | |
-| IV.5 | the enemy's planned intent appears | "That arrow is an enemy **plan**. You see where it goes, but never how strong it is, and they see yours the same way." | none | `continue` | none | |
-| IV.6 | `fight_started` at Ashwood | "A fight runs in **rounds**: each side fires one shot a round, **bonus shots first**." | none | `continue` | none | |
-| IV.7 | the first `fight_round` at Ashwood with a loss, 10 ticks later | "Be careful: once in a fight, you **cannot leave** until it ends, but reinforcements can join to help." | none | `continue` | none | |
-| IV.8 | `node_captured` Ashwood by you, 25 ticks later | "Ashwood is yours, but one battle does not win the war. Take their **capital**, or hold the most **victory points** (VP) when time runs out. Each city earns VP, shown by the gold number at its upper right." | "Let your group refill" | `continue` | none | VP (rail and badges); the match clock for this beat only |
-| IV.8W | Continue on IV.8 | focus, 30 ticks: Ashwood and the road from Fernhold, the charges coming to refill the group | | | as before | |
-| IV.9 | your group in Ashwood is full (`charged = units`) | "Your group is full again. Take **Stormcrown**, their capital." | none | `action` | move Ashwood to Stormcrown | (the clock hidden again) |
-| IV.F | `fight_ended` at Ashwood lost by you (an ordinary attack), 10 ticks later | "As the math showed, your charges ran out before Ashwood fell, so the group turned back. Let it refill, then use a **planned order**." | none | `continue` | a planned move Fernhold to Ashwood | planned orders, if not yet |
-| done | `match_ended`, winner you (the capital) | Seal | | | | |
+| IV.1 | chapter start | "In a fight, each charge is a **shot**. Two shots from opposite sides cancel out; a shot that meets none kills a unit." | none | `continue` | none | |
+| IV.2 | Continue on IV.1 | "Attack **Ashwood** with your group in Fernhold." Marks: Fernhold's group, Ashwood | "Click on your group, then on Ashwood" | `action` | an ordinary move Fernhold to Ashwood | |
+| IV.3 | `fight_ended` at Ashwood lost by you, 10 ticks later | "Your charges ran out before Ashwood fell, so your group turned back." Mark: Ashwood | none | `continue` | none | |
+| IV.4 | your group in Fernhold is full (`group_full`) | "Your group is full again. This time, plan the attack." | "Click on your group in Fernhold" | `action` | a planned move Fernhold to Ashwood | |
+| IV.5 | the group is selected (UI) | "A **planned order** gathers **bonus shots** before it sets off. They fire first and fight like extra charges." | "Hold {planned_key} over Ashwood, turn the wheel to +3, then click" | (as before) | as before | planned orders (`{planned_key}`, the wheel) |
+| IV.6 | your planned order accepted | "Your group gathers its bonus from the warehouse here, then sets off on its own." (not shown: P2, the army walks) | none | none | none | |
+| IV.7 | the enemy's planned intent appears | "That arrow is an enemy **plan**. You see where it goes, but never how strong it is, and they see yours the same way." Mark: Old Mill (the arrow is the map's, no road mark, P8) | none | `continue` | none | |
+| IV.8 | `fight_started` at Ashwood | "A fight runs in **rounds**: each side fires one shot a round, **bonus shots first**." | none | `continue` | none | |
+| IV.9 | the first `fight_round` at Ashwood with a loss, 10 ticks later | "Be careful: once in a fight, you **cannot leave** until it ends, but reinforcements can join to help." | none | `continue` | none | |
+| IV.10 | `node_captured` Ashwood by you, 25 ticks later | "Ashwood is yours. Take their **capital** to win, or hold the most **victory points** (VP) when the clock runs out. Each city earns VP, shown by the gold number at its upper right." | none | `continue` | none | VP (rail and badges); the match clock, to the end of the chapter (`clock` 600) |
+| IV.10W | Continue on IV.10 | focus, 30 ticks: Ashwood and the road from Fernhold, the charges coming to refill the group | | | as before | |
+| IV.11 | your group in Ashwood is full (`charged = units`) | "Your group is full again. Take **Stormcrown**, their capital." | none | `action` | a move Ashwood to Stormcrown, ordinary or planned | |
+| done | `match_ended`, winner you (the capital), or the clock runs out (won by VP) | Seal | | | | |
 
-IV.F is the one failure kept in the tutorial: the bounce is the lesson of the plan. IV.2 allows the ordinary order on
-purpose; after IV.F only the plan is allowed. The beats after a plan is accepted (IV.4 on) are the same on both paths.
+Review 5, show do not tell (owner decision 1): the three slides of IV.2 (the math of the attack) are gone. The player
+first attacks Ashwood head-on, the only order IV.2 allows; the group bounces, and one short card (IV.3) says why. The
+bounce is the main path now, not a failure branch: no chapter has a failure beat any more. IV.4 waits until the group
+is full again, so the plan gathers on a full group. The enemy's plan (IV.7) now comes at tick 230, while the player's
+plan gathers, so its arrow is seen next to the player's own (before, it came at 20 and was over before the plan of the
+failure path). IV.11 allows both orders on the capital (owner decision 2): the ordinary one takes it at once; a plan
+there finds Ashwood's warehouse empty (the chapter's charges went into the first attack, the refill and the plan), so
+it gathers until the clock runs out and the chapter ends as won by VP (the player leads 14 to 13).
 
-IV.2's math is the rule of DEC-07 (rules 1 to 3) and DEC-38 on the view's range "1-2": against two charged defenders
-the three charges cancel two and kill one, the fight ends with the attacker empty and a defender alive (the failure
-branch below: one defender dies, the group bounces). Against one defender the ordinary attack would win (one shot
-cancels, one kills, the third pays the capture), so the slides do the math for the most the range allows, not "in both
-cases" as the owner's draft had it. IV.8 marks Ashwood's VP badge (the gilt lozenge at the upper right of the city's
-ring, `vpBadgeAt`, ui-style 9.5) besides the VP rail and the clock.
+IV.10 marks Ashwood's VP badge (the gilt lozenge at the upper right of the city's ring, `vpBadgeAt`, ui-style 9.5)
+besides the VP rail and the clock.
 
-**Opponent script:** at tick 20 the group of Thornwick, a planned order to Old Mill with a bonus of 1. Nothing else.
+**Opponent script:** at tick 230 the group of Thornwick, a planned order to Old Mill with a bonus of 1. Nothing else.
 
-**Verified** (`mvp-7`): the player's planned order at tick 1 with a bonus of 3: +1 at 60, 90, 120, the group leaves at
-120 (frame of IV.4 at 61). The enemy plan at 20 (beat IV.5), its bonus at 82, Old Mill taken at 138. Contact at
-Ashwood at 198 (IV.6); rounds at 218 and 238 (a bonus shot against a real one), 258 (a bonus shot kills: IV.7), 278 (a
-real shot kills): Ashwood taken at 278, the group 3/1 (IV.8). It is full again at 502 (IV.9); ordered at 503 to
+**Verified** (`mvp-7`; review 5): the ordinary order at tick 1: contact at Ashwood at 78, rounds 98, 118, 138,
+`fight_ended` at 138 lost (one defender dies, the group bounces home empty; IV.3 at 148). Home and full at 218 (IV.4);
+the plan at 219 with a bonus of 3 (IV.6): +1 at 266, 296, 326. The enemy plan at 230 (IV.7), Old Mill taken at 333.
+Contact at Ashwood at 404 (IV.8); rounds at 424 (IV.9 at 454) and 444: Ashwood taken at 444, the group 3/2; IV.10 at
+469 (the clock ends at 1069), IV.10W to 499; full at 502 (IV.11: 3.3 s after the card, Q6). Ordered at 503 to
 Stormcrown: contact at 601, rounds 621 (cancel) and 641 (a kill), the capital taken at 641 and `match_ended`
-(`winner = 0`, `reason = capital`). **Failure:** an ordinary order at 1: contact at 78, rounds 98, 118, 138,
-`fight_ended` at 138 lost (one defender dies, the group bounces home empty; IV.F); home and full at 218, the plan at
-219 (IV.4): +3 at 324, contact at 402 (IV.6), rounds at 422 and 442: Ashwood taken at 442 (the group 3/2); full at 502
-(IV.9), the capital at 641 as on the main path. **Review 4:** the cards wait for the map: IV.7 at 268, IV.8 at 303
-(IV.8W to 333) on the main path; IV.F at 148, IV.7 at 452, IV.8 at 467 (IV.8W to 497) on the failure path; no command
-moves, so the simulation's ticks are as above. (Before: IV.7 at 258, IV.8 at 278; IV.F at 138, IV.7 and IV.8 at 442.) IV.5 does not show on
-this path: the enemy plan was over (Old Mill taken at 138) before the player's plan, so the beat is `optional` (7.3) and
-IV.6 passes it over (PR 1).
+(`winner = 0`, `reason = capital`). **A plan on the capital** at 503: with a bonus of 1 it gathers at 902 and takes
+Stormcrown at 1041; with 2 or 3 it is still gathering at 1069, the clock runs out and the chapter ends at 1070
+(`reason = forfeit`, VP 14 to 13). **In War** (the stance open): the refill is slower, IV.11 at 902, the capital at 1041.
+(Before review 5: the plan first, Ashwood at 278, IV.9 at 502 after a refill of 22 s; the head-on path was the failure
+branch IV.F.)
 
 ### 4.5 Chapter V: Defence (about 1 minute)
 
@@ -563,33 +617,38 @@ Highcrag-Ridgeway 81, Flatford-Eastfield 78, Ridgeway-Stormcrown 124, Eastfield-
 Two lessons in a row: first the player watches mountains hold (Highcrag), then answers a planned strike on a plains
 town (Flatford). Eastfield is a city so the group of 4 passes it (a province holds 3).
 
-**Shown at the start:** chapter IV's without the clock (VP shown; the stance chip and the recruit item locked).
+**Chapter data:** `always` = the stance (review 5, P10).
+
+**Shown at the start:** chapter IV's without the clock (VP shown, the stance chip open; the recruit item locked).
 
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
-| V.1 | an enemy group on a road toward Highcrag (the view) | "The enemy is coming for **Highcrag**, up in the **mountains**." In turn: the mountains (Highcrag) | none | `continue` | none | |
-| V.2 | `fight_round` at Highcrag with `virtual_0 > 0`, 10 ticks later (in turn: the mountains, Highcrag and Highhold; the plains, Flatford and Ridgeway) | "**Mountains** give the defender a bonus shot; **plains** take a charge from the defender when the fight starts. The chevron on the helmet shows it: up helps, down hurts." | none | `continue` | none | terrain marks |
+| V.1 | chapter start (in turn: the mountains, Highcrag; the plains, Flatford) | "**Terrain** changes a fight for the defender: **mountains** help, **plains** hurt. The chevron on a helmet shows which." Marks: the groups of Highcrag and Flatford (their chevrons) | none | `continue` | none | terrain marks |
+| V.2 | an enemy group on a road toward Highcrag (the view) | "The enemy is coming for **Highcrag**, up in the mountains." | none | `continue` | none | |
 | V.3 | `fight_ended` at Highcrag, not captured, 10 ticks later | "Highcrag held against a bigger army, and nobody died." | none | none | none | |
-| V.4 | the enemy's planned intent to Flatford appears (in turn: the plains, Flatford) | "A planned attack is coming for **Flatford**, on the plains. A **road fort** takes charges from enemies crossing it." | "Click on Flatford, choose Fortify road, then click on the road to Eastfield" | `action` | fortify Flatford's road to Eastfield | the warnings at the top; road forts (`{fortify_key}`, the menu item, the marks) |
-| V.5 | your `FortifyRoad` on that road accepted | "Now send Millbrook's group to help Flatford." | none | `action` | move Millbrook to Flatford | |
-| V.6 | your `toll_taken` | "The fort took its toll. With Millbrook's group there, Flatford can afford the charge the plains take." | none | none | none | |
+| V.4 | the enemy's planned intent to Flatford appears | "A planned attack is coming for **Flatford**. A **road fort** weakens enemies on their way in." | "Click on Flatford, choose Fortify road, then click on the road to Eastfield" | `action` | fortify Flatford's road to Eastfield | the warnings at the top; road forts (`{fortify_key}`, the menu item, the marks) |
+| V.5 | your `FortifyRoad` on that road accepted | "Now send Millbrook's group to help Flatford." Mark: Millbrook's group | none | `action` | move Millbrook to Flatford | |
+| V.6 | your `toll_taken` | "The fort took charges from the attackers. With Millbrook's group there, Flatford can spare the charge the plains take." | none | none | none | |
 | done | your `road_fort_built` on Flatford-Eastfield, and Flatford yours after a `fight_ended` at Flatford | Seal | | | | |
 
-No failure branch: V.4 and V.5 wait for their commands, so the fort always works before the strike crosses it and the
-help always arrives (Flatford fell in round 2 when the player was late).
+Review 5: the terrain chevrons are shown from the chapter start and explained before the fight at Highcrag (V.1, the
+card of the old V.2 moved ahead of the march), so the player sees Highcrag's chevron point up and Flatford's down
+before anything happens; the march (V.2) comes on Continue. The road fort is told as weakening the attacker; no card
+says "toll". No failure branch: V.4 and V.5 wait for their commands, so the fort always works before the strike
+crosses it and the help always arrives (Flatford fell in round 2 when the player was late).
 
 **Opponent script:** at tick 10 the group of Ridgeway to Highcrag (an ordinary order). At 200 the group of
 Stormcrown, a planned order to Flatford with a bonus of 1. When Flatford becomes its own, that group goes back to
 Stormcrown (never fires now).
 
-**Verified** (`mvp-7`): the attack leaves Ridgeway at 10 (V.1), reaches Highcrag at 99; rounds at 119 (the mountain
-bonus, `virtual_0 = 1`), 139, 159; `fight_ended` at 159 with no losses, the attacker bounces home. Review 4: V.2 at 129,
-V.3 at 169 (before: 119 and 159). The
-strike is planned at 200 (V.4: the planned intent is in the view of tick 200); the fort at 201 (V.5), works at 301;
-Millbrook's group sent at 202, in Flatford at 267 (4/4). (PR 1: one tick earlier than the first draft, which had the
-player act a tick late after V.4; nothing else moves.) The strike gathers its bonus at 258, pays `toll_paid` 2 charges at the fort's point at 384 (4 units: 2 started
-threes; V.6), contact at Flatford at 415, the first round burns a defender's charge (`burned_0 = 1`), the fight ends at
-475 with no losses, `winner = 0`.
+**Verified** (`mvp-7`; review 5: V.1 at the start, the march card V.2 at 10): from the start Highcrag's
+`terrain_mark` is 1 and Flatford's -1. The attack leaves Ridgeway at 10 (V.2), reaches Highcrag at 99; rounds at 119
+(the mountain bonus, `virtual_0 = 1`), 139, 159; `fight_ended` at 159 with no losses, the attacker bounces home (V.3
+at 169). The strike is planned at 200 (V.4: the planned intent is in the view of tick 200); the fort at 201 (V.5),
+works at 301; Millbrook's group sent at 202, in Flatford at 267 (4/4). The strike gathers its bonus at 258, pays
+`toll_paid` 2 charges at the fort's point at 384 (4 units: 2 started threes; V.6), contact at Flatford at 415, the
+first round burns a defender's charge (`burned_0 = 1`), the fight ends at 475 with no losses, `winner = 0`. (Before
+review 5: V.1 the march at 10, V.2 the terrain card at 129.)
 
 ### 4.6 Advanced 1: Group orders (about 40 s)
 
@@ -619,12 +678,17 @@ Only the group order is allowed, so that never happens.
 
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
-| A1.1 | chapter start | "Sent one at a time, these groups would arrive apart and fight alone." | "Click on one of them" | `action` | a group order of both groups to Ashwood | group selection |
+| A1.1 | chapter start | "Sent one at a time, these groups would not reach Ashwood together." | "Click on one of them" | `action` | a group order of both groups to Ashwood | group selection |
 | A1.2 | a group is selected (UI) | "One **group order** sends both, and they arrive together." | "Shift-click the other group, then click on Ashwood" | (as before) | as before | |
 | A1.3 | your `GroupMove` accepted (`kind = attack`) | "**Fernhold waits** so both arrive together. The hourglass shows the wait." (not shown: P2, the army walks) | none | none | none | |
 | A1.4 | `fight_started` at Ashwood with both groups | "Together, they far outnumber the defenders." | none | none | none | |
-| A1.5 | `node_captured` Ashwood by you, 25 ticks later (the goal waits for it) | "The same order to your own place is a **rally**: the groups gather there for **half the price**." | Continue (it fires with the goal) | (goal) | none | |
+| A1.5 | `node_captured` Ashwood by you, 25 ticks later (the goal waits for it) | "The same order to one of your own places **gathers** the groups there for **half the price**." | Continue (it fires with the goal) | (goal) | none | |
 | done | `node_captured` Ashwood by you | Seal (after Continue on A1.5) | | | | |
+
+Review 5: A1.1 names the real problem (sent one by one the groups do not arrive at the same time; the player noted they
+may still arrive close enough to fight together), and A1.5 says "gathers", not "rally", so it is not taken for the
+rally point of Advanced 2; the Seal lesson is "Gathering at your own place costs half." The stance is open
+(`always`).
 
 **Opponent script:** none.
 
@@ -659,9 +723,14 @@ Fernhold-Ashwood 75, Ashwood-Stormcrown 70, Lowfield-Stormcrown 202.
 | Beat | Trigger | The card says | Action | Pause | Allowed | Unlocks |
 |---|---|---|---|---|---|---|
 | A2.1 | chapter start | "Give your capital a **rally point**, and its recruits walk to the front by themselves." | "Click on Highhold, choose Rally point, then click on Fernhold" | `action` | a rally point of Highhold on Fernhold | rally points |
-| A2.2 | your `SetRallyPoint` accepted (the card stays until both recruits are given, `acts` 2) | "Highhold's new units will now walk to Fernhold. Each walk costs a little CP." | "Recruit two: press {recruit_key} twice" | `action` | recruit in Highhold (twice) | |
+| A2.2 | your `SetRallyPoint` accepted (the card stays until both recruits are given, `acts` 2) | "Highhold's recruits now walk to Fernhold on their own, each for **half the price** of a move." | "Press {recruit_key} twice to recruit two" | `action` | recruit in Highhold (twice) | |
 | A2.3 | the first own `rally_walk_paid` | "Your first recruit is walking to Fernhold. The second will follow." (not shown: P2, the recruit walks) | none | none | as before (A2.2's two recruits, the same count) | |
 | done | two own groups of `rally_walk_paid` arrived at Fernhold (`group_arrived`, then `groups_merged` there) | Seal | | | | |
+
+Review 5: the point of A2.2 is that the recruits' walk is not free but half a move each (CP were taught in II); the
+Seal lessons are "A rally point sends recruits to the front by themselves.", "Each walk costs half a move." and "Set it
+once, and every new recruit follows." ("Your capital has a barracks." told nothing new, "A rally point sends recruits
+on." read unfinished). The stance is open (`always`).
 
 No failure branch: two recruits at most (`allow` counts them), so the walks never lack CP (round 2's A2.F needed a
 third recruit). A2.3 keeps A2.2's `allow` and its count (PR 1): a player who presses the second recruit more than 3 s
@@ -718,12 +787,13 @@ terrain effect) wins in two rounds and pays the capture with its last charge: th
 | A3.2W | Continue on A3.2 | focus, 40 ticks: Highhold, the road to Millbrook, Millbrook | | | as before | |
 | A3.3 | your `packet_lost` (or the enemy takes Lowfield), 12 ticks later | "The enemy took **Lowfield**, and the charge on its road was lost. **Coldwell** touches the enemy now, so it is your front there." Marks: Lowfield, Coldwell | none | `continue` | none | |
 | A3.3W | Continue on A3.3 | focus, 50 ticks: Coldwell, the road Millbrook-Fernhold, Fernhold | | | as before | |
-| A3.4 | Fernhold's warehouse is full (`NodeView.warehouse = warehouse_cap`) | "Fernhold is full. Now move the front: take **Ashwood**." | none | `action` | move Fernhold to Ashwood | |
+| A3.4 | Fernhold's warehouse is full (`NodeView.warehouse = warehouse_cap`) | "Fernhold is full. Capture **Ashwood** to move your front line forward." | none | `action` | move Fernhold to Ashwood | |
 | A3.5 | your first `packet_sent` to Ashwood | "Ashwood is your new front. Its **empty army calls first**, and Fernhold passes its charges on." Marks: Ashwood, the road Fernhold-Ashwood | none | `continue` | none | |
 | A3.5W | Continue on A3.5 | focus, 100 ticks (the goal ends it): Ashwood, Fernhold, the roads Millbrook-Fernhold-Ashwood | | | as before | |
 | done | your group in Ashwood is full (`charged = units`) | Seal | | | | |
 
-No failure branch: A3.4 allows only the attack that wins, and nothing else is allowed. A3.5 pauses since review 4
+No failure branch: A3.4 allows only the attack that wins, and nothing else is allowed but the stance (`always`,
+review 5). A3.4 says what moving the front means (review 5: "Now move the front" was not understood). A3.5 pauses since review 4
 (it did not): the packets it talks about move in the focus phase after it, with no text over them.
 
 **Opponent script:** at tick 20 the group of Gullmoor to Lowfield (an ordinary order). Nothing else.
@@ -753,13 +823,13 @@ chapter starts with it. "Locked" is shown but disabled (section 4.0).
 | `supply` | charges on roads; the pocket and starvation marks (from II.4, when they happen) | | from II.2 | on | on | on | on |
 | `warehouse` | the warehouse diamonds, the amber "waiting for charges" sign, warehouse lines in tips | | from II.3 | on | on | on | on |
 | `buildings` | building marks on cities, builds under way, the Factory and Barracks items of the city menu | | | from III.1 | on | on | on |
-| `factories` | the factory counter of the top bar | | | from III.4 | on | on | on |
-| `recruit` | the Recruit item and key, the queue marks | | | from III.5 | locked | locked | locked (A2: allowed) |
-| `stance` | the stance chip and its menu (`{stance_key}`) | | | from III.6 | locked | locked | locked |
-| `planned` | planned orders (`{planned_key}`, the wheel, the bonus pill) | | | | from IV.3 | locked | locked |
-| `vp` | the VP rail, the VP badges of cities | | | | from IV.8 | on | on |
-| `clock` | the match timer | | | | IV.8 only | | |
-| `terrainMarks` | the terrain chevrons of defenders (DEC-45) | | | | | from V.2 | on |
+| `factories` | the factory counter of the top bar | | | from III.6 | on | on | on |
+| `recruit` | the Recruit item and key, the queue marks | | | from III.4 | locked | locked | locked (A2: allowed) |
+| `stance` | the stance chip and its menu (`{stance_key}`) | | | from III.7 | on (`always`) | on (`always`) | on (`always`) |
+| `planned` | planned orders (`{planned_key}`, the wheel, the bonus pill) | | | | from IV.5 | locked | locked |
+| `vp` | the VP rail, the VP badges of cities | | | | from IV.10 | on | on |
+| `clock` | the match timer (in IV the chapter's clock) | | | | from IV.10 to the end of IV | | |
+| `terrainMarks` | the terrain chevrons of defenders (DEC-45) | | | | | from V.1 | on |
 | `alerts` | the warnings at the top (attacks on you, `{alert_key}`) | | | | | from V.4 | on |
 | `fort` | road forts (`{fortify_key}`, the menu item, the marks) | | | | | from V.4 | locked |
 | `groupSelect` | Shift-click and Shift-drag selection | | | | | | A1 |
@@ -831,7 +901,7 @@ Out of a match the client has no `ruleset_public` (it comes in `welcome`), so th
 | Starting garrisons | yes, one group per node, `start_units`, `start_charged` (an empty or half-charged group too: II starts Westmarch 3/0); **not** in provinces, **not** in neutral nodes (load errors) | yes, only in cities and capitals |
 | Warehouses | **capital only**: `start_stock` of any other node is dropped (DEC-41 item 9); a capital may start at 0 (validated) | the capital's stock; I starts it empty; the roads fill the rest in seconds; III relies on the empty city warehouses |
 | Buildings | **no**: every capital has its barracks and its factory (`initial_state`), nothing else can be set | Advanced 2 uses the capital's barracks; III builds its own |
-| CP, stance | no (the ruleset: `cp.start`, `economy.start_stance`) | `cp_start` of the chapter file (7.3): chapter I |
+| CP, stance | no (the ruleset: `cp.start`, `economy.start_stance`) | `cp_start` of the chapter file (7.3): chapter I; `cp_ticks_start` (the CP progress at the start): chapter II |
 | Groups on roads, gathering plans, fights in progress | no | none needed (the scripted opponent makes them) |
 
 **Finding: the eight chapters need no map-format extension.** Each was designed inside these limits and played on
@@ -901,16 +971,22 @@ as it is in the code:
 - **`cp_start`** (optional): the starting CP of the chapter, `"cap"` or hundredths in `0..cp.cap`. The server plays the
   chapter on the main ruleset with only `cp.start` replaced (a derived `Ruleset`, `dataclasses.replace`, as map tempo
   derives `Match.rules`); no rule number in code, no new rule.
+- **`cp_ticks_start`** (optional, review 5): the player's progress toward the next CP income at the start
+  (`PlayerState.cp_ticks`), below the CP period of the start stance (`TutorialDirector.prepare` checks it on the
+  match's rules, map tempo applied, and sets it before the first tick): II starts at 70 of 100, so its first income
+  comes 3 s after its first card. A starting state like a garrison, not a rule.
+- **`always`** (optional, review 5): commands allowed at every beat besides the beat's `allow` (IV, V and the
+  Advanced chapters: `[{"set_stance": {}}]`); one never ends a card's pause and has no `max`.
 - **`ui`**: the pieces shown at the chapter start (section 4.9's flags; `check_chapters` checks it equals what the chapters
   before it leave: a main chapter those of the main chapters before it, an Advanced one those of the whole main road, so
-  a chapter played alone still starts right); a beat's `ui` adds pieces, its `hide` removes them (IV.9 hides the clock
-  IV.8 showed).
+  a chapter played alone still starts right; the clock never carries over); a beat's `ui` adds pieces, its `hide`
+  removes them.
 - **`allow`**: per beat, a list of command patterns: the command type of the wire (`move`, `cancel_order`,
   `build_factory`, `build_barracks`, `recruit`, `set_stance`, `fortify_road`, `group_move`, `set_rally_point`) and its
   places by name (`from` the group's node, `to`, `node`, `toward` the road's other end, `groups` by their nodes,
   `stance`, `planned`: `true`, `false` or absent for either; an absent field matches any); `max` bounds how often the
-  pattern is accepted while the beat lasts. Every `move` of the chapters is `"planned": false` except IV.2 (either),
-  IV.4's trigger and IV.F (planned). `forfeit` (leaving) is always allowed. A beat without `allow` keeps the one before it
+  pattern is accepted while the beat lasts. Every `move` of the chapters is `"planned": false` except IV.4 and IV.6's
+  trigger (planned) and IV.11 (either; review 5). `forfeit` (leaving) is always allowed. A beat without `allow` keeps the one before it
   with its counts (a UI beat must not have one; A2.3 keeps A2.2's); `[]` allows nothing. Split, merge, releasing a plan,
   cancelling a recruit and the leaf shift have no pattern: never allowed in a chapter.
 - **`pause`**: `"continue"`, `"action"` or absent (section 4.0). A UI beat must not pause (the server does not see it).
@@ -919,6 +995,8 @@ as it is in the code:
   `tutorial.<chapter>.<beat>.<n>`. **`with_goal`** (client only): the beat fires with the goal (A1.5): the client keeps
   its card with Continue before the Seal. **`optional`**: the beat after it may begin first, and this one is then passed
   over (IV.5, see the failure path of section 4.4).
+- **`clock`** (review 5, IV.10): the chapter's clock starts with this beat and runs out that many ticks after the beat
+  began; the chapter is then done, won by VP, unless its goal came first. At most one beat of a chapter has one.
 - **`focus`** (review 4, P5): a focus beat, `<n>W` after beat `n`: no card, no text, no step lozenge, no pause, no
   `allow` of its own; for that many ticks its marks light the places, roads and warehouse rows where charges are made
   and carried over a dimmed map (a `hud` mark outlines the HUD piece). The beat after it begins when its trigger has
@@ -927,7 +1005,8 @@ as it is in the code:
 - **`mark`**: the Compass marks of the beat, each one of: `{"node": X}` (with `"ring": true` the wide ring of capacity
   and fights), `{"group": X}` (the own group standing in X), `{"road": [A, B]}`, `{"hud": "cp" | "stance" | "vp" |
   "clock" | "alerts" | "factories"}`, `{"menu": "factory" | "barracks" | "recruit" | "fortify" | "rally", "at": X}` (the
-  item of X's menu), `{"vp_badge": X}`; and since review 4 (P3) the element of a place, lit itself:
+  item of X's menu), `{"vp_badge": X}`, `{"enemy": X}` (review 5: the enemy figure seen on a road that touches X, the fact of
+`enemy_road`, followed as it walks: II.4); and since review 4 (P3) the element of a place, lit itself:
   `{"capacity": X}` (the segments of its capacity ring), `{"warehouse": X}` (its warehouse row), `{"count": X}` (the
   number or range under the group there).
 - **`on`** (triggers), exactly one kind: `start`; `event` with its filters (`node`, `to` the `to_node`, `edge` by its two
@@ -938,7 +1017,7 @@ as it is in the code:
   unit charged), `enemy_road` (an enemy group seen on a road touching the node: the view says where a figure is, never
   where it goes), `enemy_plan` (an enemy planned intent targets the node); `continued` (Continue on that beat); `any` (the first of several that fires: A3.3's `packet_lost` or Lowfield taken by the enemy; IV.7's
   round with a loss on either side); `ui` (client only: `select` of a group, `group` the node it stands in or absent for
-  any). **`after`** (review 4, P1) on any trigger the server fires (not `start`, `ui`, an inner trigger of `any` or a
+  any; or, since review 5, `menu` with `node`: the city menu of that node opens, III.2). **`after`** (review 4, P1) on any trigger the server fires (not `start`, `ui`, an inner trigger of `any` or a
   goal condition): the beat begins that many ticks after its trigger fired.
 - **`goal`**: `{"all": [...]}`, every condition at once; an `event` condition holds once its event came (`since` a beat,
   `count` times: A2's two arrivals at Fernhold of groups named by `rally_walk_paid`), a `view` condition while it is
@@ -983,8 +1062,9 @@ disagree).
   its card shows before the result (A1.5). A failure beat with `after` begins that many ticks after its trigger. An `action` card's pause ends
   when the server admits a command of its `allow` (in `submit`); if the simulation then rejects it, the card waits
   again.
-- **The client** gets the beat in a new server message `tutorial` (`{chapter, beat, paused, used, done, tick}`: `beat`
-  is `null` before the first one (chapter V), `used` counts the accepted commands of each `allow` entry against its
+- **The client** gets the beat in a new server message `tutorial` (`{chapter, beat, paused, used, done, tick,
+  clock_end, by_clock}`: `clock_end` (review 5) is the tick the chapter's clock runs out, `by_clock` that it ran out; `beat`
+  is `null` before the first one, `used` counts the accepted commands of each `allow` entry against its
   `max`, `done` says the goal holds, `tick` (review 4) is the tick the beat began; sent on every change, after the
   tick's acks and events, and after `welcome`); it shows that beat's card, mark, `ui` and `allow`, the card once its
   map has drawn `tick`. Only the UI beats (a selection) are walked by the client itself, between two
@@ -1096,6 +1176,7 @@ is a fresh tutorial and a player keeps the progress across browsers).
 | Rules | none: no DEC, no `SIM_VERSION`, no golden replays (`cp_start` replaces a ruleset value for a chapter, like map tempo) |
 | The server message `tutorial` (`chapter`, `beat`, `paused`, `used`, `done`) | `PROTOCOL_VERSION`++ (53 to 54), `regen:protocol`, in PR 1 |
 | Its `tick` (review 4, #1047) | `PROTOCOL_VERSION`++ (54 to 55), `regen:protocol` |
+| Its `clock_end` and `by_clock` (review 5, #1054) | `PROTOCOL_VERSION`++ (55 to 56), `regen:protocol` |
 | A locked command | none: an `ack` with the existing `INVALID_ARGUMENT` (Q10) |
 | Pause and resume of a chapter | none on the wire beyond `tutorial`: the existing `resume` message; the runner's existing `pause()` and `resume()`. A line in DEC-05 (mechanics.md 19: "a tutorial chapter pauses at its cards, no limit") in PR 1, no new DEC: pauses are server settings, not rules |
 | Chapter files (new Pydantic model) | the schema and `protocol.gen.ts` by `regen` (no WebSocket message carries them) |
@@ -1294,6 +1375,30 @@ arrow, a focus lights the charges moving on the roads; P9 the pace of a multi-pa
   and the bonus counter over it (IV.3) outside its rings: both stand at its reach (`compassReach`), and the head of a
   plan's ribbon stops before them.
 
+### 7.15 Review 5, batch 2 (the content) as built (#1054)
+
+The principles the player feedback of 2026-11-14 added, as far as the content goes: P10 what was taught stays usable
+later unless it breaks the script; P11 show, do not tell. The presentation (P7 a card never covers an arena, P8 no road
+mark where the map draws an arrow, P9 the player's pace) is #1053 (section 7.14).
+
+- **Format** (`gow_protocol.tutorial`): `Chapter.cp_ticks_start`, `Chapter.always`, `Beat.clock`, the trigger
+  `{"ui": "menu", "node": X}` and the mark `{"enemy": X}` (section 7.3); `Chapter.ui_after` never carries the clock
+  over. `TutorialMsg.clock_end` and `by_clock` (`PROTOCOL_VERSION` 56).
+- **Server** (`gow_server.tutorial`): `TutorialDirector.prepare(match)` sets the CP progress before the first tick (the
+  runner calls it); `admit` admits an `always` command without ending a pause or counting it (`Admission.entry =
+  ALWAYS`); a beat with `clock` sets the tick it runs out, and `observe` makes the chapter done (`by_clock`) when it
+  does, so the runner queues the scripted side's `Forfeit` as for a goal.
+- **Client:** the coach walks a UI beat on an open city menu (`TutorialCoach.onMenu`, fed by the order controller's
+  city menu), allows `always` commands in `allows` and `allowsFacts` (so the stance chip is open), and passes
+  `clock_end` to the HUD (`HudState.setClockEnd`: the top bar's timer counts to it); the Seal says "Time ran out, and
+  you won on victory points." when `by_clock`. The map draws a Compass on the enemy figure an `enemy` mark names
+  (`EntityView.enemyFigureOn`). `{esc}` in a card is the Esc key cap.
+- **Maps:** `tut-build` Fernhill 3/3 (version 2). No other map changed: the refill after Ashwood is quick with the new
+  order of chapter IV (Q6).
+- **The walkthrough** (`mockups/tutorial-walkthrough.html`) still shows the cards of round 5 and review 4; this
+  document is right where they differ (section 8). Its frames need the chapters replayed and redrawn, a job of its
+  own.
+
 ---
 
 ## 8. The look [accepted 2026-11-13]
@@ -1354,9 +1459,9 @@ The defaults are in force until the owner changes them.
   added**: no card quotes a ruleset number, and the rules reference leaves the starvation pace out (the countdown mark
   shows it); the capital's VP multiplier is not quoted. Alternative: add `starvation` and quote its pace in the
   reference.
-- **Q6.** Chapter IV is the longest (about 64 s of play: the group waits about 22 s to fill up before the capital).
-  Keep the wait (IV.8 explains the VP meanwhile), or start Ashwood with an empty warehouse but give the player a second
-  group? **Default: keep.**
+- ~~**Q6.** Chapter IV is the longest (about 64 s of play: the group waits about 22 s to fill up before the capital).~~
+  **Settled by review 5:** with the head-on attack first, Ashwood falls later and the roads have filled meanwhile: the
+  group is full 3.3 s after IV.10 (no map change needed).
 - **Q7.** Chapter III asks for four things (factory, barracks, recruit, stance). Keep all four in one chapter, or move
   the stance to chapter II? **Default: keep** (the stance is the throttle of what III builds).
 - **Q8 (changed in round 3).** On Charter a main chapter opens when the one before it is done; the first match is open
@@ -1379,6 +1484,12 @@ The defaults are in force until the owner changes them.
 - **Q14 (new, round 5).** The Advanced chapter is named "Supply distribution" (the eyebrow already says "Advanced") and
   comes third on the Advanced rule. **Default: as written.** Alternative: the owner's "Advanced supply distribution",
   or first on the Advanced rule (it deepens chapter II).
-- **Q15 (new, round 5).** IV.2 does the math for the most the range "1-2" allows and says so ("Count on two");
-  the owner's draft said neither case wins, which is not the rule (one charged defender loses to three charges).
-  **Default: as written.** Alternative: a fourth slide for the one-defender case.
+- ~~**Q15 (new, round 5).** IV.2 does the math for the most the range "1-2" allows.~~ **Settled by review 5:** the
+  slides are gone; the player sees the head-on attack bounce (IV.3).
+- **Q16 (new, review 5).** A planned order on Stormcrown (IV.11, allowed by decision 2) cannot gather in time: the
+  chapter's charges went into the first attack, its refill and the plan on Ashwood, and the capital's next charge comes
+  later than the clock, so a plan of +2 or +3 gathers until the clock runs out and the chapter ends as won by VP (a +1
+  plan takes the capital at 1041 of 1069). **Default: as built** (both orders end in a win; the ordinary one at once).
+  Alternative: a stocked city near Ashwood (the map-format extension of 7.1, a DEC note), so a plan there gathers too.
+- **Q17 (new, review 5).** Chapter IV's clock starts with IV.10 (Ashwood taken) and runs one minute of simulation
+  (the cards' pauses stop it). **Default: as built.** Alternative: start it with the chapter.
