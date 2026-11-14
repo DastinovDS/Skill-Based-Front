@@ -11,6 +11,10 @@ bot match (``POST /api/bot-matches``).
 
 ``GET /api/ruleset`` is the public part of the main ruleset, for the rules reference (no map
 tempo: the reference says bigger maps are faster). Public and cacheable.
+
+``GET`` and ``PUT /api/me/tutorial`` are the tutorial progress of the account
+(``gow_server.tutorialprogress``, section 7.8): the chapters done are recorded by the server when
+a chapter reaches its goal, the interface flags come from the client.
 """
 
 import logging
@@ -23,6 +27,7 @@ from gow_bots.bots.scripted import ScriptedBot
 from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.tutorial import Chapter, ChapterId
 from gow_server.abuse import Limits, enforce, server_full
+from gow_server.db import DbSession
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.maps import MapCatalog
@@ -35,6 +40,7 @@ from gow_server.tutorial import (
     chapter_rules,
     script_of,
 )
+from gow_server.tutorialprogress import TutorialFlags, TutorialProgress, read, write_flags
 from gow_sim.maps import MapDef
 from gow_sim.match import given
 from gow_sim.ruleset import Ruleset
@@ -54,6 +60,7 @@ def opponent_seat(chapter: Chapter, mapdef: MapDef) -> BotSeat:
 
 router = APIRouter(prefix="/api/tutorial-matches", tags=["tutorial"])
 ruleset_router = APIRouter(prefix="/api/ruleset", tags=["ruleset"])
+progress_router = APIRouter(prefix="/api/me/tutorial", tags=["tutorial"])
 
 
 class CreateTutorialMatch(BaseModel):
@@ -127,3 +134,20 @@ async def get_ruleset(request: Request, response: Response) -> RulesetPublic:
     rules: Ruleset = request.app.state.ruleset
     response.headers["Cache-Control"] = "public, max-age=300"
     return RulesetPublic.from_ruleset(rules)
+
+
+@progress_router.get("")
+def get_progress(response: Response, player: CurrentPlayer) -> TutorialProgress:
+    """The tutorial progress of the account (a guest has its own)."""
+    response.headers["Cache-Control"] = "no-store"
+    return read(player)
+
+
+@progress_router.put("")
+def put_progress(
+    body: TutorialFlags, response: Response, player: CurrentPlayer, session: DbSession
+) -> TutorialProgress:
+    """Replace the interface flags; the chapters done stay the server's (``import_done`` is taken
+    once, while none is done)."""
+    response.headers["Cache-Control"] = "no-store"
+    return write_flags(session, player, body)

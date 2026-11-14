@@ -55,18 +55,18 @@ export class Player {
     await context.addInitScript(() => {
       window.sessionStorage.setItem('sbf.introSeen', '1');
     });
+    const player = new Player(nick, await context.newPage());
     if (!tutorialOffer) {
-      // The entry popup of the tutorial (#806) is for players new to the game: "Don't show again".
-      await context.addInitScript(() => {
-        if (window.localStorage.getItem('sbf.tutorial') === null) {
-          window.localStorage.setItem(
-            'sbf.tutorial',
-            JSON.stringify({ v: 1, done: [], offerOff: true, firstMatch: false }),
-          );
-        }
+      // The entry popup of the tutorial (#806) is for players new to the game: the progress lives
+      // on the account, so the answer of the server says "Don't show again" (the page's own PUT
+      // keeps it that way).
+      await player.page.route('**/api/me/tutorial', async (route) => {
+        if (route.request().method() !== 'GET') return route.continue();
+        const response = await route.fetch();
+        const body = (await response.json()) as Record<string, unknown>;
+        return route.fulfill({ response, json: { ...body, offer_off: true } });
       });
     }
-    const player = new Player(nick, await context.newPage());
     await player.page.routeWebSocket(/\/ws\/match\//, (route) => {
       const server = route.connectToServer();
       player.#links.push({ page: route, server });

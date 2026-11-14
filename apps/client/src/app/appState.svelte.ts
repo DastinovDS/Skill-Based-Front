@@ -115,7 +115,7 @@ export class AppState {
   queueBanUntil = $state.raw<number | null>(null);
   /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
   readonly backdrop: MapFile = MENU_MAP;
-  /** The tutorial progress of this browser (#806, section 7.8). */
+  /** The tutorial progress of the account (#806, section 7.8). */
   readonly tutorial: TutorialProgressState;
   /**
    * The entry popup that offers the tutorial (#806, section 3, "Entry") is up. Asked once per
@@ -138,7 +138,7 @@ export class AppState {
     this.api = opts.api ?? new Api();
     this.maps = new MapCache(this.api);
     this.#storage = opts.storage ?? (() => window.localStorage);
-    this.tutorial = new TutorialProgressState(this.#storage);
+    this.tutorial = new TutorialProgressState(this.api, this.#storage);
     this.#botTimeoutMs = opts.botTimeoutMs ?? BOT_START_TIMEOUT_MS;
     this.#location = opts.location ?? window.location;
     this.#replaceUrl =
@@ -536,6 +536,7 @@ export class AppState {
   forget(): void {
     forgetGuest(this.#storage);
     this.guest = null;
+    this.tutorial.clear();
     this.playerId = null;
     this.colour = null;
     this.queueBanUntil = null;
@@ -565,6 +566,7 @@ export class AppState {
       this.screen = { name: 'welcome' };
       return;
     }
+    await this.tutorial.load(guest.token);
     // A page reload (or a new tab) in a running match: go back to it inside the reconnect window.
     const running = await this.refreshActiveMatch();
     if (running !== null) {

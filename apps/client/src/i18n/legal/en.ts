@@ -43,7 +43,7 @@ export const en = {
       {
         heading: 'Guest account and password',
         body: [
-          'To play you pick a nickname (3 to 16 characters). The server stores the nickname, the time of registration and a SHA-256 hash of a random token it issues. The token itself is not stored on the server. If you set a password, the server stores only its hash (scrypt with a random salt); the password itself is neither stored nor logged. Logging in with nickname and password issues a new token and the previous one stops working. There is no password recovery: a forgotten password means you cannot log in from another device. There is no e-mail or real name. Do not use your real name as a nickname.',
+          'To play you pick a nickname (3 to 16 characters). The server stores the nickname, the time of registration, your progress in the tutorial (the chapters you completed, the hints you saw or turned off, whether you chose not to be offered the tutorial again) and a SHA-256 hash of a random token it issues. The token itself is not stored on the server. If you set a password, the server stores only its hash (scrypt with a random salt); the password itself is neither stored nor logged. Logging in with nickname and password issues a new token and the previous one stops working. There is no password recovery: a forgotten password means you cannot log in from another device. There is no e-mail or real name. Do not use your real name as a nickname.',
           'Purpose: playing, telling players apart, the rating. Legal basis: Art. 6(1)(b) GDPR (providing the game) and Art. 6(1)(f) GDPR (operating a rated game). Storage: until you ask for deletion (see "Your rights"); there is no automatic deletion of inactive guests.',
         ],
       },
@@ -67,14 +67,13 @@ export const en = {
       {
         heading: 'Data in your browser',
         body: [
-          'The game saves up to six entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
+          'The game saves up to five entries in the localStorage of your browser and one entry in its sessionStorage. No cookies are set. Clearing the site data of this page in your browser removes all of them.',
         ],
         items: [
           'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
           'sbf.sound: whether you muted the sound and the volume you chose, saved when you change either.',
           'sbf.settings: the interface scale, the motion and the opening scene you chose in the settings, saved when you change one.',
           'sbf.keys: the keys of a match you chose in the settings, saved when you change one.',
-          'sbf.tutorial: your progress in the tutorial (the chapters you completed, the first match while it runs and whether you played it, the hints of the first match you saw or turned off, and whether you chose not to be offered the tutorial again), saved when one of them changes. It holds no personal data.',
           'sbf.locale: the interface language, saved only when you choose one yourself. The game is English only for now and has no language selector, so this entry normally does not appear.',
           'sbf.introSeen (sessionStorage, not localStorage): a mark that the opening scene of the start screen already played in this tab, so that it does not play again on a reload. It holds no personal data and is removed when you close the tab.',
         ],

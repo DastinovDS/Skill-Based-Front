@@ -119,6 +119,8 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
     page.getByRole('radio', { name: /Chapter II: Map and economy, Next/ }),
   ).toHaveAttribute('aria-checked', 'true');
   await shot(page, '08-charter-after-I');
+  // The server recorded the chapter itself, and a reload shows it from the account.
+  await expect.poll(async () => (await progress(page))['done']).toEqual(['units']);
   expect(errors).toEqual([]);
   await player.close();
 });
@@ -131,12 +133,8 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   const { page } = player;
   await player.enter();
   await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
-  await page.evaluate(() => {
-    window.localStorage.setItem(
-      'sbf.tutorial',
-      JSON.stringify({ v: 1, done: ['units', 'economy', 'building'], offerOff: true }),
-    );
-  });
+  // Chapters are the server's to record: a fresh account takes the import of the old browser's.
+  await putProgress(page, { import_done: ['units', 'economy', 'building'] });
   await page.reload();
   await page.getByRole('button', { name: 'How to play' }).click();
   await expect(
@@ -178,11 +176,34 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   await player.close();
 });
 
-/** The tutorial progress of the page (`sbf.tutorial`). */
+/** The tutorial progress of the account (`GET /api/me/tutorial`, snake_case). */
 async function progress(page: Page): Promise<Record<string, unknown>> {
-  return page.evaluate(
-    () =>
-      JSON.parse(window.localStorage.getItem('sbf.tutorial') ?? '{}') as Record<string, unknown>,
+  return page.evaluate(async () => {
+    const guest = JSON.parse(window.localStorage.getItem('sbf.guest') ?? '{}') as { token: string };
+    const response = await fetch('/api/me/tutorial', {
+      headers: { Authorization: `Bearer ${guest.token}` },
+    });
+    return (await response.json()) as Record<string, unknown>;
+  });
+}
+
+/** Writes the flags of the account's progress, the others as they are (`PUT /api/me/tutorial`). */
+async function putProgress(page: Page, patch: Record<string, unknown>): Promise<void> {
+  const current = await progress(page);
+  await page.evaluate(
+    async ({ current, patch }) => {
+      const guest = JSON.parse(window.localStorage.getItem('sbf.guest') ?? '{}') as {
+        token: string;
+      };
+      const { done: _done, ...flags } = current;
+      const response = await fetch('/api/me/tutorial', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${guest.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...flags, ...patch }),
+      });
+      if (!response.ok) throw new Error(`PUT /api/me/tutorial ${String(response.status)}`);
+    },
+    { current, patch },
   );
 }
 
@@ -217,28 +238,23 @@ test('the rules from the chapter select, and the first match with its hints acro
   await shot(page, '15-hint-H1');
   await hint.getByRole('button', { name: 'Close the hint' }).click();
   await expect(hint).toHaveCount(0);
-  const kept = await progress(page);
-  expect(kept['hints']).toEqual(['H1']);
-  expect(typeof kept['firstMatchId']).toBe('string');
+  await expect.poll(async () => (await progress(page))['hints']).toEqual(['H1']);
+  expect(typeof (await progress(page))['first_match_id']).toBe('string');
 
   // A reload returns to the first match with its hints: with H1 forgotten, it shows again.
-  await page.evaluate(() => {
-    const saved = JSON.parse(window.localStorage.getItem('sbf.tutorial') ?? '{}') as object;
-    window.localStorage.setItem('sbf.tutorial', JSON.stringify({ ...saved, hints: [] }));
-  });
+  await putProgress(page, { hints: [] });
   await page.reload();
   await player.expectPlaying();
   await expect(hint).toContainText('Bigger maps run faster', { timeout: 30_000 });
   await hint.getByRole('button', { name: 'Turn off hints' }).click();
   await expect(hint).toHaveCount(0);
-  expect((await progress(page))['hintsOff']).toBe(true);
+  await expect.poll(async () => (await progress(page))['hints_off']).toBe(true);
 
   // Its end marks the tutorial finished.
   await player.forfeit();
   await expect(page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
-  const done = await progress(page);
-  expect(done['firstMatch']).toBe(true);
-  expect(done['firstMatchId']).toBeNull();
+  await expect.poll(async () => (await progress(page))['first_match']).toBe(true);
+  expect((await progress(page))['first_match_id']).toBeNull();
   expect(errors).toEqual([]);
   await player.close();
 });

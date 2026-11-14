@@ -274,10 +274,27 @@ describe('AppState', () => {
       createBotMatch: vi.fn(() =>
         Promise.resolve({ match_id: 'm1', map_id: 'narrows', level: 'easy' as const, player: 0 }),
       ),
+      activeMatch: () => Promise.resolve(null),
+      // The server keeps the progress of the account: a new app on the same account reads it.
+      tutorialProgress: () => Promise.resolve({ ...account }),
+      saveTutorialFlags: (_token: string, flags: Record<string, unknown>) => {
+        delete flags['import_done'];
+        account = { ...account, ...flags };
+        return Promise.resolve({ ...account });
+      },
     } as const;
-    const { app } = setup('', storage, api);
+    let account: Record<string, unknown> = {
+      done: [],
+      offer_off: false,
+      first_match: false,
+      first_match_id: null,
+      hints: [],
+      hints_off: false,
+    };
+    const { app } = setup('', storage, api as unknown as Partial<Api>);
     await app.start();
     await app.playFirstMatch();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(api.createBotMatch).toHaveBeenCalledWith(
       't',
       'easy',
@@ -285,8 +302,9 @@ describe('AppState', () => {
       expect.any(AbortSignal),
     );
     expect(app.tutorial.isFirstMatch('m1')).toBe(true);
-    // A reload: a new app on the same browser storage still knows the match (its hints, its mark).
-    const again = setup('', storage, api).app;
+    // A reload: a new app on the same account still knows the match (its hints, its mark).
+    const again = setup('', storage, api as unknown as Partial<Api>).app;
+    await again.start();
     expect(again.tutorial.isFirstMatch('m1')).toBe(true);
     expect(again.tutorial.isFirstMatch('m2')).toBe(false);
     const end: MatchEndMsg = {

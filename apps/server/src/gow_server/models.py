@@ -6,9 +6,17 @@ Times are naive UTC (SQLite has no time zones): use ``utcnow()``.
 """
 
 from datetime import UTC, datetime
-from typing import Final
+from typing import Any, Final
 
-from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, MetaData, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    ForeignKey,
+    LargeBinary,
+    MetaData,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Named constraints: Alembic batch mode on SQLite can only alter or drop a named constraint.
@@ -61,6 +69,9 @@ class Player(Base):
     """The colour the player asks for in a match (DEC-49): a ``gow_protocol.messages.PlayerColour``
     value, checked by ``PUT /api/me/colour``. The match may give another one on a clash
     (``gow_server.colours``)."""
+    tutorial: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    """The tutorial progress (#806): a ``gow_server.tutorialprogress.TutorialProgress`` document.
+    ``NULL``: nothing yet. A new document is assigned on every change (never mutated in place)."""
 
 
 class Rating(Base):

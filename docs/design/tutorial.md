@@ -32,7 +32,7 @@ plan; 8 the look; 9 open questions.
 **Round 1 (2026-11-13), kept.** The opponent of a chapter is scripted (an exact command sequence, the lesson is always
 the same), the first match is against `@easy`. ~~A new guest's first "Play" starts the tutorial, with a visible
 "Skip";~~ **[superseded by round 5]**: a popup offers the tutorial on the first entry; it is reachable later from the
-menu. Completed chapters are kept in the browser; any chapter can be replayed. The old How to play text page becomes a
+menu. Completed chapters are kept on the account (7.8); any chapter can be replayed. The old How to play text page becomes a
 short rules reference whose numbers come from `ruleset_public`; `regen:howto` and the v1 text go away when the tutorial
 lands. The combat rules card of #766 was closed into this issue (2026-11-09): its rows are covered by chapters IV and V
 and the reference.
@@ -193,7 +193,7 @@ Charter ─> any open intro (II ... V; Advanced I to III after V) ─> the chapt
 | **Rules reference** | one page of short rules with live numbers (section 6) | Charter | back |
 
 **Entry** (round 5). The popup shows on the main screen of an entry (the first time the main screen appears after the
-app loads) while all of these hold: `sbf.tutorial` has no done chapter and `firstMatch` false, `offerOff` is not set
+app loads) while all of these hold: the account's progress has no done chapter and `firstMatch` false, `offerOff` is not set
 (section 7.8), and the player has played no match (the profile's count; a guest and an account alike, Q3). "Start the
 tutorial" opens the intro of chapter I; "Not now" or Esc closes it and the main screen stays as it was; with "Don't
 show again" ticked either button sets `offerOff`. So a player who says "Not now" sees it again at the next entry, and
@@ -767,7 +767,7 @@ chapter starts with it. "Locked" is shown but disabled (section 4.0).
 ## 5. The hints of the first match
 
 The first match is a normal bot match: `@easy` (`gow_server.botmatch`), `narrows` (29 nodes, Q1), unrated, one pause,
-the full HUD, no locks. The client turns on the hints for it only (Q2); each shows **once** (kept in `sbf.tutorial`),
+the full HUD, no locks. The client turns on the hints for it only (Q2); each shows **once** (kept in the account's progress, 7.8),
 when its trigger fires. A hint never pauses the match and never covers its place; it goes away by itself after 12 s or
 by its close button, and "Turn off hints" is one click on every hint. The look is the chapter card (Leader) without the
 step lozenges.
@@ -1059,12 +1059,33 @@ disagree).
 
 ### 7.8 Progress
 
-`localStorage` `sbf.tutorial` (wrapped in `try`, as the other `sbf.*` keys): `{"v": 1, "done": ["units", "economy"],
-"offerOff": false, "firstMatch": false, "firstMatchId": null, "hints": ["H1"], "hintsOff": false}` (`firstMatchId`:
-the first match while it runs, PR 3, 7.12). `offerOff` (round 5) is set by either
-button of the entry popup with "Don't show again" ticked; it replaces round 1's `skipped`. Whether the popup was shown in
-this visit is kept in memory only, so it shows at most once per entry. A guest and an account on the same browser share
-it (round 1: "in the browser"). No server state.
+The progress belongs to the account, a guest included, not to the browser (owner decision 2026-11-14, #1049: after
+`stack:reset` wiped the database the progress was still there, because it lived in `localStorage`; now a fresh database
+is a fresh tutorial and a player keeps the progress across browsers).
+
+- **Storage.** `players.tutorial`, one nullable JSON column (Alembic `0010`), the document of
+  `gow_server.tutorialprogress.TutorialProgress`: `{"done": ["units", "economy"], "offer_off": false, "first_match":
+  false, "first_match_id": null, "hints": ["H1"], "hints_off": false}` (`first_match_id`: the first match while it runs,
+  PR 3, 7.12). `NULL` is the empty progress. One column and not a table: the document is read and written whole, only
+  by its owner, and has no query of its own.
+- **Who writes what.** The chapters done: only the server. When a chapter match ends and its director reached the goal
+  (`done`), `MatchLifecycle` records the chapter on the account (`mark_done`, in the thread that saves the result), so
+  a client cannot claim one. The flags of the interface (`offer_off`, `first_match`, `first_match_id`, `hints`,
+  `hints_off`): the client, with `PUT /api/me/tutorial`, which replaces them as a whole (`extra="forbid"`, strict
+  booleans, known hint ids, at most 5, a match id of digits only). `GET /api/me/tutorial` answers the whole progress.
+  `offer_off` is set by either button of the entry popup with "Don't show again" ticked.
+- **The client** reads and writes only the server (`tutorial/progressState.svelte.ts`): it loads the progress when the
+  main screen is reached (a start, a login, a new guest), shows a change at once and sends the flags in the background,
+  in order; a chapter that reached its goal is shown at once without being sent. A server that cannot be reached leaves
+  the empty progress for the visit. Whether the popup was shown in this visit is kept in memory only, so it shows at most
+  once per entry.
+- **One-time import.** `localStorage` `sbf.tutorial` (older versions): when the account has no progress and the key
+  exists, the client sends it once (the flags, and the chapters as `import_done`, which the server takes only while no
+  chapter is done on the account) and then removes the key. A key that finds a non-empty account progress is removed
+  without a send. This is the one place a client names chapters, and it can name only chapters while none is done, which
+  is harmless: the lock of the chapter select is a convenience, not a rule of the game.
+- **A guest and an account** have separate progress when they are separate players. A guest that sets a password stays
+  the same player and keeps its progress; logging in to another account loads that account's progress.
 
 ### 7.9 Versions, DEC, protocol
 
@@ -1133,7 +1154,7 @@ What the client PR built, and where it differs from 7.7 or from the walkthrough 
   "Rules" on Charter opened the How to play page as it was until PR 3 replaced it (7.12). The Sheet's map is the chapter map
   drawn as an SVG over its baked ground (as the map cards of the menus), not a frame of the client: a frame needs a
   running chapter. The first match is the bot match of section 5 started from Charter; its end sets `firstMatch`.
-- **Privacy.** `sbf.tutorial` is listed in the privacy text with the other browser entries (`legal.svelte.test.ts`).
+- **Privacy.** The progress is listed in the privacy text with the guest account data on the server (no longer with the browser entries, 7.8).
 - **E2E.** The players of the existing e2e tests turn the popup off before the page loads (`Player.create`); the new
   `e2e/tests/tutorial.spec.ts` plays the popup, the intro, chapter I to its Seal with a reload in the middle, Charter
   in progress, the slides of IV.2 and leaving a chapter (on `test-short`, the e2e ruleset: a chapter counts ticks, and
@@ -1143,7 +1164,7 @@ What the client PR built, and where it differs from 7.7 or from the walkthrough 
 
 What the third PR built, and where it differs from sections 5, 6, 7.7 or the walkthrough (each with its reason):
 
-- **The first match across a reload.** `sbf.tutorial` keeps `firstMatchId`, the match the chapter select started as the
+- **The first match across a reload.** The progress keeps `firstMatchId`, the match the chapter select started as the
   first match, while it runs (7.8 gains the field). A reload returns to the match (`GET /api/me/active-match`) and the
   client still knows it for the first match: its hints go on, and its end (any end, a forfeit included, as in PR 2)
   sets `firstMatch` and clears the id. PR 2 kept the id in memory only, so a reload lost both.

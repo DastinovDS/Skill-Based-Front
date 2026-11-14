@@ -387,3 +387,133 @@ def test_migration_0009_marks_earlier_rows_as_matches(tmp_path: Path) -> None:
     with sqlite3.connect(db_path) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(matches)")}
     assert "kind" not in columns
+
+
+# The progress of an account (section 7.8) ---------------------------------------------------
+
+FLAGS: Final[dict[str, object]] = {
+    "offer_off": False,
+    "first_match": False,
+    "first_match_id": None,
+    "hints": [],
+    "hints_off": False,
+}
+EMPTY: Final[dict[str, object]] = {
+    "done": [],
+    "offer_off": False,
+    "first_match": False,
+    "first_match_id": None,
+    "hints": [],
+    "hints_off": False,
+}
+
+
+def _guest(client: TestClient, nick: str) -> dict[str, str]:
+    guest = client.post("/api/guest", json={"nick": nick}).json()
+    return {"Authorization": f"Bearer {guest['token']}"}
+
+
+def test_progress_is_empty_for_a_new_guest_and_needs_a_token(settings: Settings) -> None:
+    with TestClient(create_app(settings)) as client:
+        headers = _guest(client, "pupil")
+        answer = client.get("/api/me/tutorial", headers=headers)
+        assert answer.status_code == 200
+        assert answer.json() == EMPTY
+        assert answer.headers["Cache-Control"] == "no-store"
+        assert client.get("/api/me/tutorial").status_code in (401, 403)
+        assert client.put("/api/me/tutorial", json=FLAGS).status_code in (401, 403)
+
+
+def test_progress_flags_are_saved_and_two_players_do_not_share(settings: Settings) -> None:
+    with TestClient(create_app(settings)) as client:
+        first, second = _guest(client, "pupil"), _guest(client, "other")
+        flags = {
+            **FLAGS,
+            "offer_off": True,
+            "first_match_id": "12",
+            "hints": ["H3", "H1"],
+            "hints_off": True,
+        }
+        put = client.put("/api/me/tutorial", json=flags, headers=first)
+        assert put.status_code == 200, put.text
+        saved = {**EMPTY, **flags, "hints": ["H1", "H3"]}  # in the order of the hints
+        assert put.json() == saved
+        assert client.get("/api/me/tutorial", headers=first).json() == saved
+        assert client.get("/api/me/tutorial", headers=second).json() == EMPTY
+    # Survives a restart of the server (the progress is in the database).
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/api/me/tutorial", headers=first).json() == saved
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"hints": ["H9"]},
+        {"hints": ["H1"] * 6},
+        {"first_match_id": "not-a-number"},
+        {"first_match_id": "1" * 40},
+        {"import_done": ["nope"]},
+        {"import_done": ["units"] * 9},
+        {"done": ["units"]},  # a client cannot claim a chapter
+        {"extra": 1},
+        {"offer_off": "yes"},
+    ],
+)
+def test_progress_rejects_bad_flags(settings: Settings, patch: dict[str, object]) -> None:
+    with TestClient(create_app(settings)) as client:
+        headers = _guest(client, "pupil")
+        answer = client.put("/api/me/tutorial", json={**FLAGS, **patch}, headers=headers)
+        assert answer.status_code == 422
+        assert client.get("/api/me/tutorial", headers=headers).json() == EMPTY
+
+
+def test_progress_import_is_taken_once_and_only_while_nothing_is_done(settings: Settings) -> None:
+    with TestClient(create_app(settings)) as client:
+        headers = _guest(client, "pupil")
+        body = {**FLAGS, "import_done": ["economy", "units"]}
+        assert client.put("/api/me/tutorial", json=body, headers=headers).json()["done"] == [
+            "units",
+            "economy",
+        ]
+        again = {**FLAGS, "import_done": ["attack"], "hints_off": True}
+        saved = client.put("/api/me/tutorial", json=again, headers=headers).json()
+        assert saved["done"] == ["units", "economy"]  # the chapters stay
+        assert saved["hints_off"] is True
+
+
+def test_a_chapter_goal_marks_it_done_and_a_left_chapter_does_not(
+    tutorial_settings: Settings,
+) -> None:
+    async def scenario() -> None:
+        async with live_server(tutorial_settings) as live:
+
+            async def progress() -> dict[str, object]:
+                answer = await live.http.get("/api/me/tutorial", headers=live.headers)
+                body: dict[str, object] = answer.json()
+                return body
+
+            async def leave(chapter: str, *, goal: bool) -> None:
+                info = (await live.start(chapter)).json()
+                runner = live.manager.get(info["match_id"])
+                assert runner is not None and runner.tutorial is not None
+                if goal:
+                    runner.tutorial.done = True  # the director's goal, which the beats reach
+                async with live.socket(info["match_id"]) as ws:
+                    hello = HelloMsg(protocol_version=PROTOCOL_VERSION, token=live.token)
+                    await ws.send(encode(hello))
+                    await ws.send(encode(CommandMsg(seq=1, cmd=wire.ForfeitCmd())))
+                    await live.advance(0.3)
+                    await recv_until(ws, MatchEndMsg)
+                await asyncio.sleep(0.3)  # the result is written in a thread
+
+            await leave("units", goal=False)
+            assert (await progress())["done"] == []
+            await leave("economy", goal=True)
+            assert (await progress())["done"] == ["economy"]
+            await leave("units", goal=True)
+            assert (await progress())["done"] == ["units", "economy"]
+            other = (await live.http.post("/api/guest", json={"nick": "other"})).json()
+            theirs = {"Authorization": f"Bearer {other['token']}"}
+            assert (await live.http.get("/api/me/tutorial", headers=theirs)).json()["done"] == []
+
+    asyncio.run(scenario())

@@ -11,6 +11,8 @@ export type Invite = Schemas['InviteOut'];
 export type ActiveMatch = Schemas['ActiveMatch'];
 export type BotMatch = Schemas['BotMatchOut'];
 export type TutorialMatch = Schemas['TutorialMatchOut'];
+export type TutorialProgressWire = Schemas['TutorialProgress'];
+export type TutorialFlagsWire = Schemas['TutorialFlags'];
 export type LobbyEntry = Schemas['LobbyEntry'];
 export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
@@ -305,6 +307,16 @@ export class Api {
   /** A tutorial chapter (#806): a scripted match on its map; 503 when the server has no tutorial. */
   createTutorialMatch(token: string, chapter: Schemas['ChapterId']): Promise<TutorialMatch> {
     return this.#request('POST', '/api/tutorial-matches', token, { chapter });
+  }
+
+  /** The tutorial progress of the account (a guest has its own; #806, section 7.8). */
+  tutorialProgress(token: string): Promise<TutorialProgressWire> {
+    return this.#request('GET', '/api/me/tutorial', token);
+  }
+
+  /** Replaces the interface flags of the progress; the chapters done stay the server's. */
+  saveTutorialFlags(token: string, flags: TutorialFlagsWire): Promise<TutorialProgressWire> {
+    return this.#request('PUT', '/api/me/tutorial', token, flags);
   }
 
   /**

@@ -12,11 +12,12 @@ import { allowOf, FULL_GATE, gateOf, UI_FLAGS } from './gate.ts';
 import {
   defaultSeat,
   EMPTY_PROGRESS,
-  loadProgress,
+  fromWire,
+  isEmptyProgress,
   offerAllowed,
-  saveProgress,
+  readLegacyProgress,
   sealStates,
-  TUTORIAL_STORAGE_KEY,
+  toFlags,
   type TutorialProgress,
 } from './progress.ts';
 import { richText } from './rich.ts';
@@ -604,29 +605,57 @@ describe('coach on recorded tutorial streams', () => {
 });
 
 describe('progress (section 7.8) and Charter (section 3)', () => {
-  it('saves and loads, dropping unknown entries', () => {
+  it('reads the server progress and writes only the flags', () => {
+    const wire = {
+      done: ['units', 'nope', 'units'],
+      offer_off: true,
+      first_match: false,
+      first_match_id: '7',
+      hints: ['H3', 'H9', 'H1'],
+      hints_off: true,
+    } as unknown as Parameters<typeof fromWire>[0];
+    const progress = fromWire(wire);
+    expect(progress).toEqual({
+      v: 1,
+      done: ['units'],
+      offerOff: true,
+      firstMatch: false,
+      firstMatchId: '7',
+      hints: ['H1', 'H3'],
+      hintsOff: true,
+    });
+    // The chapters done never go back to the server, only the one-time import does.
+    expect(toFlags(progress)).toEqual({
+      offer_off: true,
+      first_match: false,
+      first_match_id: '7',
+      hints: ['H1', 'H3'],
+      hints_off: true,
+      import_done: [],
+    });
+    expect(toFlags(progress, ['economy']).import_done).toEqual(['economy']);
+    expect(isEmptyProgress(EMPTY_PROGRESS)).toBe(true);
+    expect(isEmptyProgress({ ...EMPTY_PROGRESS, hintsOff: true })).toBe(false);
+  });
+
+  it('reads the progress an older version kept in the browser, dropping unknown entries', () => {
     const storage = memoryStorage();
-    expect(loadProgress(() => storage)).toEqual(EMPTY_PROGRESS);
-    saveProgress(() => storage, { ...EMPTY_PROGRESS, done: ['units'], offerOff: true });
-    expect(loadProgress(() => storage).done).toEqual(['units']);
+    expect(readLegacyProgress(() => storage)).toBeNull();
     storage.setItem(
-      TUTORIAL_STORAGE_KEY,
-      JSON.stringify({ done: ['units', 'nope'], hints: ['H9', 'H2'] }),
+      'sbf.tutorial',
+      JSON.stringify({ done: ['units', 'nope'], hints: ['H9', 'H2'], firstMatchId: 'x y' }),
     );
-    expect(loadProgress(() => storage)).toEqual({
+    expect(readLegacyProgress(() => storage)).toEqual({
       ...EMPTY_PROGRESS,
       done: ['units'],
       hints: ['H2'],
     });
-    storage.setItem(TUTORIAL_STORAGE_KEY, '{broken');
-    expect(loadProgress(() => storage)).toEqual(EMPTY_PROGRESS);
+    storage.setItem('sbf.tutorial', '{broken');
+    expect(readLegacyProgress(() => storage)).toBeNull();
     const throwing = (): Storage => {
       throw new Error('blocked');
     };
-    expect(loadProgress(throwing)).toEqual(EMPTY_PROGRESS);
-    expect(() => {
-      saveProgress(throwing, EMPTY_PROGRESS);
-    }).not.toThrow();
+    expect(readLegacyProgress(throwing)).toBeNull();
   });
 
   it('offers the tutorial until a chapter is done, the first match played or the box ticked', () => {

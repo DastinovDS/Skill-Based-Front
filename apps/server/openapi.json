@@ -1035,6 +1035,78 @@
         }
       }
     },
+    "/api/me/tutorial": {
+      "get": {
+        "tags": [
+          "tutorial"
+        ],
+        "summary": "Get Progress",
+        "description": "The tutorial progress of the account (a guest has its own).",
+        "operationId": "get_progress_api_me_tutorial_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialProgress"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "tutorial"
+        ],
+        "summary": "Put Progress",
+        "description": "Replace the interface flags; the chapters done stay the server's (``import_done`` is taken\nonce, while none is done).",
+        "operationId": "put_progress_api_me_tutorial_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorialFlags"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TutorialProgress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/queue": {
       "get": {
         "tags": [
@@ -1959,6 +2031,16 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HintId": {
+        "type": "string",
+        "enum": [
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5"
+        ]
       },
       "InviteOut": {
         "properties": {
@@ -3091,6 +3173,60 @@
         "title": "TerrainDefensePublic",
         "description": "``terrain.defense_mod``: charges added to the node defender's pool; a negative value burns\nthat many of its charges at the start of the first round (DEC-45)."
       },
+      "TutorialFlags": {
+        "properties": {
+          "offer_off": {
+            "type": "boolean",
+            "title": "Offer Off"
+          },
+          "first_match": {
+            "type": "boolean",
+            "title": "First Match"
+          },
+          "first_match_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{1,18}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Match Id"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/HintId"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Hints"
+          },
+          "hints_off": {
+            "type": "boolean",
+            "title": "Hints Off"
+          },
+          "import_done": {
+            "items": {
+              "$ref": "#/components/schemas/ChapterId"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Import Done"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "offer_off",
+          "first_match",
+          "hints",
+          "hints_off"
+        ],
+        "title": "TutorialFlags",
+        "description": "What a client may write: the flags of the interface. Replaces them as a whole."
+      },
       "TutorialMatchOut": {
         "properties": {
           "match_id": {
@@ -3117,6 +3253,54 @@
           "player"
         ],
         "title": "TutorialMatchOut"
+      },
+      "TutorialProgress": {
+        "properties": {
+          "done": {
+            "items": {
+              "$ref": "#/components/schemas/ChapterId"
+            },
+            "type": "array",
+            "title": "Done"
+          },
+          "offer_off": {
+            "type": "boolean",
+            "title": "Offer Off",
+            "default": false
+          },
+          "first_match": {
+            "type": "boolean",
+            "title": "First Match",
+            "default": false
+          },
+          "first_match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Match Id"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/HintId"
+            },
+            "type": "array",
+            "title": "Hints"
+          },
+          "hints_off": {
+            "type": "boolean",
+            "title": "Hints Off",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TutorialProgress",
+        "description": "The whole progress, as stored and as ``GET /api/me/tutorial`` answers."
       },
       "UnratedReason": {
         "type": "string",

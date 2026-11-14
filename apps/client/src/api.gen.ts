@@ -511,6 +511,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/me/tutorial': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Progress
+     * @description The tutorial progress of the account (a guest has its own).
+     */
+    get: operations['get_progress_api_me_tutorial_get'];
+    /**
+     * Put Progress
+     * @description Replace the interface flags; the chapters done stay the server's (``import_done`` is taken
+     *     once, while none is done).
+     */
+    put: operations['put_progress_api_me_tutorial_put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/queue': {
     parameters: {
       query?: never;
@@ -941,6 +966,8 @@ export interface components {
       /** Detail */
       detail?: components['schemas']['ValidationError'][];
     };
+    /** @enum {string} */
+    HintId: 'H1' | 'H2' | 'H3' | 'H4' | 'H5';
     /** InviteOut */
     InviteOut: {
       /** Code */
@@ -1392,6 +1419,24 @@ export interface components {
       /** Mountains */
       mountains: number;
     };
+    /**
+     * TutorialFlags
+     * @description What a client may write: the flags of the interface. Replaces them as a whole.
+     */
+    TutorialFlags: {
+      /** Offer Off */
+      offer_off: boolean;
+      /** First Match */
+      first_match: boolean;
+      /** First Match Id */
+      first_match_id?: string | null;
+      /** Hints */
+      hints: components['schemas']['HintId'][];
+      /** Hints Off */
+      hints_off: boolean;
+      /** Import Done */
+      import_done?: components['schemas']['ChapterId'][];
+    };
     /** TutorialMatchOut */
     TutorialMatchOut: {
       /** Match Id */
@@ -1401,6 +1446,33 @@ export interface components {
       chapter: components['schemas']['ChapterId'];
       /** Player */
       player: number;
+    };
+    /**
+     * TutorialProgress
+     * @description The whole progress, as stored and as ``GET /api/me/tutorial`` answers.
+     */
+    TutorialProgress: {
+      /** Done */
+      done?: components['schemas']['ChapterId'][];
+      /**
+       * Offer Off
+       * @default false
+       */
+      offer_off: boolean;
+      /**
+       * First Match
+       * @default false
+       */
+      first_match: boolean;
+      /** First Match Id */
+      first_match_id?: string | null;
+      /** Hints */
+      hints?: components['schemas']['HintId'][];
+      /**
+       * Hints Off
+       * @default false
+       */
+      hints_off: boolean;
     };
     /**
      * UnratedReason
@@ -2235,6 +2307,59 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['RulesetPublic'];
+        };
+      };
+    };
+  };
+  get_progress_api_me_tutorial_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TutorialProgress'];
+        };
+      };
+    };
+  };
+  put_progress_api_me_tutorial_put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TutorialFlags'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TutorialProgress'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };
