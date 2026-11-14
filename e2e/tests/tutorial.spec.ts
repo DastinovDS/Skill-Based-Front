@@ -133,8 +133,17 @@ test('the chapter select in progress, the slides of IV.2 and leaving a chapter',
   const { page } = player;
   await player.enter();
   await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
-  // Chapters are the server's to record: a fresh account takes the import of the old browser's.
-  await putProgress(page, { import_done: ['units', 'economy', 'building'] });
+  // Chapters are the server's to record and a test cannot reach one without playing it: the
+  // account's progress is shown with chapters I to III done (the server does not check the lock).
+  await page.route('**/api/me/tutorial', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const real = await route.fetch();
+    const body = (await real.json()) as Record<string, unknown>;
+    return route.fulfill({
+      response: real,
+      json: { ...body, done: ['units', 'economy', 'building'] },
+    });
+  });
   await page.reload();
   await page.getByRole('button', { name: 'How to play' }).click();
   await expect(

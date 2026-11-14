@@ -1,8 +1,7 @@
 /**
  * The tutorial progress of the account (`docs/design/tutorial.md`, section 7.8): kept by the server
- * (`GET` and `PUT /api/me/tutorial`), a guest has its own. Plain TypeScript: the shapes, the
- * conversion from the wire, and the one-time import of the progress older versions kept in
- * `localStorage` (`sbf.tutorial`).
+ * (`GET` and `PUT /api/me/tutorial`), a guest has its own. Plain TypeScript: the shapes and the
+ * conversion from the wire.
  */
 import type { TutorialFlagsWire, TutorialProgressWire } from '../api/http.ts';
 import type { ChapterId } from '../protocol.gen.ts';
@@ -54,71 +53,15 @@ export function fromWire(wire: TutorialProgressWire): TutorialProgress {
   };
 }
 
-/** What `PUT` takes: the flags, never the chapters (`importDone`: the old browser's, once). */
-export function toFlags(
-  progress: TutorialProgress,
-  importDone: readonly ChapterId[] = [],
-): TutorialFlagsWire {
+/** What `PUT` takes: the flags, never the chapters. */
+export function toFlags(progress: TutorialProgress): TutorialFlagsWire {
   return {
     offer_off: progress.offerOff,
     first_match: progress.firstMatch,
     first_match_id: progress.firstMatchId,
     hints: [...progress.hints],
     hints_off: progress.hintsOff,
-    import_done: [...importDone],
   };
-}
-
-/** Nothing recorded: the state of a new account. */
-export function isEmptyProgress(progress: TutorialProgress): boolean {
-  return (
-    progress.done.length === 0 &&
-    !progress.offerOff &&
-    !progress.firstMatch &&
-    progress.firstMatchId === null &&
-    progress.hints.length === 0 &&
-    !progress.hintsOff
-  );
-}
-
-/** The key older versions kept the progress under, in this browser; read once, then removed. */
-const LEGACY_KEY = 'sbf.tutorial';
-
-/** The progress an older version left in this browser, `null`: none (or damaged, or no storage). */
-export function readLegacyProgress(storage: () => Storage): TutorialProgress | null {
-  try {
-    const raw = storage().getItem(LEGACY_KEY);
-    if (raw === null) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const { done, offerOff, firstMatch, firstMatchId, hints, hintsOff } = parsed as Record<
-      string,
-      unknown
-    >;
-    return {
-      v: 1,
-      done: Array.isArray(done) ? [...new Set(done.filter(isChapterId))] : [],
-      offerOff: offerOff === true,
-      firstMatch: firstMatch === true,
-      firstMatchId:
-        typeof firstMatchId === 'string' && /^[0-9]{1,18}$/.test(firstMatchId)
-          ? firstMatchId
-          : null,
-      hints: Array.isArray(hints) ? HINT_IDS.filter((id) => hints.includes(id)) : [],
-      hintsOff: hintsOff === true,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** Removes the old key (best effort). */
-export function forgetLegacyProgress(storage: () => Storage): void {
-  try {
-    storage().removeItem(LEGACY_KEY);
-  } catch {
-    // Blocked storage: nothing to remove.
-  }
 }
 
 /** The place of a chapter on the chapter select (Charter, section 3). */

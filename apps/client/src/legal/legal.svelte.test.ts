@@ -37,8 +37,6 @@ describe('legal content', () => {
         used.add(match[1] ?? '');
       }
     }
-    // `sbf.tutorial` is read once and removed (the old tutorial progress, #806): nothing is stored.
-    used.delete('sbf.tutorial');
     expect([...used].sort()).toEqual([
       'sbf.guest',
       'sbf.introSeen',
