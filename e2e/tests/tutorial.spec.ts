@@ -269,15 +269,9 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   page.on('pageerror', (error) => errors.push(error.message));
   await player.enter();
   await expect(page.getByRole('radio', { name: 'Invite a friend' })).toBeVisible();
-  await page.evaluate(() => {
-    window.localStorage.setItem(
-      'sbf.tutorial',
-      JSON.stringify({
-        v: 1,
-        done: ['units', 'economy', 'building', 'attack', 'defence'],
-        offerOff: true,
-      }),
-    );
+  // Chapters are the server's to record: a fresh account takes the import of the old browser's.
+  await putProgress(page, {
+    import_done: ['units', 'economy', 'building', 'attack', 'defence'],
   });
   await page.reload();
 
