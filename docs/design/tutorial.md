@@ -268,7 +268,7 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   more, or once the orders it asks for stand (`acts`, one by default; a cancel takes one back, so I.5 comes back when
   the army is called back). Its marks go with it; nothing is written on the screen while the army walks. This holds
   for a card without a pause too (owner, 2026-11-14): the card that answers the player's order (its beat begins on
-  the order accepted, or on the walk the order starts: IV.4, A1.3, A2.3) is never shown, because the order it answers
+  the order accepted, or on the walk the order starts: IV.6, A1.3, A2.3) is never shown, because the order it answers
   stands already; those beats stay in the chapter file for the server (their `allow` and the chain of triggers). A card
   that only comments on what happens (no order of the player's: A1.4, V.3, V.6) stays until the next beat.
 - **A focus phase** (review 4, P5) follows a card that explains how charges or CP are made or carried: for a set
@@ -283,7 +283,7 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   looks on screen. **The action line** (under a rule, italic, with the key or mouse glyph) is there only when it tells
   the player something the card and the screen do not, what to click or press: never "watch" or "look at" (the Compass
   mark points), never a repeat of the card; a target is named "Click on <place>" (round 5). **No number** the HUD, a
-  menu or a mark shows, and none a newcomer does not need (round 4); IV.2 keeps the counts its math needs.
+  menu or a mark shows, and none a newcomer does not need (round 4).
 - **Slides** (round 5, IV.2; no chapter uses them since review 5, the client keeps them): a card may have two or three slides; "Next" at its foot pages them in the client (no
   command, no server message), the step lozenges stay those of the beat, and a small "1 of 3" sits beside "Next". The
   beat's pause and `allow` hold for all its slides; the action line is on the last slide only. A command the beat allows
@@ -294,7 +294,7 @@ first match the tutorial counts as finished (`firstMatch: true`); the Advanced s
   word of the card is underlined (the words before it stay, dimmer), and its label comes up over its first place and
   stays; no ring on the places, beside the beat's own mark. Continue and the action line are on the last page; a
   command the beat allows is accepted on any page. With "Less motion" nothing flashes. Every card that names a
-  terrain uses it (I.6, I.7, V.1, V.2, V.4; a card with one terrain has one page).
+  terrain uses it (I.6, I.7, V.1; a card with one terrain has one page).
 - **Shown (`ui`).** A chapter starts with the HUD of the chapters before it, and its beats unlock more (section 4.9,
   the table). A piece not yet unlocked is **hidden**: a top-bar piece, a map mark, a tooltip line. An item of a menu
   the player can open (the city menu, the group menu) whose concept is not unlocked, or whose command the beat does
