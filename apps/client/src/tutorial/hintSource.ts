@@ -18,11 +18,14 @@ export function hintMarks(hint: HintShow, seq: number, since: number): CoachMark
     nodes: hint.node === null ? [] : [{ id: hint.node, ring: wide }],
     groupsAt: [],
     roads: hint.road === null ? [] : [hint.road],
+    charges: [],
     vpBadges: [],
     capacities: [],
     warehouses: [],
     counts: [],
     turns: null,
+    turn: 0,
+    turnSince: since,
     focus: false,
   };
 }

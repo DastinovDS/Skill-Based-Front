@@ -9,6 +9,7 @@
   import type { HintShow } from '../tutorial/hints.ts';
   import {
     centreOf,
+    covers,
     leaderLine,
     placeCard,
     targetRect,
@@ -136,6 +137,7 @@
   }
 
   let placedFor = '';
+  let placedArenas = '';
   let lastTarget: Target | null = null;
 
   function moved(a: Target | null, b: Target | null): boolean {
@@ -159,8 +161,18 @@
     // A notice that comes in under the card moves it.
     const notices = document.querySelectorAll('.toasts > *').length;
     const key = `${String(coach.seq)}:${String(notices)}:${String(size.h)}:${String(window.innerWidth)}x${String(window.innerHeight)}`;
-    if (key !== placedFor || moved(target, lastTarget) || place === null) {
+    // The card never covers the arena of a fight (review 5, P7): one that comes up under it moves
+    // it, once per change of the arenas.
+    const arenas = anchors.arenas?.() ?? [];
+    const arenaKey = arenas.map((b) => b.map((v) => Math.round(v / 8)).join(',')).join('|');
+    if (
+      key !== placedFor ||
+      moved(target, lastTarget) ||
+      place === null ||
+      (arenaKey !== placedArenas && covers(place, size, arenas))
+    ) {
       placedFor = key;
+      placedArenas = arenaKey;
       lastTarget = target;
       const top = document.querySelector('.hud .bar')?.getBoundingClientRect().bottom ?? 56;
       // The match ends above the legal footer.
@@ -179,7 +191,7 @@
       place =
         target === null
           ? { x: window.innerWidth - size.w - 24, y: top + 24 }
-          : placeCard(target, size, area, obstacles(h, target));
+          : placeCard(target, size, area, obstacles(h, target), arenas);
     }
     leader = target === null ? null : leaderLine(target, place, size);
   }
@@ -511,10 +523,28 @@
   }
 
   .act {
-    margin: 8px 0 0;
-    font: italic 500 15.5px/1.45 var(--font-text);
-    color: var(--ink-soft);
+    position: relative;
+    margin: 10px 0 0;
+    padding: 8px 0 0 17px;
+    border-top: 1px solid var(--line);
+    font: italic 600 16.5px/1.4 var(--font-text);
+    color: var(--ink);
     text-wrap: pretty;
+  }
+
+  /* What to do now (review 5): ivory on the plate, under a rule, a lozenge before it. */
+  .act::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 16px;
+    width: 6px;
+    height: 6px;
+    background: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--casing),
+      0 0 0 3.5px rgb(236 228 209 / 20%);
+    transform: rotate(45deg);
   }
 
   .row {

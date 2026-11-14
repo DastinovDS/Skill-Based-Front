@@ -451,6 +451,23 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.slide).toBe(0);
   });
 
+  it('pages the terrains of I.7 one a page: Next, never a timer (review 5, P9)', () => {
+    const { coach } = coachOf('units', {});
+    coach.onMessage(msg('units', '7', true, []));
+    const card = coach.current.card;
+    expect(card?.slides).toBe(1);
+    expect(card?.turns?.map((turn) => turn.word)).toEqual(['plains', 'forest', 'mountains']);
+    expect(card?.pages).toBe(3);
+    expect(coach.slide).toBe(0);
+    coach.nextSlide();
+    coach.nextSlide();
+    coach.nextSlide();
+    expect(coach.slide).toBe(2);
+    // A card with one terrain has one page (I.6): its Continue is on it.
+    coach.onMessage(msg('units', '6', true, []));
+    expect(coach.current.card?.pages).toBe(1);
+  });
+
   it('walks the failure of chapter IV: Try again, the plan unlocked, only the plan allowed', () => {
     const { coach, map } = coachOf('attack', { g: 'Fernhold' });
     coach.onMessage(msg('attack', '2', true, [0]));

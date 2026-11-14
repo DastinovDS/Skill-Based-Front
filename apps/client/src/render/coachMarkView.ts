@@ -10,7 +10,6 @@ import {
   compassTurn,
   focusDim,
   turnFlash,
-  turnPhase,
   type CoachMarks,
 } from './coachMarks.ts';
 import { compassGlowSpec, compassPointsSpec, compassRingSpec } from './compassShapes.ts';
@@ -41,6 +40,10 @@ export interface CoachGeometry {
   countBox(node: number): Box | null;
   /** The area of `node` (its cell of the territory). */
   cell(node: number): readonly Point[] | null;
+  /** Where the charges moving on the road between `a` and `b` (either way) are drawn this frame. */
+  charges(a: number, b: number): readonly Point[];
+  /** The arenas of the fights drawn now, world units: a terrain's label keeps off them (P7). */
+  arenas(): readonly Box[];
 }
 
 /** One Compass mark: the glow, the rings and the points, each a baked sprite. */
@@ -77,17 +80,22 @@ function edgeKey(a: Point, b: Point): string {
 /**
  * The goal marks of a tutorial card on the map (`docs/design/tutorial.md`, sections 7.7 and 8,
  * "Compass"), in the effects layer: a place, the own group standing in one, a city's VP badge (a
- * double ring whose four points turn once), a road (two rails and a chevron). Review 4 (#1047)
- * adds the element a card names, lit itself rather than ringed (P3: the segments of a capacity
- * ring, the warehouse row, the count under a group), the terrain areas of the marks in turn
- * flashing one after another with their labels (P4), and the focus phase (P5): the map dimmed but
- * for the places, roads and rows that make and carry charges. The Compass parts are baked sprites,
+ * double ring whose four points turn once), a road of a first-match hint (two rails and a
+ * chevron). Review 4 (#1047) adds the element a card names, lit itself rather than ringed (P3: the
+ * segments of a capacity ring, the warehouse row, the count under a group), the terrain areas of
+ * the marks in turn with their labels (P4), and the focus phase (P5): the map dimmed but for the
+ * places and rows that make and carry charges. Review 5 (#1053): a chapter's road lights the
+ * charges moving on it, each one, rather than the road (P8: the map draws its own arrows there),
+ * the terrains go a page at a time (P9), and a card that names a warehouse row dims the map round
+ * it as a focus phase does. The Compass parts are baked sprites,
  * one texture per radius (`AGENTS.md` 7.2); the rest is redrawn only when its shape changes. The
  * motion stops by itself and "less motion" holds it still.
  */
 export class CoachMarkView {
   private readonly root = new Container({ label: 'coach-marks' });
   private readonly roads = new Graphics({ label: 'coach-roads' });
+  /** The charges moving on the marked roads (P8): a glow and an ivory ring round each. */
+  private readonly chargeRings = new Graphics({ label: 'coach-charges' });
   private readonly turnRoot = new Container({ label: 'coach-turns' });
   /** The flash of a terrain's area (P4): a wash and the outline of the area. */
   private readonly areaWash = new Graphics({ label: 'coach-area-wash' });
@@ -132,6 +140,7 @@ export class CoachMarkView {
       this.areaLine,
       this.turnRoot,
       this.roads,
+      this.chargeRings,
       this.elementGlow,
       this.elementInk,
     );
@@ -201,9 +210,11 @@ export class CoachMarkView {
     }
     this.roads.visible = !marks.focus;
     if (!marks.focus) this.drawRoads(marks, age, reduced);
-    this.drawTurns(marks, map, age, reduced);
+    const charges = marks.charges.flatMap(([a, b]) => map.charges(a, b));
+    this.drawCharges(charges, glow);
+    this.drawTurns(marks, map, nowMs, reduced);
     this.drawElements(marks, map, glow);
-    this.drawFocus(marks, map, age, reduced);
+    this.drawFocus(marks, map, charges, age, reduced);
   }
 
   destroy(): void {
@@ -279,23 +290,48 @@ export class CoachMarkView {
   }
 
   /**
-   * The marks in turn (I.7, P4): the area of each terrain flashes for `COMPASS.turnMs` while its
-   * word is named, one pass; its label comes up over its first place then and stays. No ring on
-   * the places.
+   * The charges moving on the marked roads (P8), each one lit where it is drawn this frame: a soft
+   * glow and a thin ivory ring on a casing. Redrawn every frame (they move; a few circles).
    */
-  private drawTurns(marks: CoachMarks, map: CoachGeometry, age: number, reduced: boolean): void {
+  private drawCharges(charges: readonly Point[], glow: number): void {
+    const g = this.chargeRings.clear();
+    const { ring } = COMPASS.charge;
+    for (const at of charges) {
+      for (let i = 0; i < 5; i++) {
+        g.circle(at.x, at.y, ring + 1.5 + i * 1.4).stroke({
+          width: 1.4,
+          color: INK,
+          alpha: 0.3 * glow * (1 - i / 5),
+        });
+      }
+      g.circle(at.x, at.y, ring).stroke({ width: 3.2, color: CASING });
+      g.circle(at.x, at.y, ring).stroke({ width: 1.3, color: INK });
+    }
+  }
+
+  /**
+   * The marks in turn (I.7, P4, P9): the terrains up to the card's page keep their labels; the area
+   * of the terrain on the page now flashes twice when the page shows, then stays outlined until
+   * the player turns the page. No ring on the places.
+   */
+  private drawTurns(marks: CoachMarks, map: CoachGeometry, nowMs: number, reduced: boolean): void {
     const turns = marks.turns ?? [];
-    const key = turns.map((t) => `${t.label}:${t.nodes.join('.')}`).join('|');
+    const arenas = map.arenas();
+    const key = [
+      ...turns.map((t) => `${t.label}:${t.nodes.join('.')}`),
+      ...arenas.map((a) => `${halfUnit(a.x)},${halfUnit(a.y)},${halfUnit(a.w)}`),
+    ].join('|');
     if (key !== this.turnKey) {
       this.turnKey = key;
       turns.forEach((turn, i) => {
         const label = this.turnLabel(i);
         label.text = turn.label.toUpperCase();
-        const first = turn.nodes[0];
-        const node = first === undefined ? undefined : this.map.nodes[first];
-        if (node !== undefined && first !== undefined) {
+        // Over the first of its places whose spot is clear of the arena of a fight (P7).
+        const spots = turn.nodes.flatMap((id) => {
+          const node = this.map.nodes[id];
+          if (node === undefined) return [];
           // Over the place's ring, or over its Compass when the card marks the place too.
-          const compass = marks.focus ? undefined : marks.nodes.find((n) => n.id === first);
+          const compass = marks.focus ? undefined : marks.nodes.find((n) => n.id === id);
           const lift =
             compass === undefined
               ? 12
@@ -304,32 +340,42 @@ export class CoachMarkView {
                 COMPASS.point.length +
                 (compass.ring ? COMPASS.wide : 0) +
                 10;
-          label.position.set(node.x, node.y - ringRadius(this.radiusOf(first)) - lift);
-        }
+          return [{ x: node.x, y: node.y - ringRadius(this.radiusOf(id)) - lift }];
+        });
+        // The label hangs over its anchor (anchor at its foot): its box, with a little room.
+        const half = label.width / 2 + 4;
+        const high = label.height + 4;
+        const clear = (p: Point): boolean =>
+          !arenas.some(
+            (a) =>
+              p.x + half > a.x && p.x - half < a.x + a.w && p.y + 4 > a.y && p.y - high < a.y + a.h,
+          );
+        const at = spots.find(clear) ?? spots[0];
+        if (at !== undefined) label.position.set(at.x, at.y);
       });
       for (let i = turns.length; i < this.turnLabels.length; i++) {
         const label = this.turnLabels[i];
         if (label !== undefined) label.visible = false;
       }
     }
-    const phase = turnPhase(age, turns.length, reduced);
+    const page = Math.min(marks.turn, turns.length - 1);
     turns.forEach((_turn, i) => {
       const label = this.turnLabels[i];
-      if (label !== undefined) label.visible = phase === 'all' || i <= phase;
+      if (label !== undefined) label.visible = i <= page;
     });
-    // The area of the terrain named now flashes; none once the pass is over.
-    const now = phase === 'all' ? null : (turns[phase] ?? null);
-    const areaKey = now === null ? '' : `${String(phase)}:${now.nodes.join('.')}`;
+    // The area of the terrain on the page now: it flashes, then rests outlined.
+    const now = turns[page] ?? null;
+    const areaKey = now === null ? '' : `${String(page)}:${now.nodes.join('.')}`;
     if (areaKey !== this.areaKey) {
       this.areaKey = areaKey;
       this.areaWash.clear();
       this.areaLine.clear();
       if (now !== null) this.drawArea(now.nodes, map);
     }
-    if (now !== null && phase !== 'all') {
-      const flash = turnFlash(age - phase * COMPASS.turnMs, reduced);
-      this.areaWash.alpha = 0.3 * flash;
-      this.areaLine.alpha = 0.3 + 0.7 * flash;
+    if (now !== null) {
+      const flash = turnFlash(nowMs - marks.turnSince, reduced);
+      this.areaWash.alpha = 0.1 + 0.2 * flash;
+      this.areaLine.alpha = 0.75 + 0.25 * flash;
     }
   }
 
@@ -384,17 +430,7 @@ export class CoachMarkView {
           arcs.push({ x: node.x, y: node.y, r, from: arc.from, to: arc.to });
         }
       }
-      for (const id of marks.warehouses) {
-        const row = map.warehouseRow(id);
-        if (row === null) continue;
-        const h = LOZENGE.casing + 2 * pad;
-        capsules.push({
-          x: row.x0 - LOZENGE.casing / 2 - pad,
-          y: row.y - h / 2,
-          w: row.x1 - row.x0 + LOZENGE.casing + 2 * pad,
-          h,
-        });
-      }
+      capsules.push(...this.rowBoxes(marks, map));
       for (const id of marks.counts) {
         const box = map.countBox(id);
         if (box === null) continue;
@@ -469,22 +505,33 @@ export class CoachMarkView {
   }
 
   /**
-   * A focus phase (P5): the map goes dark but for the places, roads and warehouse rows it lights,
-   * where the charges are made and carried, each lit place with a faint ivory rim. It fades in.
+   * A focus phase (P5): the map goes dark but for the places and warehouse rows it lights and the
+   * charges moving on its roads (P8), each lit place with a faint ivory rim. A card that names a
+   * warehouse row (II.3) dims the map the same way round the row alone. It fades in.
    */
-  private drawFocus(marks: CoachMarks, map: CoachGeometry, age: number, reduced: boolean): void {
-    const on = marks.focus;
+  private drawFocus(
+    marks: CoachMarks,
+    map: CoachGeometry,
+    charges: readonly Point[],
+    age: number,
+    reduced: boolean,
+  ): void {
+    const rows = marks.focus ? [] : this.rowBoxes(marks, map);
+    const on = marks.focus || rows.length > 0;
     this.focusShade.visible = on;
     this.focusRims.visible = on;
     if (!on) return;
-    const { pad, road } = COMPASS.focus;
+    const { pad } = COMPASS.focus;
     const key = [
+      marks.focus ? 'f' : 'c',
       marks.nodes.map((n) => n.id).join('.'),
-      marks.roads.map(([a, b]) => `${String(a)}-${String(b)}`).join('.'),
-      marks.warehouses.map((id) => {
-        const row = map.warehouseRow(id);
-        return row === null ? '' : `${halfUnit(row.x0)},${halfUnit(row.x1)}`;
-      }),
+      marks.focus
+        ? marks.warehouses.map((id) => {
+            const row = map.warehouseRow(id);
+            return row === null ? '' : `${halfUnit(row.x0)},${halfUnit(row.x1)}`;
+          })
+        : rows.map((c) => `${halfUnit(c.x)},${halfUnit(c.y)},${halfUnit(c.w)}`),
+      charges.map((p) => `${halfUnit(p.x)},${halfUnit(p.y)}`).join(';'),
     ].join('|');
     if (key !== this.focusKey) {
       this.focusKey = key;
@@ -492,31 +539,48 @@ export class CoachMarkView {
       this.focusShade.clear().rect(0, 0, width, height).fill(CASING);
       const holes = this.focusHoles.clear();
       const rims = this.focusRims.clear();
-      const places = new Set<number>([...marks.nodes.map((n) => n.id), ...marks.warehouses]);
-      for (const id of places) {
-        const node = this.map.nodes[id];
-        if (node === undefined) continue;
-        const r = ringRadius(this.radiusOf(id)) + pad;
-        holes.circle(node.x, node.y, r).fill(0xffffff);
-        rims.circle(node.x, node.y, r).stroke({ width: 3, color: CASING, alpha: 0.6 });
-        rims.circle(node.x, node.y, r).stroke({ width: 1.1, color: INK, alpha: 0.7 });
-      }
-      for (const [a, b] of marks.roads) {
-        const p = this.map.nodes[a];
-        const q = this.map.nodes[b];
-        if (p === undefined || q === undefined) continue;
-        const len = Math.hypot(q.x - p.x, q.y - p.y);
-        if (len === 0) continue;
-        const nx = (-(q.y - p.y) / len) * road;
-        const ny = ((q.x - p.x) / len) * road;
-        holes
-          .poly([p.x + nx, p.y + ny, q.x + nx, q.y + ny, q.x - nx, q.y - ny, p.x - nx, p.y - ny])
-          .fill(0xffffff);
+      if (marks.focus) {
+        const places = new Set<number>([...marks.nodes.map((n) => n.id), ...marks.warehouses]);
+        for (const id of places) {
+          const node = this.map.nodes[id];
+          if (node === undefined) continue;
+          const r = ringRadius(this.radiusOf(id)) + pad;
+          holes.circle(node.x, node.y, r).fill(0xffffff);
+          rims.circle(node.x, node.y, r).stroke({ width: 3, color: CASING, alpha: 0.6 });
+          rims.circle(node.x, node.y, r).stroke({ width: 1.1, color: INK, alpha: 0.7 });
+        }
+        for (const at of charges) holes.circle(at.x, at.y, COMPASS.charge.hole).fill(0xffffff);
+      } else {
+        // The row alone, a little wider than its capsule (the rim of `drawElements` lies on it).
+        const grow = COMPASS.element.glow;
+        for (const c of rows) {
+          holes
+            .roundRect(c.x - grow, c.y - grow, c.w + 2 * grow, c.h + 2 * grow, c.h / 2 + grow)
+            .fill(0xffffff);
+        }
       }
     }
     const dim = focusDim(age, reduced);
     this.focusShade.alpha = dim;
     this.focusRims.alpha = dim / COMPASS.focus.dim;
+  }
+
+  /** The capsules of the warehouse rows the card names (P3), world units. */
+  private rowBoxes(marks: CoachMarks, map: CoachGeometry): Box[] {
+    const { pad } = COMPASS.element;
+    const out: Box[] = [];
+    for (const id of marks.warehouses) {
+      const row = map.warehouseRow(id);
+      if (row === null) continue;
+      const h = LOZENGE.casing + 2 * pad;
+      out.push({
+        x: row.x0 - LOZENGE.casing / 2 - pad,
+        y: row.y - h / 2,
+        w: row.x1 - row.x0 + LOZENGE.casing + 2 * pad,
+        h,
+      });
+    }
+    return out;
   }
 
   private turnLabel(index: number): Text {

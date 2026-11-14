@@ -1,14 +1,15 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { keyBindings } from '../app/keyBindingsState.svelte.ts';
   import { DICTIONARIES, getLocale, t, tf, type MessageKey } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudPiece, MapFile } from '../protocol.gen.ts';
   import type { MapAnchors } from '../render/anchors.ts';
   import { reducedMotion } from '../render/motion.ts';
-  import { turnPhase } from '../render/coachMarks.ts';
   import { nodeNamed } from '../tutorial/chapters.ts';
   import type { TutorialCoach } from '../tutorial/coach.svelte.ts';
   import {
+    covers,
     leaderLine,
     placeCard,
     targetRect,
@@ -33,7 +34,7 @@
   const view = $derived(coach.current);
   const card = $derived(view.card);
   const slide = $derived(coach.slide);
-  const lastSlide = $derived(card === null || slide >= card.slides - 1);
+  const lastSlide = $derived(card === null || slide >= card.pages - 1);
 
   /** A dictionary key that may be missing (an optional action line). */
   function has(key: string): key is MessageKey {
@@ -54,35 +55,10 @@
     actKey !== null && lastSlide && has(actKey) ? richText(t(actKey), keys) : [],
   );
 
-  // The marks in turn (I.7): the word of the terrain whose places are ringed is underlined, then
-  // all of them stay underlined, dimmer. The clock is the card's (`view.seq`).
-  let shownAt = $state(0);
-  let now = $state(0);
-  let seenSeq = -1;
-  $effect(() => {
-    if (view.seq === seenSeq) return;
-    seenSeq = view.seq;
-    shownAt = performance.now();
-    now = shownAt;
-  });
+  // The marks in turn (I.7, review 5 P9): a page per terrain, the player turns them with "Next";
+  // the word of the terrain on the map now is underlined, the ones before it stay, dimmer.
   const turns = $derived(card?.turns ?? null);
-  $effect(() => {
-    if (turns === null || reducedMotion()) return undefined;
-    const timer = setInterval(() => {
-      now = performance.now();
-    }, 200);
-    const stop = setTimeout(() => {
-      clearInterval(timer);
-      now = performance.now();
-    }, 6500);
-    return () => {
-      clearInterval(timer);
-      clearTimeout(stop);
-    };
-  });
-  const phase = $derived(
-    turns === null ? null : turnPhase(now - shownAt, turns.length, reducedMotion()),
-  );
+  const phase = $derived(turns === null ? null : Math.min(slide, turns.length - 1));
   function turnOf(word: string): number {
     return turns?.findIndex((turn) => turn.word === word.toLowerCase()) ?? -1;
   }
@@ -162,7 +138,10 @@
     return null;
   }
 
-  /** What the card keeps clear of: every place and its name, the marks, the HUD, open menus. */
+  /**
+   * What the card keeps clear of: every place and its name, the marks, the HUD, open menus (the
+   * arenas of fights are kept clear harder, `placeCard`).
+   */
   function obstacles(target: Target | null): Rect[] {
     const out: Rect[] = [];
     for (const node of map.nodes) {
@@ -180,15 +159,11 @@
       const r = el.getBoundingClientRect();
       if (r.width > 0) out.push([r.x - 8, r.y - 8, r.right + 8, r.bottom + 8]);
     }
-    if (view.paused) {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      out.push([w / 2 - 120, h - 96, w / 2 + 120, h - 40]);
-    }
     return out;
   }
 
   let placedFor = '';
+  let placedArenas = '';
   let lastTarget: Target | null = null;
 
   function moved(a: Target | null, b: Target | null): boolean {
@@ -220,16 +195,26 @@
       return;
     }
     const size = { w: plate.offsetWidth, h: plate.offsetHeight };
-    const key = `${String(view.seq)}:${String(slide)}:${String(size.h)}:${String(view.paused)}:${String(window.innerWidth)}x${String(window.innerHeight)}`;
-    if (key !== placedFor || moved(target, lastTarget) || place === null) {
+    const key = `${String(view.seq)}:${String(slide)}:${String(size.h)}:${String(window.innerWidth)}x${String(window.innerHeight)}`;
+    // The card never covers the arena of a fight (review 5, P7): one that comes up under it moves it.
+    // (Once per change of the arenas: a card with no free spot is not placed again every frame.)
+    const arenas = anchors.arenas?.() ?? [];
+    const arenaKey = arenas.map((b) => b.map((v) => Math.round(v / 8)).join(',')).join('|');
+    if (
+      key !== placedFor ||
+      moved(target, lastTarget) ||
+      place === null ||
+      (arenaKey !== placedArenas && covers(place, size, arenas))
+    ) {
       placedFor = key;
+      placedArenas = arenaKey;
       lastTarget = target;
       const top = document.querySelector('.hud .bar')?.getBoundingClientRect().bottom ?? 56;
       const area: Rect = [0, top + 8, window.innerWidth, window.innerHeight];
       place =
         target === null
           ? { x: window.innerWidth - size.w - 24, y: top + 24 }
-          : placeCard(target, size, area, obstacles(target));
+          : placeCard(target, size, area, obstacles(target), arenas);
     }
     leader = target === null ? null : leaderLine(target, place, size);
   }
@@ -328,47 +313,40 @@
             <p class="act" class:pulse={coach.pulse > 0}><RichText segments={act} /></p>
           {/key}
         {/if}
-        {#if card.slides > 1}
-          <div class="row slides" class:bare={lastSlide}>
-            <span class="of">{tf('tutorial.card.of', { n: slide + 1, total: card.slides })}</span>
+        {#if card.pages > 1 || card.canContinue}
+          <div
+            class="row"
+            class:slides={card.pages > 1}
+            class:bare={card.pages > 1 && lastSlide && !card.canContinue}
+          >
+            {#if card.pages > 1}
+              <span class="of">{tf('tutorial.card.of', { n: slide + 1, total: card.pages })}</span>
+            {/if}
             {#if !lastSlide}
               <button
                 type="button"
                 class="btn"
                 onclick={() => {
                   coach.nextSlide();
+                  // The focus stays on the card's button: Next, or Continue on the last page.
+                  void tick().then(() => {
+                    plate?.querySelector<HTMLButtonElement>('.row .btn')?.focus();
+                  });
                 }}>{t('tutorial.card.next')}</button
               >
+            {:else if card.canContinue}
+              <button
+                type="button"
+                class="btn"
+                onclick={() => {
+                  coach.continue();
+                }}>{t('tutorial.card.continue')}</button
+              >
             {/if}
-          </div>
-        {:else if card.canContinue}
-          <div class="row">
-            <button
-              type="button"
-              class="btn"
-              onclick={() => {
-                coach.continue();
-              }}>{t('tutorial.card.continue')}</button
-            >
           </div>
         {/if}
       </section>
     {/key}
-  {/if}
-
-  {#if view.paused}
-    <!-- The simulation waits for the card (round 3): bottom centre, clear of the top bar and the
-         warnings; nothing is dimmed, the card asks the player to look at the frame. -->
-    <div class="paused" role="status">
-      <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"
-        ><rect x="0.5" y="0.5" width="3" height="11" /><rect
-          x="6.5"
-          y="0.5"
-          width="3"
-          height="11"
-        /></svg
-      >{t('tutorial.paused')}
-    </div>
   {/if}
 </div>
 
@@ -607,10 +585,28 @@
   }
 
   .act {
-    margin: 8px 0 0;
-    font: italic 500 15.5px/1.45 var(--font-text);
-    color: var(--ink-soft);
+    position: relative;
+    margin: 10px 0 0;
+    padding: 8px 0 0 17px;
+    border-top: 1px solid var(--line);
+    font: italic 600 16.5px/1.4 var(--font-text);
+    color: var(--ink);
     text-wrap: pretty;
+  }
+
+  /* What to do now (review 5): ivory on the plate, under a rule, a lozenge before it. */
+  .act::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 16px;
+    width: 6px;
+    height: 6px;
+    background: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--casing),
+      0 0 0 3.5px rgb(236 228 209 / 20%);
+    transform: rotate(45deg);
   }
 
   /* A locked control was used: the action line says again what to do. */
@@ -621,7 +617,7 @@
   @keyframes pulse {
     0%,
     100% {
-      color: var(--ink-soft);
+      color: var(--ink);
       transform: none;
     }
     30% {
@@ -692,35 +688,6 @@
     outline-offset: 3px;
   }
 
-  /* --- The "Paused" plate --------------------------------------------------------------------- */
-  .paused {
-    position: absolute;
-    left: 50%;
-    bottom: 42px;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 32px;
-    box-sizing: border-box;
-    padding: 0 17px 0 14px;
-    background: rgb(14 12 9 / 95%);
-    border: 1px solid rgb(236 228 209 / 60%);
-    box-shadow:
-      inset 0 0 0 3px rgb(14 12 9 / 95%),
-      inset 0 0 0 4px rgb(236 228 209 / 22%),
-      0 10px 26px rgb(0 0 0 / 55%);
-    font: 500 12px/1 var(--font-display);
-    letter-spacing: 0.26em;
-    text-transform: uppercase;
-    color: var(--ink);
-    animation: ink 0.2s linear both;
-  }
-
-  .paused rect {
-    fill: currentColor;
-  }
-
   /* "Less motion" (#871): the card is there at once, the marks hold still. */
   .still .plate.placed,
   .still .placed .pt,
@@ -728,8 +695,7 @@
   .still .leadcase,
   .still .leadfoot,
   .still .hudmark .glow,
-  .still .act.pulse,
-  .still .paused {
+  .still .act.pulse {
     animation: none;
     mask-image: none;
     stroke-dashoffset: 0;

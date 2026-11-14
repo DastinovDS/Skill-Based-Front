@@ -35,13 +35,20 @@ import type { RenderSource } from './source.ts';
 import { SightView } from './sightView.ts';
 import { FlowView } from './flowView.ts';
 import { CoachMarkView } from './coachMarkView.ts';
-import type { Anchor } from './anchors.ts';
+import { compassReach, type CoachMarks } from './coachMarks.ts';
+import { ringRadius } from './cityLayout.ts';
+import type { Anchor, ScreenBox } from './anchors.ts';
+import { ARENA_REACH, PLATE } from './fightFx.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
 import type { EventMsg } from '../protocol.gen.ts';
 import { playerColours, type ColourIds } from './style.ts';
 import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 
+/** The casing round the compass points, world units. */
+const COMPASS_CASING = 2;
+/** The room a hint card keeps from the arena of a fight, px. */
+const ARENA_PAD = 12;
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 const FRAME_FAILURE_LIMIT = 3;
 
@@ -135,6 +142,8 @@ export class MapScene {
   private readonly alerts: AlertView;
   /** The goal marks of a tutorial card (#806). */
   private readonly coach: CoachMarkView;
+  /** The marks the bonus counter was last cleared of. */
+  private compassFor: CoachMarks | null = null;
   private interaction: MapInteraction | null;
   private hovering = false;
   /** Where the pointer rests on the canvas, CSS px; `null`: off it. */
@@ -269,6 +278,22 @@ export class MapScene {
   groupAnchor(id: string): Anchor | null {
     const spot = this.entities.groupPoints().get(id);
     return spot === undefined ? null : this.anchorAt(spot, (spot.side * spot.scale) / 2);
+  }
+
+  /**
+   * The arenas of the fights drawn now on the page (CSS px): the plate and the badges over it. The
+   * arena keeps its size on screen (`PLATE`), so only its centre moves with the camera.
+   */
+  arenaBoxes(): ScreenBox[] {
+    return this.effects.arenaCentres().map((centre) => {
+      const { x, y } = this.anchorAt(centre, 0);
+      return [
+        x - PLATE.halfWidth - ARENA_PAD,
+        y - PLATE.halfHeight - ARENA_REACH - ARENA_PAD,
+        x + PLATE.halfWidth + ARENA_PAD,
+        y + PLATE.halfHeight + ARENA_PAD,
+      ] as const;
+    });
   }
 
   private anchorAt(world: Point, radius: number): Anchor {
@@ -470,6 +495,22 @@ export class MapScene {
     // A made unit leaves the barracks' foundation: into the ring, or off to the rally point (#1005).
     this.cities.setRecruits(this.source.events(), tickHz);
     this.cities.advance(this.frameMs);
+    // A tutorial card's marks (#1053): what the map draws round a place it rings (the threat of a
+    // plan, the bonus counter over a target) stands clear of its Compass.
+    const coachMarks = this.source.coachMarks?.() ?? null;
+    if (coachMarks !== this.compassFor) {
+      this.compassFor = coachMarks;
+      const reach = new Map(
+        coachMarks === null || coachMarks.focus
+          ? []
+          : coachMarks.nodes.map(({ id, ring }) => [
+              id,
+              compassReach(ringRadius(this.cities.radiusOf(id)), ring) + COMPASS_CASING,
+            ]),
+      );
+      this.intents.setCompassReach(reach);
+      this.overlay.setCompassReach(reach);
+    }
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(
       frame,
@@ -514,7 +555,7 @@ export class MapScene {
     this.cities.setVpBadges(gate === null || gate.has('vp'));
     const points = this.entities.groupPoints();
     this.coach.update(
-      this.source.coachMarks?.() ?? null,
+      coachMarks,
       {
         groupAt: (node) => {
           for (const group of frame.base.view.groups) {
@@ -527,6 +568,17 @@ export class MapScene {
         warehouseRow: (node) => this.cities.warehouseRow(node),
         countBox: (node) => this.entities.enemyCountBox(node),
         cell: (node) => this.view.cells[node] ?? null,
+        charges: (a, b) => this.entities.chargesOn(a, b),
+        arenas: () => {
+          // The arenas keep their size on screen: their boxes in world units at this zoom.
+          const k = 1 / this.layers.world.scale.x;
+          return this.effects.arenaCentres().map((c) => ({
+            x: c.x - PLATE.halfWidth * k,
+            y: c.y - (PLATE.halfHeight + ARENA_REACH) * k,
+            w: 2 * PLATE.halfWidth * k,
+            h: (2 * PLATE.halfHeight + ARENA_REACH) * k,
+          }));
+        },
       },
       performance.now(),
     );

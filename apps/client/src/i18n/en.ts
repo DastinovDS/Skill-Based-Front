@@ -609,7 +609,6 @@ export const en = {
   'tutorial.card.continue': 'Continue',
   'tutorial.card.next': 'Next',
   'tutorial.card.of': '{n} of {total}',
-  'tutorial.paused': 'Paused',
   'tutorial.warnSign': 'the amber sign: a triangle with an exclamation mark',
   'tutorial.locked': 'Not yet',
   'tutorial.exit.title': 'Leave the chapter?',

@@ -4,7 +4,7 @@
   import { onMount, untrack } from 'svelte';
   import type { GeoFile } from '../map/geography.ts';
   import type { MapFile, PlayerId } from '../protocol.gen.ts';
-  import type { Anchor } from './anchors.ts';
+  import type { Anchor, ScreenBox } from './anchors.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
   import type { MapInteraction } from './interaction.ts';
   import { createSceneSprites, MapScene, type SceneSprites } from './mapScene.ts';
@@ -79,6 +79,11 @@
   /** Where an own group's token is on screen; `null`: not drawn. */
   export function groupAnchor(group: string): Anchor | null {
     return scene?.groupAnchor(group) ?? null;
+  }
+
+  /** The arenas of the fights on screen (client px): a hint card keeps clear of them. */
+  export function arenaBoxes(): ScreenBox[] {
+    return scene?.arenaBoxes() ?? [];
   }
 
   /** The screen margins the HUD covers: "fit map" keeps the map out of them. */

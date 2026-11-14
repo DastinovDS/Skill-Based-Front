@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arrivalAngle,
+  ribbonShape,
   barracksAt,
   dashAlong,
   delayLeft,
@@ -404,5 +406,38 @@ describe('ghostLook', () => {
       ghostLook('rejected', fadeFrom + GHOST_CP.fadeMs / 2, 1, false, CP_REJECT).alpha,
     ).toBeCloseTo(0.5);
     expect(ghostLook('rejected', GHOST_CP.rejectMs, 1, false, CP_REJECT).alpha).toBe(0);
+  });
+});
+
+describe('arrivalAngle', () => {
+  // The threat of V.4 (#1053): Stormcrown's plan on Flatford of the defence chapter's map, an
+  // enemy ribbon (no path: the fixed arc that bulges up).
+  const stormcrown = { x: 1060, y: 330 };
+  const flatford = { x: 600, y: 560 };
+  const shape = ribbonShape(stormcrown, flatford, [], 40, 40, 1);
+  const axis = shape?.axis ?? [];
+  const tip = axis[axis.length - 1] ?? flatford;
+  const deg = (r: number): number => (r * 180) / Math.PI;
+  const turn = (a: number, b: number): number =>
+    Math.abs(deg(Math.atan2(Math.sin(a - b), Math.cos(a - b))));
+
+  it('faces the point where the ribbon touches the target', () => {
+    const angle = arrivalAngle(axis, flatford);
+    expect(flatford.x + 40 * Math.cos(angle)).toBeCloseTo(tip.x, 6);
+    expect(flatford.y + 40 * Math.sin(angle)).toBeCloseTo(tip.y, 6);
+  });
+
+  it('points at the side the order comes from, not round the city by the bulge of the arc', () => {
+    const angle = arrivalAngle(axis, flatford);
+    const fromOrigin = Math.atan2(stormcrown.y - flatford.y, stormcrown.x - flatford.x);
+    expect(turn(angle, fromOrigin)).toBeLessThan(2);
+    // The tangent at the tip, which the mark faced before, is far round from it.
+    const before = axis[axis.length - 2] ?? tip;
+    const tangent = Math.atan2(before.y - tip.y, before.x - tip.x);
+    expect(turn(tangent, fromOrigin)).toBeGreaterThan(30);
+  });
+
+  it('is 0 for a degenerate axis', () => {
+    expect(arrivalAngle([], flatford)).toBe(0);
   });
 });

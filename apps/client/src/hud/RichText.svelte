@@ -6,8 +6,8 @@
     segments: readonly Segment[];
     /** The marks in turn (I.7): the index of the terrain a bold word names, or -1. */
     turnOf?: (word: string) => number;
-    /** The terrain ringed now, `'all'` once the pass is over, or null (no marks in turn). */
-    phase?: number | 'all' | null;
+    /** The terrain on the map now (its page, review 5 P9), or null (no marks in turn). */
+    phase?: number | null;
   }
 
   let { segments, turnOf = () => -1, phase = null }: Props = $props();
@@ -21,7 +21,7 @@
     <b
       class:tw={turn >= 0}
       class:tw-on={turn >= 0 && phase === turn}
-      class:tw-rest={turn >= 0 && phase === 'all'}>{segment.text}</b
+      class:tw-rest={turn >= 0 && phase !== null && turn < phase}>{segment.text}</b
     >{:else if segment.kind === 'key'}<kbd class="kbd">{segment.text}</kbd
     >{:else if segment.kind === 'mouse'}<span
       class="mouse"
@@ -47,7 +47,7 @@
     color: #fff6e2;
   }
 
-  /* The word of the terrain the map rings now (I.7). */
+  /* The word of the terrain the map lights now (I.7); the ones before it stay, dimmer. */
   .tw {
     text-decoration: underline;
     text-decoration-thickness: 2px;

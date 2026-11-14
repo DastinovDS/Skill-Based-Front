@@ -81,6 +81,8 @@ interface PacketEntry extends Labelled {
   label: Text;
   stamp: number;
   view: Container;
+  /** The road it is on. */
+  edge: number;
 }
 
 /**
@@ -205,6 +207,21 @@ export class EntityView implements EnemyAnchors {
   }
 
   /** The box of the count under the enemy token in `node` (world units); `null`: none shown. */
+  /**
+   * Where the charges moving on the road between `a` and `b` are drawn now (world units): the
+   * tutorial lights them (#1053). A charge fading into a city is left out.
+   */
+  chargesOn(a: number, b: number): Point[] {
+    const out: Point[] = [];
+    for (const entry of this.packets.values()) {
+      const edge = this.map.edges[entry.edge];
+      if (edge === undefined || !entry.view.visible || entry.view.alpha < 0.5) continue;
+      if ((edge.a === a && edge.b === b) || (edge.a === b && edge.b === a))
+        out.push({ x: entry.view.x, y: entry.view.y });
+    }
+    return out;
+  }
+
   enemyCountBox(node: number): { x: number; y: number; w: number; h: number } | null {
     return this.enemyNodes[node]?.countBox() ?? null;
   }
@@ -684,6 +701,7 @@ export class EntityView implements EnemyAnchors {
       const entry = this.packetEntry(item);
       entry.stamp = this.stamp;
       const { packet } = item;
+      entry.edge = packet.edge;
       const ends = edgeEnds(this.map, packet.edge);
       const edge = this.map.edges[packet.edge];
       const shown = ends !== undefined && edge !== undefined;
@@ -731,6 +749,7 @@ export class EntityView implements EnemyAnchors {
         label,
         view,
         stamp: this.stamp,
+        edge: packet.edge,
         labels: () => [label],
       };
       this.packets.set(packet.id, entry);

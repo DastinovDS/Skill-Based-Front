@@ -23,6 +23,9 @@ export class TutorialSource implements RenderSource {
   readonly #gate = new FrameGate();
   #marks: CoachMarks | null = null;
   #marksKey = '';
+  /** The page of the card the marks were made for, and when it showed. */
+  #turn = -1;
+  #turnSince = 0;
 
   constructor(
     session: RenderSource,
@@ -73,15 +76,21 @@ export class TutorialSource implements RenderSource {
     // player did what it asks) takes its marks with it.
     if (marks === null || this.#coach.sealed) return null;
     const menuAt = this.#menuAt();
-    const key = `${String(view.seq)}:${String(menuAt)}`;
+    const page = this.#coach.slide;
+    const key = `${String(view.seq)}:${String(menuAt)}:${String(page)}`;
     if (key === this.#marksKey) return this.#marks;
     const sameCard = this.#marks !== null && this.#marks.seq === view.seq;
+    // A new page of the marks in turn (P9) flashes its terrain from now.
+    if (!sameCard || page !== this.#turn) {
+      this.#turn = page;
+      this.#turnSince = performance.now();
+    }
     this.#marksKey = key;
     const id = (name: string | null | undefined): number | undefined =>
       name === null || name === undefined ? undefined : nodeNamed(this.#map, name);
     const nodes: { id: number; ring: boolean }[] = [];
     const groupsAt: number[] = [];
-    const roads: (readonly [number, number])[] = [];
+    const charges: (readonly [number, number])[] = [];
     const vpBadges: number[] = [];
     const capacities: number[] = [];
     const warehouses: number[] = [];
@@ -98,10 +107,11 @@ export class TutorialSource implements RenderSource {
       add(capacities, mark.capacity);
       add(warehouses, mark.warehouse);
       add(counts, mark.count);
+      // A road: the charges moving on it are lit, not the road (review 5, P8).
       if (mark.road != null) {
         const a = id(mark.road[0]);
         const b = id(mark.road[1]);
-        if (a !== undefined && b !== undefined) roads.push([a, b]);
+        if (a !== undefined && b !== undefined) charges.push([a, b]);
       }
       // A menu item: the place until its menu is open, then the HTML marks the item itself.
       const at = id(mark.at);
@@ -121,12 +131,15 @@ export class TutorialSource implements RenderSource {
       since: sameCard && this.#marks !== null ? this.#marks.since : performance.now(),
       nodes,
       groupsAt,
-      roads,
+      roads: [],
+      charges,
       vpBadges,
       capacities,
       warehouses,
       counts,
       turns,
+      turn: page,
+      turnSince: this.#turnSince,
       focus: card === null,
     };
     return this.#marks;

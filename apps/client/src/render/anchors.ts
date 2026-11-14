@@ -11,14 +11,23 @@ export interface Anchor {
   readonly r: number;
 }
 
+/** A box on the page [x0, y0, x1, y1], client px. */
+export type ScreenBox = readonly [number, number, number, number];
+
 export interface MapAnchors {
   /** The circle of a city; `null`: no such city, or the map is not up yet. */
   node(id: number): Anchor | null;
   /** The token of an own group; `null`: the group is gone or not drawn. */
   group(id: string): Anchor | null;
+  /**
+   * The arenas of the fights drawn now, with the badges over their plate: a hint card never
+   * covers one (review 5, P7). Absent: none known.
+   */
+  arenas?(): readonly ScreenBox[];
 }
 
 export const NO_ANCHORS: MapAnchors = {
   node: () => null,
   group: () => null,
+  arenas: () => [],
 };

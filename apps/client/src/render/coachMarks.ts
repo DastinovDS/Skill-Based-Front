@@ -2,8 +2,9 @@
  * The goal marks of a tutorial card on the map (`docs/design/tutorial.md`, section 8, "Compass"):
  * what the coach asks the map to mark, and the timing of their motion. Plain data and functions,
  * no PixiJS (the view is `coachMarkView.ts`). The motion stops by itself (WCAG 2.2.2): the compass
- * points turn once, the glow breathes four times, the marks in turn make one pass; under "less
- * motion" everything shows still at once.
+ * points turn once, the glow breathes four times, a terrain of the marks in turn flashes twice when
+ * its page shows (the player turns the pages, review 5 P9); under "less motion" everything shows
+ * still at once.
  */
 
 /** One terrain of the marks in turn (I.7): its places and the word of the card it lights. */
@@ -22,8 +23,14 @@ export interface CoachMarks {
   readonly nodes: readonly { readonly id: number; readonly ring: boolean }[];
   /** The own group standing in each of these places is ringed. */
   readonly groupsAt: readonly number[];
-  /** Roads, by their two end nodes (the chevron points from the first to the second). */
+  /**
+   * Roads ruled by two rails and a chevron, by their two end nodes (the chevron points from the
+   * first to the second): the first match's hints. A chapter's road marks light the charges
+   * moving on the road instead (`charges`, review 5 P8: the map draws its own arrows there).
+   */
   readonly roads: readonly (readonly [number, number])[];
+  /** Roads whose moving charges (the packets) are lit, each one, by their two end nodes (P8). */
+  readonly charges: readonly (readonly [number, number])[];
   /** The VP badge of these cities is ringed. */
   readonly vpBadges: readonly number[];
   /** The capacity ring of these places is lit itself, segment by segment (review 4, P3). */
@@ -32,11 +39,18 @@ export interface CoachMarks {
   readonly warehouses: readonly number[];
   /** The count under the group in these places (an enemy's range, "1-2") is lit itself (P3). */
   readonly counts: readonly number[];
-  /** The marks in turn: each terrain's area flashes in turn, then its label stays (P4); or null. */
-  readonly turns: readonly CoachTurn[] | null;
   /**
-   * A focus phase (P5): no Compass; the map is dimmed but for the places, roads and warehouse rows
-   * above, where the charges are made and carried.
+   * The marks in turn: the terrains up to `turn` keep their labels, the area of `turns[turn]`
+   * flashes (P4) when its page shows and stays outlined; or null.
+   */
+  readonly turns: readonly CoachTurn[] | null;
+  /** The terrain on the map now (the card's page, P9). */
+  readonly turn: number;
+  /** When that page showed, `performance.now()` ms: its area flashes from then. */
+  readonly turnSince: number;
+  /**
+   * A focus phase (P5): no Compass; the map is dimmed but for the places and warehouse rows above
+   * and the charges moving on the roads of `charges`, where the charges are made and carried.
    */
   readonly focus: boolean;
 }
@@ -60,17 +74,19 @@ export const COMPASS = {
   /** One breath of the glow, ms; it breathes this many times. */
   breatheMs: 2400,
   breaths: 4,
-  /** The marks in turn: each terrain this long, ms, then all of them stay. */
+  /** The flash of a terrain of the marks in turn, ms (two pulses), then its outline rests. */
   turnMs: 2000,
   /** An element mark (capacity, warehouse, count): the glow and rim stand this far out. */
   element: { pad: 4.5, glow: 7 },
   /** A focus phase: how dark the rest of the map goes, and the fade in and out, ms. */
-  focus: { dim: 0.5, fadeMs: 600, pad: 10, road: 14 },
+  focus: { dim: 0.5, fadeMs: 600, pad: 10 },
+  /** A lit charge on a road (P8): the hole of the focus around it and its ivory ring, world units. */
+  charge: { hole: 16, ring: 10 },
 } as const;
 
-/** The flash of a terrain area while its word is named (0..1): two soft pulses in its 2 s. */
+/** The flash of a terrain area when its page shows (0..1): two soft pulses in 2 s, then 0. */
 export function turnFlash(ms: number, reduced: boolean): number {
-  if (reduced) return 0;
+  if (reduced || ms >= COMPASS.turnMs) return 0;
   const t = Math.max(0, Math.min(1, ms / COMPASS.turnMs));
   // Two pulses, eased: up, down, up, down.
   return Math.sin(t * Math.PI * 2) ** 2;
@@ -105,12 +121,9 @@ export function compassGlow(ms: number, reduced: boolean): number {
 }
 
 /**
- * Which terrain of the marks in turn shows `ms` after the card showed: its index while the pass
- * runs, `'all'` once it is over (every terrain stays, each with its label). One pass, `turnMs` a
- * terrain; under "less motion" `'all'` at once.
+ * How far the Compass of a place reaches from its centre (world units): its outer ring and the
+ * compass points, for what must stand clear of it (the bonus counter over a target, P7).
  */
-export function turnPhase(ms: number, count: number, reduced: boolean): number | 'all' {
-  if (reduced || count <= 0) return 'all';
-  const index = Math.floor(Math.max(0, ms) / COMPASS.turnMs);
-  return index >= count ? 'all' : index;
+export function compassReach(ringRadius: number, wide: boolean): number {
+  return ringRadius + COMPASS.gap + COMPASS.step + COMPASS.point.length + (wide ? COMPASS.wide : 0);
 }
