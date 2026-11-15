@@ -110,8 +110,11 @@ export const ENGRAVED = {
   neutralFill: 0x221e18,
   /** An empty segment of a scale. CSS `--segment-empty`. */
   segmentEmpty: 0x5a5243,
-  /** Victory points: the gilt lozenge. CSS `--vp`. */
-  vp: 0xcfab62,
+  /**
+   * Victory points: the pale gilt lozenge. CSS `--vp`. Lighter than the amber alert (L* 85 against
+   * 74, ΔE 31 from `warn`; it was 72 and 19, ui-style R2, #1069).
+   */
+  vp: 0xe8d594,
   /** Warnings (amber), never the opponent. CSS `--warn`. */
   warn: 0xe6ab42,
   /** The advantage and disadvantage chevrons. CSS `--badge-up`, `--badge-down`. */

@@ -8,7 +8,7 @@
   import type { NodeInfo } from './hudData.ts';
   import type { NodeNamer } from './nodeName.ts';
   import Radial from './Radial.svelte';
-  import { halfFor, spreadAngles, type RadialItem } from './radial.ts';
+  import { BAR_CLEAR, halfFor, spreadAngles, type RadialItem } from './radial.ts';
 
   interface Props {
     orders: OrderController;
@@ -188,7 +188,7 @@
     at={() => anchors.node(target)}
     {ring}
     half={halfFor(count)}
-    clamp={false}
+    top={BAR_CLEAR}
     hover={menu.hover}
     onhover={(id: string | null) => {
       orders.cityMenu.hover(id as CityChoice | null);

@@ -42,7 +42,7 @@ import { ARENA_REACH, PLATE } from './fightFx.ts';
 import type { Point } from './camera.ts';
 import type { GeoFile } from '../map/geography.ts';
 import type { EventMsg } from '../protocol.gen.ts';
-import { playerColours, type ColourIds } from './style.ts';
+import { VP_BADGE_LIFT, playerColours, type ColourIds } from './style.ts';
 import { captureWalks, floodDelayMs, type Walk } from './walkLayout.ts';
 
 /** The casing round the compass points, world units. */
@@ -271,7 +271,12 @@ export class MapScene {
   /** Where the city `id` is on the page and the radius of its circle there (CSS px). */
   nodeAnchor(id: number): Anchor | null {
     const at = nodePoint(this.map, id);
-    return at === undefined ? null : this.anchorAt(at, this.cities.radiusOf(id));
+    if (at === undefined) return null;
+    const radius = this.cities.radiusOf(id);
+    const anchor = this.anchorAt(at, radius);
+    // The ring and the VP lozenge on it reach past the body: a tag keeps clear of them.
+    const scale = radius === 0 ? 0 : anchor.r / radius;
+    return { ...anchor, reach: (ringRadius(radius) + VP_BADGE_LIFT) * scale + 6 };
   }
 
   /** Where the own group `id` is drawn on the page (CSS px); `null`: no such token now. */

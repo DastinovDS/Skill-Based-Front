@@ -6,6 +6,7 @@
  * `autoDensity`, so the device pixel ratio never shows up here.
  */
 
+import { CAPTION } from './nameLayout.ts';
 import { UNIT_MIN_HIT_PX, UNIT_MIN_SIDE_PX } from './style.ts';
 
 export interface Point {
@@ -44,7 +45,7 @@ export const NO_INSETS: Insets = { left: 0, top: 0, right: 0, bottom: 0 };
 
 /** Empty margin around the map in "fit map", CSS pixels. */
 export const FIT_PADDING = 32;
-/** How far out and in the player can zoom, relative to the "fit map" scale. */
+/** How far out and in the player can zoom, relative to the "fit map" scale (out: not past the city names). */
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 6;
 
@@ -103,7 +104,10 @@ export function cameraLimits(
   insets: Insets = NO_INSETS,
 ): CameraLimits {
   const fit = fitScale(world, viewport, padding, insets);
-  return { world, minScale: fit * MIN_ZOOM, maxScale: fit * MAX_ZOOM };
+  // Zoomed far out the names of the cities go and the helmets shrink under their floor, and the
+  // map only sits in a corner: the minimum keeps the city names (#1069), never past "fit map".
+  const minScale = Math.min(fit, Math.max(fit * MIN_ZOOM, CAPTION.city.minScale));
+  return { world, minScale, maxScale: fit * MAX_ZOOM };
 }
 
 function clamp(value: number, low: number, high: number): number {

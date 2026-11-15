@@ -342,6 +342,7 @@ export const en = {
   'bar.factoriesLabel': 'Factories: {count} of {max}',
   'bar.factoriesLabelFull': 'Factories: {count} of {max}, at the most',
   'bar.scoreLabel': 'VP score: {mine} {mineVp}, {enemy} {enemyVp}',
+  'bar.railTip': 'Next VP credit: each side gets its +N when the line is full',
   'bar.help': 'Settings [?]',
   'bar.exit': 'Exit',
   'bar.clock': 'Time left {time}',

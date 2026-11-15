@@ -25,8 +25,9 @@ interface Caption {
  * constant size on screen (`nameLayout.ts`), hidden below the zoom threshold of its kind. The
  * names come from the map file only. The text is in screen px (the container is scaled by the
  * inverse of the camera), so it needs the device pixel ratio as its resolution, not the label
- * resolution of the world text. They live in the `nodes` layer, above the cities and under the
- * groups and the fog. `destroy()` releases every object.
+ * resolution of the world text. They live at the bottom of the `groups` layer: above the cities and
+ * above the haze (a name in the fog keeps 4.5:1 against what is under it, ui-style 14.2, #1069), and
+ * under the groups. `destroy()` releases every object.
  */
 export class NameView {
   private readonly holder: Container;
@@ -50,7 +51,8 @@ export class NameView {
         stroke: { color: BG, width: CAPTION.strokePx, join: 'round' },
       });
     this.styles = { city: style('city'), province: style('province') };
-    this.holder = layers.layer.nodes.addChild(new Container({ label: 'node-names' }));
+    this.holder = new Container({ label: 'node-names' });
+    layers.layer.groups.addChildAt(this.holder, 0);
     this.captions = map.nodes.map((node) => {
       if (node.name === '') return null;
       const kind = captionKind(node.kind);

@@ -12,6 +12,8 @@ import {
   DARK_PLATE,
   TERRAIN_FILL,
   VP,
+  VP_LOZENGE,
+  VP_LOZENGE_FLOOR,
   WARN,
   YOU,
   otherPlayer,
@@ -19,6 +21,7 @@ import {
   playerColours,
   sideColours,
   sideOf,
+  vpLozengeScale,
 } from './style.ts';
 import { PLAYER_COLOURS } from '../theme/tokens.ts';
 
@@ -38,7 +41,7 @@ describe('the map palette (Engraved, ui-style 57)', () => {
     [NEUTRAL_STROKE, '#b3a88f'],
     [NEUTRAL_FILL, '#221e18'],
     [WARN, '#e6ab42'],
-    [VP, '#cfab62'],
+    [VP, '#e8d594'],
     [BADGE_UP, '#8cc79a'],
     [BADGE_DOWN, '#ec6654'],
     // The ink of the map: darker and warmer than the ivory of the interface (#865).
@@ -87,5 +90,20 @@ describe('sides and colours (DEC-49)', () => {
       violet: '#966fd6',
       madder: '#c8587e',
     });
+  });
+});
+
+describe('the VP lozenge floor (#1069)', () => {
+  it('draws the lozenge at its world size once the camera is close enough', () => {
+    expect(vpLozengeScale(1)).toBe(1);
+    expect(vpLozengeScale(VP_LOZENGE_FLOOR.px / VP_LOZENGE.side)).toBe(1);
+  });
+
+  it('grows it so it is at least the floor across on screen, to a limit', () => {
+    const scale = 0.5;
+    const k = vpLozengeScale(scale);
+    expect(k).toBeGreaterThan(1);
+    expect(VP_LOZENGE.side * scale * k).toBeGreaterThanOrEqual(VP_LOZENGE_FLOOR.px - 1e-9);
+    expect(vpLozengeScale(0.05)).toBe(VP_LOZENGE_FLOOR.maxScale);
   });
 });

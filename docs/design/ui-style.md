@@ -41,7 +41,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | --- | --- | --- |
 | 1 Owner's decisions | [accepted] | in force |
 | 5 Principles | [accepted]; item 10 refined by section 20 | in force |
-| 6 Palette | [accepted] (blue is own, red is the enemy, amber is the alert); the pair `--vp`/`--warn` [proposed] to be changed (R2) | implemented, R2 not fixed |
+| 6 Palette | [accepted] (blue is own, red is the enemy, amber is the alert); the pair `--vp`/`--warn` changed (R2): `--vp` is now the paler gilt `#e8d594`, lighter than the amber alert (#1069) | implemented |
 | 9 Map | [accepted] as implemented (#222, #224, #256, #272, #325); arena 9.9 [replaced by DEC-32] | implemented |
 | 10, 11, 18, 19 HUD and menus | [accepted] by the decisions of the owner's rounds 2-4 | implemented |
 | 13 Screens outside the match, IM1, IM11, IM13, IM20 | [proposed], package E; new design decisions on them are **postponed** until the mechanics are done (section 23) | **not done** (K6-K11) |
@@ -2727,6 +2727,18 @@ Owner feedback of 2026-11-11, client only.
 - **No resize on a way change** (`GoTablet`): the old and the new word share one grid cell, so the box is the wider of the two from the first frame.
 - **Smoothness**: the motion paints up to 60 times a second (was 30), and the land of every owner state of the capture loop is worked out in idle tasks right after the first paint, so no frame pays for it.
 - **The brand is the way home** (`app/FrontTop.svelte`, `app/home.ts`): on the pages, the result and the replay the title in the bar is a button (name `top.home`) that goes to the main screen. Since #957 (owner 2026-11-11: a title that is sometimes a link and sometimes text is confusing) it is the same control on every screen that shows the bar, Play included: same cursor, hover rule, focus ring and name (where it does nothing it carries `aria-current="page"`). On the main screen, in the boot and while the bar is locked (a search, a waiting room) the click does nothing (no reload, which would drop a running search or an invite being drawn). A match has no bar, so no brand.
+
+## Client notes of the in-match UI audit of 2026-11-15 (#1069) **[implemented]**
+
+Small edits the owner approved straight into code (the audit's list "Small edits"); no new look.
+
+- **Fog labels and the VP lozenge (item 4).** The place names live at the bottom of the `groups` layer, above the haze and under the groups, so a name in the fog is not dimmed by the veil (it keeps the 4.5:1 of 14.2 against the ground). The VP lozenge keeps at least 13 px across on screen (`VP_LOZENGE_FLOOR`, grown up to 1.7x its world size; its number follows by quarter octaves); at a fit view of a wide window it was 8 px.
+- **The top bar in a narrow window (item 5).** Under 900 px the CP gauge shrinks to 118 px, the tug to 64 px, the key cap of the stance chip goes; under 640 px the gauge is 84 px, the tug 36 px, the clock 80 px wide and the two helmets beside the score go (the side is still told by the colour of the number and by the hatch of the tug). After a reset of the snapshot timeline (a reconnect) the bar keeps its last CP, score and clock at 45 %, the stance chip takes no click, until the next snapshot.
+- **The unit card (item 3).** The tag keeps clear of the helmet or the city ring it describes (`tipPlacement` takes the circle of the subject): it stands beyond the corner of its bounding square, the leader still ties it to the pointer. The helmets of the card stay (section 57u: the owner keeps them).
+- **VP against the alert (item 8, R2).** `--vp` is `#e8d594` (L* 85, 31 from the amber `--warn` by CIE76 Delta E, it was 72 and 19.5); the alert stays amber.
+- **The radials (item 7).** The key caps are 12.5 px in the ink on a 65 % rule (they were 10 px in the dim ink); the group and the city radials follow their object but are nudged into the window and below the top bar; the split dialog dims the map behind it (38 %) and stays on its group.
+- **The VP rail (item 9).** The gilt lozenge and the rail carry the tooltip `bar.railTip`, the lozenge a hit area 12 px wider.
+- **Zoom out (item 10).** The furthest zoom out is the larger of half of "fit map" and the scale where the city names show (`CAPTION.city.minScale`), never past "fit map": a window where the names are hidden at fit has no zoom out.
 
 ## 72. Node piece: helmet size with readable capacity, inner selection cues (#949) **[accepted]**
 

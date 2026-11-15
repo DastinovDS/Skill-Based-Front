@@ -177,7 +177,18 @@
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
 <div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
-    <TopBar {data} {orders} {chrome} {onpause} {paused} {anchors} names={hud.nodeName} {gate} />
+    <!-- Between a reset and the next snapshot (a reconnect) the bar keeps its last numbers, dimmed. -->
+    <TopBar
+      data={data ?? hud.held}
+      stale={data === null && hud.held !== null}
+      {orders}
+      {chrome}
+      {onpause}
+      {paused}
+      {anchors}
+      names={hud.nodeName}
+      {gate}
+    />
   </div>
   {#if dev !== undefined}
     <DevPanel {dev} />
@@ -207,7 +218,7 @@
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <SelectionCard {orders} groups={data?.groups ?? []} />
   <StackRadial {orders} {anchors} names={hud.nodeName} />
-  <GroupTip group={data?.hovered ?? null} />
+  <GroupTip group={data?.hovered ?? null} {anchors} />
   <TerrainBanner {orders} />
   <SplitTip {orders} names={hud.nodeName} />
   <MatchSettings

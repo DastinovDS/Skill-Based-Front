@@ -5,7 +5,7 @@
   import type { MapAnchors } from '../render/anchors.ts';
   import type { GroupInfo } from './hudData.ts';
   import Radial from './Radial.svelte';
-  import { GROUP_RING, spreadAngles, type RadialItem } from './radial.ts';
+  import { BAR_CLEAR, GROUP_RING, spreadAngles, type RadialItem } from './radial.ts';
 
   interface Props {
     orders: OrderController;
@@ -89,7 +89,7 @@
     label={t('group.title')}
     at={() => anchors.group(target)}
     ring={GROUP_RING}
-    clamp={false}
+    top={BAR_CLEAR}
     hover={menu.hover}
     onhover={(id: string | null) => {
       orders.groupMenu.hover(id as GroupChoice | null);

@@ -65,6 +65,7 @@
     }}
     closeLabel={t('split.close')}
     modal
+    dim
   >
     {#snippet centre()}
       <!-- svelte-ignore a11y_no_static_element_interactions -->

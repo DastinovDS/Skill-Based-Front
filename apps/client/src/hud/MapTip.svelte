@@ -3,6 +3,7 @@
   import { fade } from 'svelte/transition';
   import { reducedMotion } from '../render/motion.ts';
   import { DURATION } from '../theme/tokens.ts';
+  import type { Anchor } from '../render/anchors.ts';
   import { tipPlacement } from './tipPlace.ts';
 
   interface Props {
@@ -10,9 +11,14 @@
     identity: string | number | null;
     /** The content of the tip. */
     children: Snippet;
+    /**
+     * The circle of the subject on the page (its helmet or city ring), read at each placement: the
+     * tag stands outside it and never covers the subject it describes.
+     */
+    clear?: () => Anchor | null;
   }
 
-  let { identity, children }: Props = $props();
+  let { identity, children, clear }: Props = $props();
 
   // The pointer must rest on the subject this long before the tip shows (the unit card of
   // ui-style 55r and 57r: 120 ms).
@@ -40,6 +46,7 @@
         width: window.innerWidth,
         height: window.innerHeight,
       },
+      clear?.() ?? null,
     );
     box.style.left = `${String(spot.left)}px`;
     box.style.top = `${String(spot.top)}px`;

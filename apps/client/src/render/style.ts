@@ -331,6 +331,19 @@ export const LOZENGE = {
 } as const;
 /** The VP badge (`vpBadge`): a gilt lozenge, a dark square `side` across with two gilt squares. */
 export const VP_LOZENGE = { side: 18.5, outer: 17.2, inner: 12.4, width: 1.1, font: 14.5 } as const;
+
+/**
+ * The smallest the VP lozenge is drawn on screen (CSS px across its side) and how much larger than
+ * its world size it may grow to reach it: at a fit view of a wide window the camera scale is under
+ * 0.5, which made it 8 px across with an unreadable number (#1069).
+ */
+export const VP_LOZENGE_FLOOR = { px: 13, maxScale: 1.7 } as const;
+
+/** The factor of the VP lozenge at the camera scale `cameraScale` (CSS px per world unit), 1 or more. */
+export function vpLozengeScale(cameraScale: number): number {
+  const wanted = VP_LOZENGE_FLOOR.px / (VP_LOZENGE.side * Math.max(1e-3, cameraScale));
+  return Math.min(VP_LOZENGE_FLOOR.maxScale, Math.max(1, wanted));
+}
 /**
  * The helmet (`helmet`, engraved): a dark casing (`casing`, thicker by `inside` in a city) under the
  * dome and the strap, the dome on the dark plate, hatched in the side's colour above the charge and

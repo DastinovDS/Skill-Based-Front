@@ -40,6 +40,11 @@
      * factory counter, the stance chip, the VP rail, the clock). A normal match shows everything.
      */
     gate?: Gate;
+    /**
+     * The numbers are the last ones before a reconnect (#1069): the bar dims, and the stance chip
+     * and the CP gauge take no click until the next snapshot.
+     */
+    stale?: boolean;
   }
 
   let {
@@ -51,6 +56,7 @@
     anchors = NO_ANCHORS,
     names = (node: number) => String(node),
     gate = FULL_GATE,
+    stale = false,
   }: Props = $props();
 
   // A tutorial beat that shows the stance chip but allows no stance (#806): the chip is locked.
@@ -148,7 +154,7 @@
 
 <!-- The Engraved top bar (ui-style 53, the round 5 Combined view): a dark strip under a double rule,
      numbers and signs only; the words are the accessible names and the tooltips. -->
-<header class="bar">
+<header class="bar" class:stale>
   <div class="left">
     {#if data !== null && gate.has('cp')}
       <div
@@ -202,7 +208,7 @@
           class="chip"
           class:locked={chipLocked}
           data-coach="stance"
-          aria-disabled={chipLocked}
+          aria-disabled={chipLocked || stale}
           aria-label={tf('orders.stanceOpen', {
             stance: t(`stance.${data.stance}`),
             stanceKey: keyBindings.label('stance'),
@@ -217,7 +223,7 @@
                   capital: next.capital.seconds,
                 })}
           onclick={() => {
-            orders.openRadial(true);
+            if (!stale) orders.openRadial(true);
           }}
         >
           <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
@@ -271,7 +277,7 @@
         {#if countdown !== null}
           <!-- P1: the period ruled in gilt up to now, a tick every 5 s, the gilt lozenge at the
                credit. A new period is a new fill: it does not run back. -->
-          <span class="rail">
+          <span class="rail" title={t('bar.railTip')}>
             {#key countdown.round}
               <span class="rail-fill" class:still={reducedMotion()} style:width="{railShare * 100}%"
               ></span>
@@ -283,7 +289,7 @@
                 style:left="{tick * 100}%"
               ></i>
             {/each}
-            <span class="rail-loz" class:full={railShare > 0.985}></span>
+            <span class="rail-loz" class:full={railShare > 0.985} title={t('bar.railTip')}></span>
           </span>
         {/if}
       </span>
@@ -742,6 +748,13 @@
     background: var(--vp);
   }
 
+  /* A wider target for the tooltip of the lozenge (#1069); the lozenge itself is 6 px. */
+  .rail-loz::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+
   /* The tug of war: a ruled band, mine solid, the enemy's hatched at 45 degrees, a tick at the half. */
   .tug {
     position: relative;
@@ -793,6 +806,17 @@
     transition: none !important;
   }
 
+  /* After a reset (a reconnect) the bar keeps the last numbers, dimmed, until the next snapshot. */
+  .bar.stale .left,
+  .bar.stale .score,
+  .bar.stale .timer {
+    opacity: 0.45;
+  }
+
+  .bar.stale .chip {
+    pointer-events: none;
+  }
+
   @media (max-width: 960px) {
     .bar {
       padding: 0 10px;
@@ -800,6 +824,70 @@
 
     .factories,
     .term {
+      display: none;
+    }
+  }
+
+  /* A narrow window (a split screen): the gauge, the tug and the clock shrink, the key cap goes, so
+     the chip, the CP scale, the score and the timer never lie over each other (#1069). */
+  @media (max-width: 900px) {
+    .bar,
+    .left,
+    .right {
+      gap: 8px;
+    }
+
+    .right {
+      gap: 6px;
+    }
+
+    .cp :global(svg) {
+      width: 118px;
+      height: auto;
+    }
+
+    kbd {
+      display: none;
+    }
+
+    .score {
+      gap: 6px;
+    }
+
+    .tug {
+      width: 64px;
+    }
+
+    .timer {
+      margin-right: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .bar,
+    .left,
+    .right {
+      gap: 4px;
+    }
+
+    .cp :global(svg) {
+      width: 84px;
+    }
+
+    .score {
+      gap: 4px;
+    }
+
+    .tug {
+      width: 36px;
+    }
+
+    .timer :global(svg) {
+      width: 80px;
+      height: auto;
+    }
+
+    .score :global(.helmet-icon) {
       display: none;
     }
   }
