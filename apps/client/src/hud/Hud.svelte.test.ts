@@ -172,7 +172,7 @@ describe('Hud', () => {
     const dialog = target.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Leave the chapter?');
     expect(dialog?.textContent).toContain('I · Units and movement');
-    expect(dialog?.textContent).toContain('It will start over.');
+    expect(dialog?.textContent).toContain('the chapter will start over.');
     expect(button(target, 'Leave the chapter')).toBeDefined();
     expect(button(target, 'Forfeit')).toBeUndefined();
   });

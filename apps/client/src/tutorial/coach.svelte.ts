@@ -332,6 +332,16 @@ export class TutorialCoach {
     return out;
   }
 
+  /**
+   * The city menu open on `node` stays when the card on screen points into it (III.2, the item
+   * of the open menu; III.1, the item of the menu it asks to open); any other card closes it (review
+   * 6, pass 2: III.5 asked to open Millbrook's menu while Fernhill's stayed open from the recruit).
+   */
+  keepsMenu(node: number): boolean {
+    if (this.current.card === null) return true;
+    return this.menuMarks().some((mark) => mark.node === node);
+  }
+
   #shownBeat(): { beat: Beat; index: number; fail: boolean } | null {
     const msg = this.#shown;
     if (msg === null) return null;

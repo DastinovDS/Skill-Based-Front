@@ -5,7 +5,7 @@
     {"id": 1, "name": "Fernhold", "x": 440, "y": 260, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 0},
     {"id": 2, "name": "Lowfield", "x": 230, "y": 600, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 0},
     {"id": 3, "name": "Wyre", "x": 420, "y": 80, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 4, "name": "Ashwood", "x": 680, "y": 330, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 0},
+    {"id": 4, "name": "Ashwood", "x": 680, "y": 330, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 0},
     {"id": 5, "name": "Thornwick", "x": 800, "y": 120, "terrain": "plains", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 1, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 6, "name": "Gullmoor", "x": 840, "y": 580, "terrain": "forest", "vp": 0, "kind": "province", "capital_of": null, "start_owner": 1, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 7, "name": "Stormcrown", "x": 1040, "y": 350, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 1, "start_charged": 1, "start_stock": 6}
