@@ -192,3 +192,6 @@ export function stanceRates(rules: RulesetPublic, factories: number = 1): Stance
       Math.floor((100 * ticksPerMinute * count) / stances.capital_period_ticks[stance]) / 100,
   }));
 }
+
+/** A radial that follows its object is nudged into the window, and clear of the top bar (52 px and its rule). */
+export const BAR_CLEAR = 56;

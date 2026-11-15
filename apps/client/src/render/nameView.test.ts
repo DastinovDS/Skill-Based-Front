@@ -18,7 +18,7 @@ describe('NameView', () => {
   function build() {
     const layers = createLayers();
     const view = new NameView(map, layers, () => 14, 1);
-    const holder = layers.layer.nodes.children.find((c) => c.label === 'node-names') as Container;
+    const holder = layers.layer.groups.children.find((c) => c.label === 'node-names') as Container;
     const boxes = holder.children as Container[];
     return { layers, view, holder, boxes };
   }
@@ -54,7 +54,7 @@ describe('NameView', () => {
     view.setLabelResolution(2);
     expect((first?.children[0] as Text).resolution).toBe(2);
     view.destroy();
-    expect(layers.layer.nodes.children.find((c) => c.label === 'node-names')).toBeUndefined();
+    expect(layers.layer.groups.children.find((c) => c.label === 'node-names')).toBeUndefined();
     expect(first?.destroyed).toBe(true);
   });
 });

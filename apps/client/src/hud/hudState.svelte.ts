@@ -42,6 +42,12 @@ export class HudState {
   /** `null` until the first snapshot. Replaced, never mutated. */
   current = $state.raw<HudData | null>(null);
 
+  /**
+   * The last `current` before a reset (a reconnect, a resync), until the next snapshot: the top
+   * bar keeps its last CP and score, dimmed, instead of emptying (#1069). `null` otherwise.
+   */
+  held = $state.raw<HudData | null>(null);
+
   /** Alerts of the match: incoming attacks and overcrowded cities (`hud/AlertStack.svelte`). */
   readonly alerts: AlertState;
 
@@ -202,6 +208,7 @@ export class HudState {
   /** The snapshot timeline broke (resync, reconnect): forget the old picture. */
   reset(): void {
     this.#snapshot = null;
+    this.held = this.current ?? this.held;
     this.current = null;
     this.alerts.reset();
     this.toasts.clear();
@@ -329,6 +336,7 @@ export class HudState {
     if (this.#snapshot === null) {
       return;
     }
+    this.held = null;
     this.current = buildHudData(this.#ctx, this.#snapshot, this.#selection, this.#hovered, {
       pending: this.#pending,
       paid: this.#paid,

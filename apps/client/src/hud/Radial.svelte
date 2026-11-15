@@ -46,10 +46,14 @@
      * Without it the map under and around the ring stays clickable.
      */
     modal?: boolean;
+    /** A modal menu softly darkens the map behind it (the split dialog: it holds the player's attention). */
+    dim?: boolean;
     /** The ring takes clicks. `false`: a menu held open by a key, the pointer stays the map's. */
     interactive?: boolean;
     /** Keep the whole ring inside the window (menus at the pointer or the middle). */
     clamp?: boolean;
+    /** The height of the bar over the map: a clamped ring keeps below it. */
+    top?: number;
     /** Content of the hole (a slider), HTML. */
     centre?: Snippet;
     /** Radius of the plain disc when there are no sectors. */
@@ -69,8 +73,10 @@
     onclose,
     closeLabel,
     modal = false,
+    dim = false,
     interactive = true,
     clamp = true,
+    top = 0,
     centre,
     disc = 0,
     half: halfAngle,
@@ -106,7 +112,7 @@
     if (clamp) {
       x = Math.min(Math.max(x, halfW), Math.max(halfW, window.innerWidth - halfW));
       y = Math.min(
-        Math.max(y, outer + pad),
+        Math.max(y, outer + pad + top),
         Math.max(outer + pad, window.innerHeight - outer - pad),
       );
     }
@@ -201,7 +207,7 @@
     if (priceH > 0) list.push({ kind: 'price', text: '', h: priceH });
     const extra = item.lines ?? [];
     list.push(...extra.map((text) => ({ kind: 'line' as const, text, h: 16 })));
-    if (item.key !== undefined) list.push({ kind: 'key', text: item.key, h: 20 });
+    if (item.key !== undefined) list.push({ kind: 'key', text: item.key, h: 24 });
     const total = list.reduce((sum, row) => sum + row.h, 0);
     let y = -total / 2;
     return list.map((row) => {
@@ -247,7 +253,13 @@
 
 {#if modal}
   <!-- A click outside the ring, in its hole, or on the thing it belongs to closes the menu. -->
-  <button type="button" class="backdrop" tabindex="-1" aria-label={closeLabel} onclick={onbackdrop}
+  <button
+    type="button"
+    class="backdrop"
+    class:dim
+    tabindex="-1"
+    aria-label={closeLabel}
+    onclick={onbackdrop}
   ></button>
 {/if}
 <!-- The box grows out of the middle of the ring. -->
@@ -381,16 +393,16 @@
               {#if per !== ''}<text x={f.px} y={at + 14} class="per">{per}</text>{/if}
             {/if}
           {:else if row.kind === 'key'}
-            {@const w = Math.max(16, row.text.length * 7 + 6)}
+            {@const w = Math.max(20, row.text.length * 9 + 8)}
             <!-- A square for one character; a longer name of a rebound key (#966) widens it. -->
             <rect
               x={spot.x - w / 2}
-              y={spot.y + row.dy - 12}
+              y={spot.y + row.dy - 14}
               width={w}
-              height="15"
+              height="19"
               class="keycap"
             />
-            <text x={spot.x} y={spot.y + row.dy - 1} class="key">{row.text}</text>
+            <text x={spot.x} y={spot.y + row.dy - 0.5} class="key">{row.text}</text>
           {:else}
             <text x={spot.x} y={spot.y + row.dy} class={row.kind}>{row.text}</text>
           {/if}
@@ -427,6 +439,11 @@
     background: transparent;
     pointer-events: auto;
     cursor: default;
+  }
+
+  /* The split dialog (#1069): the map under it dims softly, so it reads as a dialog and not a map mark. */
+  .backdrop.dim {
+    background: rgb(6 5 4 / 38%);
   }
 
   .radial {
@@ -691,13 +708,14 @@
   /* The key in a small square in cut capitals. */
   .keycap {
     fill: none;
-    stroke: rgb(236 228 209 / 40%);
+    stroke: rgb(236 228 209 / 65%);
     stroke-width: 1;
   }
 
+  /* The key (#1069): 12.5 px in the ink, not the dim ink at 10 px (it was 9 px of grey on black). */
   .key {
-    fill: var(--ink-dim);
-    font: 600 10px var(--font-display);
+    fill: var(--ink);
+    font: 600 12.5px var(--font-display);
     letter-spacing: 0.06em;
   }
 

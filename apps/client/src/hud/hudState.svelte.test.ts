@@ -28,6 +28,22 @@ describe('HudState', () => {
     expect(hud.current).toBeNull();
   });
 
+  it('holds the last picture across a reset for the top bar, until the next snapshot (#1069)', () => {
+    const hud = newState();
+    expect(hud.held).toBeNull();
+    hud.onSnapshot(snapshot(5));
+    const last = hud.current;
+    hud.reset();
+    expect(hud.current).toBeNull();
+    expect(hud.held).toBe(last);
+    // A second reset before a snapshot keeps the picture too.
+    hud.reset();
+    expect(hud.held).toBe(last);
+    hud.onSnapshot(snapshot(9));
+    expect(hud.held).toBeNull();
+    expect(hud.current?.tick).toBe(9);
+  });
+
   it('gives the result screen the nicks of our side (#596)', () => {
     const hud = newState();
     expect(hud.summary()).toEqual({ nicks: { mine: 'Ember', enemy: 'Bot' } });

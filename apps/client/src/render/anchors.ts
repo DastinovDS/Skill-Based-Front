@@ -9,6 +9,11 @@ export interface Anchor {
   readonly x: number;
   readonly y: number;
   readonly r: number;
+  /**
+   * How far the thing and the marks on its rim (a city's capacity ring and VP lozenge) reach from
+   * the point, page px: what a tag next to it keeps clear of. Absent: `r`.
+   */
+  readonly reach?: number;
 }
 
 /** A box on the page [x0, y0, x1, y1], client px. */

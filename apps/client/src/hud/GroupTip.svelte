@@ -4,19 +4,30 @@
   import BonusChevron from './BonusChevron.svelte';
   import ChargeTip from './ChargeTip.svelte';
   import MapTip from './MapTip.svelte';
+  import { NO_ANCHORS, type Anchor, type MapAnchors } from '../render/anchors.ts';
 
   interface Props {
     /** The group under the pointer; `null`: none. */
     group: GroupInfo | null;
+    /** Where the helmets are on the page: the tag keeps clear of the one it describes. */
+    anchors?: MapAnchors;
   }
 
-  let { group }: Props = $props();
+  let { group, anchors = NO_ANCHORS }: Props = $props();
+
+  // In a city the city with its ring and its VP lozenge, else the token of the group on its road.
+  function subject(): Anchor | null {
+    if (group === null) return null;
+    const city = group.node === null ? null : anchors.node(group.node);
+    if (city !== null) return { ...city, r: city.reach ?? city.r };
+    return anchors.group(group.id);
+  }
 </script>
 
 <!-- The charges of the group under the pointer. The same group while its id is: the numbers
 change under it every snapshot. For one with a planned order the bonus of the order, a forecast
 while it stands in its city. The opponent's groups are not under this tip: they show their mode only. -->
-<MapTip identity={group === null ? null : group.id}>
+<MapTip identity={group === null ? null : group.id} clear={subject}>
   {#if group !== null}
     <ChargeTip units={group.units} charged={group.charged} />
     <!-- A plan that still gathers its bonus shows nothing extra: the charges say it (#811). -->

@@ -15,6 +15,7 @@ import {
   UNIT_SIDES,
   VP,
   VP_LOZENGE,
+  vpLozengeScale,
   YOU,
   otherPlayer,
   sideColours,
@@ -639,6 +640,7 @@ export class CityView {
    * cities keep theirs, so the barracks' foundation is placed again when either changes enough.
    */
   setCameraScale(scale: number): void {
+    this.sizeVpBadges(scale);
     const size = iconSize(scale);
     // A quarter octave below the scale: the names are never larger in world units than measured.
     const names = 2 ** (Math.floor(Math.log2(Math.max(1e-3, scale)) * 4) / 4);
@@ -651,6 +653,20 @@ export class CityView {
         this.drawRecruits(id, state, this.selected === id);
       }
     });
+  }
+
+  /**
+   * The VP lozenges keep a floor size on screen (`VP_LOZENGE_FLOOR`): the lozenge grows with the
+   * camera, the number's font by quarter octaves (the shared style re-renders the texts).
+   */
+  private sizeVpBadges(cameraScale: number): void {
+    const k = vpLozengeScale(cameraScale);
+    const font = VP_LOZENGE.font * 2 ** (Math.round(Math.log2(k) * 4) / 4);
+    if (font !== this.vpStyle.fontSize) this.vpStyle.fontSize = font;
+    for (const badge of this.badges) {
+      const lozenge = badge?.children[0];
+      if (lozenge !== undefined) lozenge.scale.set(k);
+    }
   }
 
   /** The size on screen (CSS px) of the name under each city: the barracks' foundation keeps clear of it. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAPTION } from './nameLayout.ts';
 import {
   cameraLimits,
   centerOn,
@@ -85,11 +86,21 @@ describe('fit map', () => {
   });
 
   it('derives zoom limits from the fit scale', () => {
-    // fit = 0.8 without padding; limits are 0.5x and 6x of it.
+    // fit = 0.8 without padding; limits are 0.5x and 6x of it, but not out past the city names.
     const limits = cameraLimits(WORLD, VIEWPORT, 0);
-    expect(limits.minScale).toBeCloseTo(0.4, 12);
+    expect(limits.minScale).toBeCloseTo(CAPTION.city.minScale, 12);
     expect(limits.maxScale).toBeCloseTo(4.8, 12);
     expect(limits.world).toEqual(WORLD);
+  });
+
+  it('keeps the city names at the furthest zoom out, and never takes the fit view away', () => {
+    // fit 2.4: half of it is above the names' threshold, so the plain 0.5x stays.
+    expect(
+      cameraLimits({ width: 400, height: 200 }, { width: 960, height: 480 }, 0).minScale,
+    ).toBeCloseTo(1.2, 12);
+    // fit 0.2 (a big map in a small window): the names are hidden at fit already, the minimum is fit.
+    const small = cameraLimits({ width: 4000, height: 2000 }, { width: 800, height: 400 }, 0);
+    expect(small.minScale).toBeCloseTo(0.2, 12);
   });
 });
 

@@ -200,6 +200,35 @@ describe('Hud', () => {
     expect(target.querySelector('.cp .num')?.textContent.trim()).toBe('2.5');
   });
 
+  it('keeps the last CP and score, dimmed and not clickable, between a reset and the next snapshot (#1069)', () => {
+    setLocale('en');
+    const { target, state } = render();
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+    flushSync();
+    const bar = target.querySelector('header') as HTMLElement;
+    expect(bar.classList.contains('stale')).toBe(false);
+    state.reset();
+    flushSync();
+    // The numbers stay, the bar is dimmed, the stance chip takes no click.
+    expect(bar.classList.contains('stale')).toBe(true);
+    expect(target.querySelector('.cp .num')?.textContent.trim()).toBe('2.5');
+    expect(target.querySelector('[aria-label^="VP score"]')).not.toBeNull();
+    expect(target.querySelector('.chip')?.getAttribute('aria-disabled')).toBe('true');
+    // The next snapshot brings the bar back.
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 260));
+    flushSync();
+    expect(bar.classList.contains('stale')).toBe(false);
+    expect(target.querySelector('.chip')?.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('tells what the gilt lozenge of the VP rail is (#1069)', () => {
+    setLocale('en');
+    const { target, state } = render();
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+    flushSync();
+    expect(target.querySelector('.rail-loz')?.getAttribute('title')).toContain('Next VP credit');
+  });
+
   it('shows the CP as the Double frame: the bar while it grows, the frame drawn in at the cap (#860)', () => {
     setLocale('en');
     const { target, state } = render();
