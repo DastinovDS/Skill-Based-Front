@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Next supply by the stance, round 1</title>
+<!-- The next supply indicator by the stance, design round 1 (#1067, after #1055). The owner (2026-11-15): the
+     indicator beside the stance in the top bar is the main sign of when the next supply (the next charge) is ready,
+     and it must be far more visible and readable; it is not a mark on the factories. Every variant here is a whole
+     piece of the top bar: the stance, the countdown to the capital's next charge (DEC-44: `me.capital_ticks` over
+     `ruleset_public.stances.capital_period_ticks[stance]`; under DEC-47 every other factory makes one charge per the
+     same period on its own counter) and the moment a charge is made.
+     The ground is the real client: frames of the dev scenes `economy` (the artery front: a fight at Forkway, a planned
+     order, the alert strip) and `fights` (the siege), 1280 and 960 px wide, device pixel ratio 2, with the top bar
+     hidden; the bar drawn here is the client's own markup and CSS (TopBar.svelte, CpGauge.svelte, MatchClock.svelte,
+     the cut icons), taken from the running dev server, with only the stance chip replaced per variant.
+     The model is the rule, in ticks (10 a second): each counter grows by 1 a tick and fires at the period of the
+     stance in force (Economy 100, Balance 200, War 400 ticks for the capital and every factory; CP 100, 50, 40 ticks
+     a 0.5 CP quantum, #900), a stance change carries each counter as `counter * new // old` (DEC-44, item 4).
+     Watchpost's built factory runs on its own counter (DEC-47). Self-contained: EB Garamond and Cinzel (SIL OFL)
+     from assets/in-match-cp-vp/fonts/, the frames from assets/next-supply-hud/. State in the address
+     (#v=A&g=front&w=1280&t=12.0&s=0b470w860e). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/in-match-cp-vp/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+@font-face{font-family:'Cinzel';src:url(assets/in-match-cp-vp/fonts/cinzel.woff2) format('woff2');font-weight:400 900;font-style:normal;font-display:block}
+:root{
+  --stone:#16130f;--panel:#1d1a15;--rule:#7d7363;--line:#3d372d;
+  --ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;
+  --plate:#0e0c09;--casing:#060504;--own:#86a6ea;--enemy:#e5785e;--neutral:#b3a88f;--segment-empty:#5a5243;
+  --vp:#cfab62;--warn:#e6ab42;--badge-up:#8cc79a;--badge-down:#ec6654;
+  --hatch-own:repeating-linear-gradient(0deg,var(--own) 0 1px,transparent 1px 3px);
+  --hatch-enemy:repeating-linear-gradient(45deg,var(--enemy) 0 1.2px,transparent 1.2px 3.4px);
+  --font-display:'Cinzel','Times New Roman',serif;
+  --font-text:'EB Garamond',Georgia,'Times New Roman',serif;
+  --ease-engrave:cubic-bezier(0.37,0,0.63,1);--ease-settle:cubic-bezier(0.33,1,0.68,1);
+  --t-cp-frame-in:700ms;--t-cp-frame-out:400ms;
+  --bg:#16130f;--paper:var(--ink);--you:var(--own);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+/* The page's controls: one row of variant buttons, the few switches that matter, time; the rest under More. */
+.ctl{position:sticky;top:0;z-index:20;background:var(--stone);padding:10px 16px 9px;border-bottom:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px}
+.row+.row{margin-top:8px}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0 6px 0 0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.pick{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0;min-height:28px}
+button.pick:hover{border-color:var(--rule);color:var(--ink)}
+button.pick[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.pick .k{opacity:.7;margin-right:5px;font-weight:700}
+button.pick:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.time{display:flex;align-items:center;gap:8px}
+.time input[type=range]{width:min(360px,34vw);accent-color:var(--ink-dim)}
+.time output{font:500 14px/1 'EB Garamond',Georgia,serif;font-variant-numeric:tabular-nums;color:var(--ink-soft);min-width:4.4em}
+.more{display:none}
+.ctl.open .more{display:flex}
+/* One large view: the client's frame at its CSS size, scaled to fit the page width. */
+#viewport{position:relative;margin:14px auto 24px;overflow:hidden;background:#000}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;background:#0b0c0f}
+#stage.grey{filter:grayscale(1)}
+#ground{position:absolute;left:0;top:0;display:block;user-select:none;pointer-events:none}
+.hud{position:absolute;inset:0;pointer-events:none}
+.hud header.bar{position:absolute;left:0;right:0;top:0}
+#fx{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.stage-tug .tug{width:179px!important}
+.narrow .tug{width:134px!important}
+.narrow .bar{padding:0 10px!important}
+.narrow .factories,.narrow .term{display:none!important}
+/* ---- the client's bar (TopBar, CpGauge, MatchClock, RollNum, the icons), as the dev server serves it ---- */
+.cut-icon.svelte-1p0qkde { flex: 0 0 auto; display: block; overflow: visible; }
+.svelte-1p0qkde { }
+.helmet-icon.svelte-1apoa8v { flex: 0 0 auto; overflow: visible; --tone: var(--you); }
+.helmet-icon.enemy.svelte-1apoa8v { --tone: var(--enemy); }
+.casing.svelte-1apoa8v { fill: none; stroke: var(--bg); stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+.gear.svelte-1apoa8v { fill: none; stroke: color-mix(in srgb, var(--tone) 50%, var(--paper)); stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; }
+.plate.svelte-1apoa8v { fill: rgb(22, 27, 34); }
+.fill.svelte-1apoa8v { fill: var(--tone); }
+.dashed.svelte-1apoa8v .casing:where(.svelte-1apoa8v), .dashed.svelte-1apoa8v .plate:where(.svelte-1apoa8v) { opacity: 0.5; }
+.dashed.svelte-1apoa8v .gear:where(.svelte-1apoa8v), .dashed.svelte-1apoa8v .edge:where(.svelte-1apoa8v) { stroke: var(--text-dim); }
+.dashed.svelte-1apoa8v .edge:where(.svelte-1apoa8v) { stroke-dasharray: 10, 8; }
+.edge.svelte-1apoa8v { fill: none; stroke: color-mix(in srgb, var(--tone) 50%, var(--paper)); stroke-width: 4.5; stroke-linejoin: round; }
+.engraved.svelte-1apoa8v { --tone: var(--own); }
+.engraved.enemy.svelte-1apoa8v { --tone: var(--enemy); }
+.engraved.svelte-1apoa8v .casing:where(.svelte-1apoa8v) { stroke: var(--casing); stroke-width: 11; }
+.engraved.svelte-1apoa8v .gear:where(.svelte-1apoa8v) { stroke: var(--ink); stroke-width: 4; }
+.engraved.svelte-1apoa8v .plate:where(.svelte-1apoa8v) { fill: var(--plate); }
+.engraved.svelte-1apoa8v .edge:where(.svelte-1apoa8v) { stroke: var(--ink); stroke-width: 4; }
+.engraved.dashed.svelte-1apoa8v .gear:where(.svelte-1apoa8v), .engraved.dashed.svelte-1apoa8v .edge:where(.svelte-1apoa8v) { stroke: var(--ink-dim); }
+.svelte-1apoa8v { }
+.bar-glyph.svelte-kfajlw { flex: 0 0 auto; display: block; }
+.svelte-kfajlw { }
+.cp-mark.svelte-bcfemv { flex: 0 0 auto; display: inline-block; overflow: visible; vertical-align: -0.15em; }
+.svelte-bcfemv { }
+.gauge.svelte-1dy0xsb { display: inline-flex; align-items: center; gap: 2px; }
+.num.svelte-1dy0xsb { position: relative; display: inline-grid; min-width: 30px; height: 28px; overflow: hidden; color: var(--ink); font-style: ; font-variant-ligatures: ; font-variant-caps: ; font-variant-east-asian: ; font-variant-alternates: ; font-variant-position: ; font-variant-emoji: ; font-weight: ; font-stretch: ; font-size: ; line-height: ; font-family: ; font-optical-sizing: ; font-size-adjust: ; font-kerning: ; font-feature-settings: ; font-variation-settings: ; font-language-override: ; font-variant-numeric: lining-nums tabular-nums; }
+.short.svelte-1dy0xsb .num:where(.svelte-1dy0xsb) { color: var(--enemy); }
+.digits.svelte-1dy0xsb { grid-area: 1 / 1; white-space: nowrap; }
+.now.down.svelte-1dy0xsb { animation: svelte-1dy0xsb-roll-in-down var(--t-cp-roll) var(--ease-engrave) both; }
+.now.up.svelte-1dy0xsb { animation: svelte-1dy0xsb-roll-in-up var(--t-cp-roll) var(--ease-engrave) both; }
+.was.down.svelte-1dy0xsb { animation: svelte-1dy0xsb-roll-out-down var(--t-cp-roll) var(--ease-engrave) both; }
+.was.up.svelte-1dy0xsb { animation: svelte-1dy0xsb-roll-out-up var(--t-cp-roll) var(--ease-engrave) both; }
+@keyframes svelte-1dy0xsb-roll-in-down { 
+  0%, 30% { transform: translateY(-13px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes svelte-1dy0xsb-roll-in-up { 
+  0%, 30% { transform: translateY(13px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes svelte-1dy0xsb-roll-out-down { 
+  0% { transform: none; opacity: 1; }
+  60%, 100% { transform: translateY(13px); opacity: 0; }
+}
+@keyframes svelte-1dy0xsb-roll-out-up { 
+  0% { transform: none; opacity: 1; }
+  60%, 100% { transform: translateY(-13px); opacity: 0; }
+}
+svg.svelte-1dy0xsb { display: block; overflow: visible; }
+.own-fill.svelte-1dy0xsb { fill: var(--own); }
+.casing-line.svelte-1dy0xsb { stroke: var(--casing); stroke-width: 3; fill: none; }
+.ink-line.svelte-1dy0xsb { stroke: var(--ink); stroke-width: 1; fill: none; }
+.casing.svelte-1dy0xsb { fill: var(--casing); }
+.bar.svelte-1dy0xsb { fill: var(--own); }
+.short.svelte-1dy0xsb .bar:where(.svelte-1dy0xsb) { fill: var(--enemy); }
+.sliver-rule.svelte-1dy0xsb { fill: none; stroke: var(--ink); stroke-opacity: 0.8; stroke-width: 0.8; }
+.notch.svelte-1dy0xsb { fill: var(--plate); stroke: var(--ink); stroke-width: 1; }
+.edge.svelte-1dy0xsb { fill: var(--ink); }
+.needle.svelte-1dy0xsb { fill: var(--ink); stroke: var(--casing); stroke-width: 1; }
+.frame.svelte-1dy0xsb path:where(.svelte-1dy0xsb) { fill: none; stroke-dasharray: 1; stroke-dashoffset: 1; stroke-linecap: butt; transition: stroke-dashoffset var(--t-cp-frame-out) var(--ease-engrave); }
+.frame-casing.svelte-1dy0xsb { stroke: var(--casing); stroke-width: 3; }
+.frame-outer.svelte-1dy0xsb { stroke: var(--ink); stroke-width: 1; }
+.frame-inner.svelte-1dy0xsb { stroke: var(--ink); stroke-width: 0.7; }
+.serif.svelte-1dy0xsb { fill: var(--ink); stroke: var(--casing); stroke-width: 1; opacity: 0; transition: opacity calc(var(--t-cp-frame-out) / 2) var(--ease-engrave); }
+.full.svelte-1dy0xsb .frame:where(.svelte-1dy0xsb) path:where(.svelte-1dy0xsb) { stroke-dashoffset: 0; transition-duration: var(--t-cp-frame-in); transition-delay: 120ms; }
+.full.svelte-1dy0xsb .serif.left:where(.svelte-1dy0xsb) { opacity: 1; transition-duration: calc(var(--t-cp-frame-in) / 4); transition-delay: 120ms; }
+.full.svelte-1dy0xsb .serif.right:where(.svelte-1dy0xsb) { opacity: 1; transition-duration: calc(var(--t-cp-frame-in) * 0.15); transition-delay: calc(120ms + var(--t-cp-frame-in) * 0.85); }
+.bracket-casing.svelte-1dy0xsb { fill: none; stroke: var(--casing); stroke-width: 3.4; }
+.bracket.svelte-1dy0xsb { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+.bracket.short.svelte-1dy0xsb, .chevron.svelte-1dy0xsb { stroke: var(--enemy); }
+.chevron.svelte-1dy0xsb { fill: none; stroke-width: 1.6; stroke-linejoin: miter; }
+.ear-plate.svelte-1dy0xsb { fill: var(--plate); }
+.ear-rule.svelte-1dy0xsb { fill: none; stroke: var(--ink); stroke-opacity: 0.85; stroke-width: 0.8; }
+.ear-lack-casing.svelte-1dy0xsb, .ear-lack.svelte-1dy0xsb { fill: none; visibility: hidden; }
+.ear-lack-casing.svelte-1dy0xsb { stroke: var(--casing); stroke-width: 2.6; }
+.ear-lack.svelte-1dy0xsb { stroke: var(--badge-down); stroke-width: 1.1; }
+.earmark.svelte-1dy0xsb.short .ear-plate:where(.svelte-1dy0xsb), .earmark.svelte-1dy0xsb.short .ear-hatch:where(.svelte-1dy0xsb), .earmark.svelte-1dy0xsb.short .ear-rule:where(.svelte-1dy0xsb) { visibility: hidden; }
+.earmark.svelte-1dy0xsb.short .ear-lack-casing:where(.svelte-1dy0xsb), .earmark.svelte-1dy0xsb.short .ear-lack:where(.svelte-1dy0xsb) { visibility: inherit; }
+.earmark.svelte-1dy0xsb.short .ear-helm:where(.svelte-1dy0xsb) { opacity: 0.85; }
+.fuse-casing.svelte-1dy0xsb { fill: none; stroke: var(--casing); stroke-width: 3; }
+.fuse-ink.svelte-1dy0xsb { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+.fuse-ink.svelte-1dy0xsb.short { stroke: var(--badge-down); }
+.fuse-head-casing.svelte-1dy0xsb { fill: var(--casing); }
+.fuse-head-ink.svelte-1dy0xsb { fill: var(--ink); }
+.fuse-head.svelte-1dy0xsb.short .fuse-head-ink:where(.svelte-1dy0xsb) { fill: var(--badge-down); }
+.due-chevron-casing.svelte-1dy0xsb, .due-chevron.svelte-1dy0xsb { fill: none; stroke-linejoin: miter; }
+.due-chevron-casing.svelte-1dy0xsb { stroke: var(--casing); stroke-width: 3.4; }
+.due-chevron.svelte-1dy0xsb { stroke: var(--badge-down); stroke-width: 1.6; }
+.flight-trail.svelte-1dy0xsb { fill: none; stroke: var(--ink); stroke-opacity: 0.5; stroke-width: 1; stroke-dasharray: 1.5, 3; }
+:root[data-motion="reduced"] .digits.svelte-1dy0xsb { animation: auto ease 0s 1 normal none running none !important; }
+:root[data-motion="reduced"] .was.svelte-1dy0xsb { display: none; }
+:root[data-motion="reduced"] .frame.svelte-1dy0xsb path:where(.svelte-1dy0xsb), :root[data-motion="reduced"] .serif.svelte-1dy0xsb { transition: none !important; }
+.svelte-1dy0xsb { }
+.clock.svelte-16qcfmw { display: inline-flex; color: var(--ink); transition: color 400ms var(--ease-engrave); }
+.clock.last.svelte-16qcfmw { color: var(--warn); }
+svg.svelte-16qcfmw { display: block; overflow: visible; }
+.plate.svelte-16qcfmw { fill: var(--casing); opacity: 0.55; }
+.outer.svelte-16qcfmw { fill: currentcolor; opacity: 0.6; }
+.inner.svelte-16qcfmw { fill: currentcolor; opacity: 0.22; }
+.last.svelte-16qcfmw .outer:where(.svelte-16qcfmw) { opacity: 0.8; }
+.last.svelte-16qcfmw .inner:where(.svelte-16qcfmw) { opacity: 0.32; }
+.bracket.svelte-16qcfmw { fill: currentcolor; }
+.serif-casing.svelte-16qcfmw { fill: var(--casing); }
+.pixel.svelte-16qcfmw { display: none; }
+@media (max-resolution: 1.99dppx) {
+  .pixel.svelte-16qcfmw { display: inline; }
+  .smooth.svelte-16qcfmw { display: none; }
+}
+.serif-ink.svelte-16qcfmw { fill: currentcolor; }
+.figures.svelte-16qcfmw { fill: currentcolor; font-family: var(--font-text); font-variant-numeric: lining-nums tabular-nums; }
+.paused.svelte-16qcfmw .figures:where(.svelte-16qcfmw) { opacity: 0.6; }
+.paused.svelte-16qcfmw .bracket:where(.svelte-16qcfmw) { opacity: 0.7; }
+.swell.svelte-16qcfmw { opacity: 0; animation: svelte-16qcfmw-beat 420ms var(--ease-engrave) both; }
+@keyframes svelte-16qcfmw-beat { 
+  0%, 100% { opacity: 0; }
+  35% { opacity: 1; }
+}
+:root[data-motion="reduced"] .swell.svelte-16qcfmw { animation: auto ease 0s 1 normal none running none; }
+:root[data-motion="reduced"] .clock.svelte-16qcfmw { transition: none; }
+.svelte-16qcfmw { }
+.roll.svelte-76hl56 { position: relative; display: inline-grid; overflow: hidden; vertical-align: top; }
+.digits.svelte-76hl56 { grid-area: 1 / 1; white-space: nowrap; }
+.up.svelte-76hl56 .now.rolling:where(.svelte-76hl56) { animation: svelte-76hl56-in-up var(--t-cp-roll) var(--ease-engrave) var(--roll-delay) both; }
+.up.svelte-76hl56 .was.rolling:where(.svelte-76hl56) { animation: svelte-76hl56-out-up var(--t-cp-roll) var(--ease-engrave) var(--roll-delay) both; }
+.down.svelte-76hl56 .now.rolling:where(.svelte-76hl56) { animation: svelte-76hl56-in-down var(--t-cp-roll) var(--ease-engrave) var(--roll-delay) both; }
+.down.svelte-76hl56 .was.rolling:where(.svelte-76hl56) { animation: svelte-76hl56-out-down var(--t-cp-roll) var(--ease-engrave) var(--roll-delay) both; }
+@keyframes svelte-76hl56-in-up { 
+  0%, 30% { transform: translateY(var(--roll-travel)); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes svelte-76hl56-out-up { 
+  0% { transform: none; opacity: 1; }
+  60%, 100% { transform: translateY(calc(-1 * var(--roll-travel))); opacity: 0; }
+}
+@keyframes svelte-76hl56-in-down { 
+  0%, 30% { transform: translateY(calc(-1 * var(--roll-travel))); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes svelte-76hl56-out-down { 
+  0% { transform: none; opacity: 1; }
+  60%, 100% { transform: translateY(var(--roll-travel)); opacity: 0; }
+}
+:root[data-motion="reduced"] .digits.svelte-76hl56 { animation: auto ease 0s 1 normal none running none !important; }
+:root[data-motion="reduced"] .was.svelte-76hl56 { display: none; }
+.svelte-76hl56 { }
+.bar.svelte-1q6et7t { pointer-events: auto; box-sizing: border-box; height: 52px; display: grid; grid-template-columns: minmax(0px, 1fr) auto minmax(0px, 1fr); align-items: center; gap: 12px; padding: 0px 18px; border-bottom: 1px solid rgba(236, 228, 209, 0.55); background: rgba(14, 12, 9, 0.96); box-shadow: rgba(14, 12, 9, 0.96) 0px 3px 0px, rgba(236, 228, 209, 0.22) 0px 4px 0px; color: var(--ink); font-style: ; font-variant-ligatures: ; font-variant-caps: ; font-variant-east-asian: ; font-variant-alternates: ; font-variant-position: ; font-variant-emoji: ; font-weight: ; font-stretch: ; font-size: ; line-height: ; font-family: ; font-optical-sizing: ; font-size-adjust: ; font-kerning: ; font-feature-settings: ; font-variation-settings: ; font-language-override: ; font-variant-numeric: lining-nums tabular-nums; }
+.left.svelte-1q6et7t, .right.svelte-1q6et7t { display: flex; align-items: center; gap: 12px; min-width: 0px; }
+.right.svelte-1q6et7t { justify-content: flex-end; gap: 8px; }
+button.svelte-1q6et7t { box-sizing: border-box; height: 30px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0px 9px; border: 1px solid rgba(236, 228, 209, 0.6); border-radius: 0px; background: none; box-shadow: inset 0 0 0 2px var(--plate),
+      inset 0 0 0 3px rgb(236 228 209 / 22%); color: var(--ink); font: inherit; cursor: pointer; }
+button.svelte-1q6et7t:hover { border-color: var(--ink); background: rgba(236, 228, 209, 0.06); }
+button.svelte-1q6et7t:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.icon-button.svelte-1q6et7t { width: 30px; padding: 0px; }
+.chip.locked.svelte-1q6et7t { position: relative; cursor: default; }
+.chip.locked.svelte-1q6et7t > :not(.padlock) { opacity: 0.4; }
+.chip.locked.svelte-1q6et7t:hover { border-color: rgba(236, 228, 209, 0.6); background: none; }
+.padlock.svelte-1q6et7t { position: absolute; top: -6px; right: -6px; }
+.pl-case.svelte-1q6et7t { fill: var(--casing); stroke: var(--casing); stroke-width: 2.6; stroke-linejoin: round; }
+.pl-shackle-case.svelte-1q6et7t { fill: none; stroke: var(--casing); stroke-width: 4; }
+.pl-body.svelte-1q6et7t { fill: var(--ink-dim); }
+.pl-shackle.svelte-1q6et7t { fill: none; stroke: var(--ink-dim); stroke-width: 1.8; }
+.cp.svelte-1q6et7t { display: flex; align-items: center; gap: 6px; min-width: 0px; }
+.term.svelte-1q6et7t { display: inline-flex; }
+.num.svelte-1q6et7t { white-space: nowrap; }
+.factories.svelte-1q6et7t { display: inline-flex; align-items: center; gap: 5px; font-size: 19px; }
+.factories.full.svelte-1q6et7t { outline: rgba(236, 228, 209, 0.5) dashed 1px; outline-offset: 3px; color: var(--ink-dim); }
+.capital.svelte-1q6et7t { position: relative; display: inline-block; width: 12px; height: 16px; box-sizing: border-box; border: 1px solid var(--ink); box-shadow: 0 0 0 2px var(--plate); }
+.capital.svelte-1q6et7t i:where(.svelte-1q6et7t) { position: absolute; left: 1px; right: 1px; bottom: 1px; max-height: calc(100% - 2px); background: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 2.5px); }
+kbd.svelte-1q6et7t { padding: 0px 4px; border: 1px solid rgba(236, 228, 209, 0.4); color: var(--ink-dim); font: 500 11px/14px var(--font-display); letter-spacing: 0.06em; }
+.score.svelte-1q6et7t { display: flex; align-items: center; gap: 10px; min-width: 0px; }
+.total.svelte-1q6et7t { position: relative; display: inline-flex; }
+.railed.svelte-1q6et7t .total.mine:where(.svelte-1q6et7t) { margin-left: 22px; }
+.railed.svelte-1q6et7t .total.enemy:where(.svelte-1q6et7t) { margin-right: 22px; }
+.gain.svelte-1q6et7t { position: absolute; bottom: 58%; display: inline-flex; font-style: ; font-variant-ligatures: ; font-variant-caps: ; font-variant-east-asian: ; font-variant-alternates: ; font-variant-position: ; font-variant-emoji: ; font-weight: ; font-stretch: ; font-size: ; line-height: ; font-family: ; font-optical-sizing: ; font-size-adjust: ; font-kerning: ; font-feature-settings: ; font-variation-settings: ; font-language-override: ; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.gain.mine.svelte-1q6et7t { right: calc(100% + 1px); color: var(--own); }
+.gain.enemy.svelte-1q6et7t { left: calc(100% + 1px); color: var(--enemy); }
+.gain.slide.mine.svelte-1q6et7t { animation: svelte-1q6et7t-slide-mine 550ms var(--ease-engrave) both; }
+.gain.slide.enemy.svelte-1q6et7t { animation: svelte-1q6et7t-slide-enemy 550ms var(--ease-engrave) both; }
+.gain.after.svelte-1q6et7t { animation: 1600ms linear 0s 1 normal both running svelte-1q6et7t-gain-in; }
+@keyframes svelte-1q6et7t-slide-mine { 
+  0% { transform: none; opacity: 1; }
+  45% { opacity: 1; }
+  100% { transform: translate(13px, 7px); opacity: 0; }
+}
+@keyframes svelte-1q6et7t-slide-enemy { 
+  0% { transform: none; opacity: 1; }
+  45% { opacity: 1; }
+  100% { transform: translate(-13px, 7px); opacity: 0; }
+}
+@keyframes svelte-1q6et7t-gain-in { 
+  0%, 75% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.vp.svelte-1q6et7t { min-width: 1.2ch; font-size: 27px; font-weight: 500; text-align: center; }
+.mine-vp.svelte-1q6et7t { color: var(--own); }
+.enemy-vp.svelte-1q6et7t { color: var(--enemy); }
+.tugbox.svelte-1q6et7t { display: flex; flex-direction: column; gap: 6px; }
+.railed.svelte-1q6et7t .tugbox:where(.svelte-1q6et7t) { transform: translateY(3px); margin-right: 10px; }
+.rail.svelte-1q6et7t { position: relative; box-sizing: border-box; height: 10px; margin-right: 0px; }
+.rail.svelte-1q6et7t::before { content: ""; position: absolute; left: -1px; right: -1px; top: 0px; height: 6px; background: var(--casing); }
+.rail.svelte-1q6et7t::after { content: ""; position: absolute; left: 0px; right: 0px; top: 5px; height: 1px; background: var(--ink); }
+.rail-fill.svelte-1q6et7t { position: absolute; left: 0px; top: 1px; height: 4px; background: repeating-linear-gradient(90deg, var(--vp) 0 1px, transparent 1px 2.4px); transition: width 100ms linear; }
+.rail-fill.still.svelte-1q6et7t { transition: none; }
+.rail-fill.svelte-1q6et7t::after { content: ""; position: absolute; right: -0.8px; top: -0.5px; width: 1.4px; height: 5px; background: var(--ink); }
+.rail-tick.svelte-1q6et7t { position: absolute; top: 5px; width: 1px; height: 3px; margin-left: -0.5px; background: var(--ink); opacity: 0.85; }
+.rail-tick.end.svelte-1q6et7t { height: 5px; opacity: 1; }
+.rail-loz.svelte-1q6et7t { position: absolute; right: -11px; top: -1px; box-sizing: border-box; width: 6.5px; height: 6.5px; border: 1px solid var(--vp); background: var(--plate); box-shadow: 0 0 0 1.4px var(--casing); transform: rotate(45deg); }
+.rail-loz.full.svelte-1q6et7t { background: var(--vp); }
+.tug.svelte-1q6et7t { position: relative; display: flex; box-sizing: content-box; width: clamp(80px, 14vw, 190px); height: 8px; padding: 1px 0px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.tug.svelte-1q6et7t::after { content: ""; position: absolute; left: 50%; top: -5px; bottom: -5px; width: 1px; background: var(--ink); opacity: 0.55; }
+.tug-mine.svelte-1q6et7t { flex: 0 0 auto; background: var(--own); transition: flex-basis 700ms var(--ease-engrave) 300ms; }
+.tug-enemy.svelte-1q6et7t { flex: 1 1 0px; background: var(--hatch-enemy); }
+.timer.svelte-1q6et7t { display: flex; margin-right: 8px; }
+:root[data-motion="reduced"] .gain.slide.svelte-1q6et7t { display: none; }
+:root[data-motion="reduced"] .gain.after.svelte-1q6et7t, :root[data-motion="reduced"] .tug-mine.svelte-1q6et7t { animation: auto ease 0s 1 normal none running none !important; transition: none !important; }
+.svelte-1q6et7t { }
+/* the font shorthands with var() do not survive cssText: the client's values (TopBar 384, 564; CpGauge 473) */
+.bar.svelte-1q6et7t{font:18px/1 var(--font-text);font-variant-numeric:lining-nums tabular-nums}
+.num.svelte-1dy0xsb{font:500 23px/28px var(--font-text);font-variant-numeric:lining-nums tabular-nums}
+.gain.svelte-1q6et7t{font:600 16px/1 var(--font-text);font-variant-numeric:lining-nums tabular-nums}
+/* ---- the variants ---- */
+.slot{display:flex;align-items:center;gap:12px;min-width:0}
+.chip .cut-icon{flex:none}
+svg.pc{display:block;overflow:visible;flex:none}
+.figs{position:relative;display:inline-grid;overflow:hidden;height:22px;align-items:center;font:500 19px/22px var(--font-text);font-variant-numeric:lining-nums tabular-nums;color:var(--ink);white-space:nowrap;text-align:left}
+.figs>span{grid-area:1/1}
+/* A: the mint in the chip. */
+.chip.mint{gap:6px;padding:0 8px}
+.chip.mint .figs{min-width:34px}
+/* B: the stance as a seal in the shape of the charge. */
+.sealwrap{display:inline-flex;align-items:center;gap:5px}
+button.seal{appearance:none;width:40px;height:40px;padding:0;border:0!important;background:none!important;box-shadow:none!important;position:relative;display:block;cursor:pointer;color:var(--ink)}
+button.seal svg.pc{position:absolute;left:0;top:0}
+button.seal .cut-icon{position:absolute;left:11px;top:11px}
+button.seal:hover .ring-out{stroke-opacity:1}
+/* C: a tablet hung from the bar's double rule under the chip (the alert strips' plate). */
+.tablet{position:absolute;top:56px;display:flex;align-items:center;gap:6px;padding:3px 10px 4px 9px;border:1px solid rgb(236 228 209 / 55%);border-top:0;background:rgb(14 12 9 / 95%);pointer-events:auto}
+.tablet .figs{min-width:34px}
+/* D: the supply rail under the factories and the stance (the VP rail's grammar, own colour). */
+.supbox{display:grid;grid-template-columns:auto auto;column-gap:12px;row-gap:4px;align-items:center;margin-right:18px;transform:translateY(1px)}
+.supbox .chip{height:26px;padding:0 8px}
+.supbox .factories{position:relative}
+.narrow .supbox{column-gap:0}
+.srail{grid-column:1/-1;position:relative;height:12px}
+.srail::before{content:'';position:absolute;left:-1px;right:-1px;top:0;height:8px;background:var(--casing)}
+.srail::after{content:'';position:absolute;left:0;right:0;top:7px;height:1px;background:var(--ink)}
+.srail .sfill{position:absolute;left:0;top:1px;height:6px;background:repeating-linear-gradient(90deg,var(--own) 0 1.2px,transparent 1.2px 2.4px)}
+.srail .sfill::after{content:'';position:absolute;right:-.8px;top:-.5px;width:1.6px;height:7px;background:var(--ink);box-shadow:0 0 4px 1px rgb(236 228 209 / 35%)}
+.srail i{position:absolute;top:7px;width:1px;height:3px;margin-left:-.5px;background:var(--ink);opacity:.85}
+.srail i.end{height:5px;opacity:1}
+.srail svg.pc{position:absolute;right:-18px;top:-5px}
+.fpop{position:absolute;left:3px;top:-6px}
+/* E: the hourglass of two lozenges. */
+.chip.glass{gap:6px;height:40px}
+/* F: the chip as a cartouche (the match clock's family). */
+button.cart{position:relative;margin-left:4px;height:36px;padding:0 13px!important;border:0!important;background:none!important;box-shadow:none!important;gap:7px!important}
+button.cart>svg.frame{position:absolute;left:0;top:0;overflow:visible}
+button.cart .cut-icon,button.cart .figs,button.cart kbd{position:relative}
+button.cart .figs{font-size:21px;min-width:38px}
+.narrow button.cart{padding:0 10px!important;gap:6px!important}
+.narrow button.cart .figs{font-size:19px;min-width:34px}
+button.cart:hover .fo{opacity:.9}
+</style>
+</head>
+<body>
+<div class="ctl" id="ctl">
+  <div class="row">
+    <h1>Next supply</h1>
+    <div class="group" role="group" aria-label="Variant" id="vbtns"></div>
+  </div>
+  <div class="row">
+    <div class="group" role="group" aria-label="Stance"><span class="lab">Stance</span><span id="sbtns" class="group"></span></div>
+    <div class="time">
+      <button class="pick" id="play" aria-pressed="false">Pause</button>
+      <input type="range" id="scrub" min="0" max="120" step="0.1" value="0" aria-label="Time">
+      <output id="tout">0:00</output>
+      <button class="pick" id="jump" title="Two seconds before the next charge">To next charge</button>
+    </div>
+    <div class="group" role="group" aria-label="Ground"><span class="lab">Ground</span><span id="gbtns" class="group"></span></div>
+    <div class="group" role="group" aria-label="Window"><span class="lab">Window</span><span id="wbtns" class="group"></span></div>
+    <div class="group" role="group" aria-label="View"><span class="lab">View</span><span id="cbtns" class="group"></span></div>
+    <button class="pick" id="moreb" aria-expanded="false">More</button>
+    <div class="group more"><button class="pick" id="rmb" aria-pressed="false">Reduced motion</button><button class="pick" id="grb" aria-pressed="false">Grey</button></div>
+  </div>
+</div>
+<div id="viewport" role="region" aria-label="The top bar over a frame of the match"><div id="stage">
+  <img id="ground" alt="">
+  <div class="hud" id="hud">
+    <header class="bar svelte-1q6et7t"><div class="left svelte-1q6et7t"><div data-coach="cp" role="img" class="cp svelte-1q6et7t" aria-label="CP: 3.2 of 5"><span class="term svelte-1q6et7t"><svg class="cp-mark svelte-bcfemv" focusable="false" viewBox="-1 -1 18 18" width="16" height="16" aria-hidden="true"><g fill="none" stroke-linejoin="miter" class="svelte-bcfemv" stroke="#060504" stroke-width="2"><polygon class="svelte-bcfemv" points="7.25,1.5 8.75,1.5 8.75,15.5 7.25,15.5"></polygon><polygon class="svelte-bcfemv" points="8,0 10,3 6,3"></polygon><polygon class="svelte-bcfemv" points="1.5,3 14.5,3 14.5,4.5 1.5,4.5"></polygon><polygon class="svelte-bcfemv" points="2.5,4.5 13.5,4.5 13.5,12 8,9.5 2.5,12"></polygon></g><g class="svelte-bcfemv" fill="#ece4d1"><polygon class="svelte-bcfemv" points="7.25,1.5 8.75,1.5 8.75,15.5 7.25,15.5"></polygon><polygon class="svelte-bcfemv" points="8,0 10,3 6,3"></polygon><polygon class="svelte-bcfemv" points="1.5,3 14.5,3 14.5,4.5 1.5,4.5"></polygon><polygon class="svelte-bcfemv" points="2.5,4.5 13.5,4.5 13.5,12 8,9.5 2.5,12"></polygon></g></svg></span> <span class="gauge svelte-1dy0xsb"><span class="num svelte-1dy0xsb"><span class="digits now  svelte-1dy0xsb">3.2</span> </span> <svg aria-hidden="true" class="svelte-1dy0xsb" viewBox="0 0 176 42" width="176" height="42"><defs class="svelte-1dy0xsb"><pattern id="cp-ruled" patternUnits="userSpaceOnUse" width="2.4" height="8" class="svelte-1dy0xsb"><rect width="1" height="8" class="own-fill svelte-1dy0xsb"></rect></pattern><pattern id="cp-spent" patternUnits="userSpaceOnUse" width="2.4" height="2.4" patternTransform="rotate(45)" class="svelte-1dy0xsb"><rect width="1" height="2.4" class="own-fill svelte-1dy0xsb"></rect></pattern></defs><path class="casing-line svelte-1dy0xsb" d="M5 22H157"></path><path class="ink-line svelte-1dy0xsb" d="M6 22.5H156M6.5 22V29M21.5 22V26M36.5 22V29M51.5 22V26M66.5 22V29M81.5 22V26M96.5 22V29M111.5 22V26M126.5 22V29M141.5 22V26M156.5 22V29"></path><rect class="casing svelte-1dy0xsb" height="8" x="5" y="13" width="152"></rect><rect class="quantum svelte-1dy0xsb" height="6" width="11.25" fill="url(#cp-ruled)" y="14" x="102"></rect><rect class="bar svelte-1dy0xsb" height="6" width="96" x="6" y="14"></rect><path class="notch svelte-1dy0xsb" visibility="visible" d="M0 12L-4 6H4Z" transform="translate(113.25 0)"></path><rect class="edge svelte-1dy0xsb" width="1.6" height="8" opacity="0" y="13" x="101"></rect><g class="frame svelte-1dy0xsb"><path class="frame-casing svelte-1dy0xsb" pathLength="1" d="M2.5 16.5V10.5H159.5V16.5"></path><path class="frame-casing svelte-1dy0xsb" pathLength="1" d="M2.5 16.5V22.5H159.5V16.5"></path><path class="frame-outer svelte-1dy0xsb" pathLength="1" d="M2.5 16.5V10.5H159.5V16.5"></path><path class="frame-outer svelte-1dy0xsb" pathLength="1" d="M2.5 16.5V22.5H159.5V16.5"></path><path class="frame-inner svelte-1dy0xsb" pathLength="1" d="M4.5 16.5V12.5H157.5V16.5"></path><path class="frame-inner svelte-1dy0xsb" pathLength="1" d="M4.5 16.5V20.5H157.5V16.5"></path><rect class="serif left svelte-1dy0xsb" x="-2.8" y="-2.8" width="5.6" height="5.6" transform="translate(2.5 16.5) rotate(45)"></rect><rect class="serif right svelte-1dy0xsb" x="-2.8" y="-2.8" width="5.6" height="5.6" transform="translate(159.5 16.5) rotate(45)"></rect></g><path class="needle svelte-1dy0xsb" d="M0 21L-4.5 29H4.5Z" transform="translate(102 0)"></path></svg></span></div><div class="slot" id="slot"></div></div><div data-coach="vp" role="img" class="score svelte-1q6et7t railed" aria-label="VP score: Ember 9, Bot 17. Next credit in 30 s: Ember +5, Bot +7"><svg aria-hidden="true" focusable="false" class="helmet-icon own svelte-1apoa8v engraved" width="22" height="20.91089108910891" viewBox="1 6 101 96"><g class="svelte-1apoa8v"><path class="casing svelte-1apoa8v" d="M46 80 L54 96"></path><path class="casing svelte-1apoa8v" d="M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60"></path><path class="casing svelte-1apoa8v" d="M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z"></path><path class="gear svelte-1apoa8v" d="M46 80 L54 96"></path><path class="gear svelte-1apoa8v" d="M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60"></path><path class="plate svelte-1apoa8v" d="M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z"></path><polygon class="fill svelte-1apoa8v" points="9.0,70.0 8.4,60.1 9.0,50.9 10.8,42.5 13.6,34.9 17.4,28.3 22.1,22.6 27.7,18.1 34.1,14.8 41.2,12.7 49.0,12.0 55.1,12.4 60.8,13.6 66.1,15.5 70.9,18.0 75.3,21.0 79.0,24.5 82.2,28.5 84.8,32.7 86.7,37.3 88.0,42.0 88.3,43.4 88.7,44.8 89.2,46.0 89.7,47.2 90.4,48.3 91.1,49.3 91.9,50.2 92.8,51.2 93.9,52.1 95.0,53.0 91.2,53.3 87.6,53.7 84.1,54.2 80.9,54.7 77.9,55.4 75.1,56.1 72.5,56.9 70.1,57.8 67.9,58.9 66.0,60.0 64.3,61.3 62.6,62.6 60.9,63.9 59.2,65.2 57.5,66.5 55.6,67.6 53.6,68.6 51.3,69.3 48.8,69.8 46.0,70.0"></polygon><path class="edge svelte-1apoa8v" d="M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z"></path></g></svg> <span class="total mine svelte-1q6et7t" aria-hidden="true"> <span class="gain mine svelte-1q6et7t"><span class="roll up svelte-76hl56" style="--roll-travel: 8px; --roll-delay: 0ms;"><span class="digits now svelte-76hl56">+5</span> </span></span> <span class="vp mine-vp svelte-1q6et7t"><span class="roll up svelte-76hl56" style="--roll-travel: 13px; --roll-delay: 300ms;"><span class="digits now svelte-76hl56">9</span> </span></span></span> <span class="tugbox svelte-1q6et7t" aria-hidden="true"><span class="tug svelte-1q6et7t"><span class="tug-mine svelte-1q6et7t" style="flex-basis: 35%;"></span> <span class="tug-enemy svelte-1q6et7t"></span></span> <span class="rail svelte-1q6et7t"><span class="rail-fill svelte-1q6et7t" style="width: 0%;"></span> <i class="rail-tick svelte-1q6et7t end" style="left: 0%;"></i><i class="rail-tick svelte-1q6et7t" style="left: 16.6667%;"></i><i class="rail-tick svelte-1q6et7t" style="left: 33.3333%;"></i><i class="rail-tick svelte-1q6et7t" style="left: 50%;"></i><i class="rail-tick svelte-1q6et7t" style="left: 66.6667%;"></i><i class="rail-tick svelte-1q6et7t" style="left: 83.3333%;"></i><i class="rail-tick svelte-1q6et7t end" style="left: 100%;"></i> <span class="rail-loz svelte-1q6et7t"></span></span></span> <span class="total enemy svelte-1q6et7t" aria-hidden="true"><span class="vp enemy-vp svelte-1q6et7t"><span class="roll up svelte-76hl56" style="--roll-travel: 13px; --roll-delay: 300ms;"><span class="digits now svelte-76hl56">17</span> </span></span>  <span class="gain enemy svelte-1q6et7t"><span class="roll up svelte-76hl56" style="--roll-travel: 8px; --roll-delay: 0ms;"><span class="digits now svelte-76hl56">+7</span> </span></span></span> <svg aria-hidden="true" focusable="false" class="helmet-icon enemy svelte-1apoa8v engraved" width="22" height="19.37377690802348" viewBox="2 7 102.20000000000002 90"><g class="svelte-1apoa8v" transform="translate(106.20000000000002 0) scale(-1 1)"><path class="casing svelte-1apoa8v" d="M38 75 L58 91 L64 68"></path><path class="casing svelte-1apoa8v" d="M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z"></path><path class="gear svelte-1apoa8v" d="M38 75 L58 91 L64 68"></path><path class="plate svelte-1apoa8v" d="M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z"></path><polygon class="fill svelte-1apoa8v" points="8.0,54.0 8.6,47.0 10.3,40.5 13.0,34.6 16.6,29.2 21.0,24.5 26.1,20.5 31.9,17.3 38.2,15.0 44.9,13.5 52.0,13.0 58.4,13.5 64.4,14.9 70.0,17.1 75.0,20.0 79.5,23.5 83.4,27.5 86.6,31.8 89.2,36.4 91.0,41.2 92.0,46.0 98.0,54.0 98.2,54.8 98.2,55.4 98.1,56.0 98.0,56.6 97.8,57.0 97.4,57.4 97.0,57.6 96.4,57.8 95.8,58.0 95.0,58.0 74.0,58.0 71.4,58.2 69.1,58.7 66.9,59.5 65.0,60.7 63.3,62.1 61.7,63.8 60.3,65.8 59.1,68.0 58.0,70.4 57.0,73.0 56.6,74.1 56.0,75.0 55.3,75.8 54.4,76.4 53.4,76.9 52.2,77.2 50.8,77.3 49.4,77.4 47.7,77.2 46.0,77.0 41.8,76.0 37.7,75.0 33.6,73.8 29.7,72.6 26.0,71.3 22.5,69.9 19.3,68.4 16.5,67.0 14.0,65.5 12.0,64.0 11.2,63.4 10.6,62.6 10.0,61.8 9.4,61.0 9.0,60.0 8.6,59.0 8.4,57.8 8.2,56.6 8.0,55.4 8.0,54.0"></polygon><path class="edge svelte-1apoa8v" d="M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z"></path></g></svg></div><div class="right svelte-1q6et7t"><span data-coach="clock" class="timer svelte-1q6et7t"><span role="timer" class="clock svelte-16qcfmw" aria-label="Time left 11:00"><svg aria-hidden="true" focusable="false" class="svelte-16qcfmw" width="110" height="44" viewBox="0 0 110 44"><rect class="plate svelte-16qcfmw" x="12" y="5" width="86" height="34"></rect><rect class="outer svelte-16qcfmw" x="8" y="1" width="94" height="1"></rect><rect class="outer svelte-16qcfmw" x="8" y="42" width="94" height="1"></rect><rect class="outer svelte-16qcfmw" x="8" y="2" width="1" height="40"></rect><rect class="outer svelte-16qcfmw" x="101" y="2" width="1" height="40"></rect><rect class="inner svelte-16qcfmw" x="11" y="4" width="88" height="1"></rect><rect class="inner svelte-16qcfmw" x="11" y="39" width="88" height="1"></rect><rect class="inner svelte-16qcfmw" x="11" y="5" width="1" height="34"></rect><rect class="inner svelte-16qcfmw" x="98" y="5" width="1" height="34"></rect><rect class="bracket svelte-16qcfmw" x="7" y="0" width="8" height="2"></rect><rect class="bracket svelte-16qcfmw" x="7" y="2" width="2" height="6"></rect><rect class="bracket svelte-16qcfmw" x="95" y="0" width="8" height="2"></rect><rect class="bracket svelte-16qcfmw" x="101" y="2" width="2" height="6"></rect><rect class="bracket svelte-16qcfmw" x="7" y="42" width="8" height="2"></rect><rect class="bracket svelte-16qcfmw" x="7" y="36" width="2" height="6"></rect><rect class="bracket svelte-16qcfmw" x="95" y="42" width="8" height="2"></rect><rect class="bracket svelte-16qcfmw" x="101" y="36" width="2" height="6"></rect><g class="serif svelte-16qcfmw"><g class="smooth svelte-16qcfmw"><polygon class="serif-casing svelte-16qcfmw" points="8.5,15 15.5,22 8.5,29 1.5,22"></polygon><polygon class="serif-ink svelte-16qcfmw" points="8.5,18 12.5,22 8.5,26 4.5,22"></polygon></g><g class="pixel svelte-16qcfmw"><rect class="serif-casing svelte-16qcfmw" x="2" y="21" width="13" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="2" y="22" width="13" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="3" y="20" width="11" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="3" y="23" width="11" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="4" y="19" width="9" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="4" y="24" width="9" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="5" y="18" width="7" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="5" y="25" width="7" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="6" y="17" width="5" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="6" y="26" width="5" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="7" y="16" width="3" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="7" y="27" width="3" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="8" y="15" width="1" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="8" y="28" width="1" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="5" y="21" width="7" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="5" y="22" width="7" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="6" y="20" width="5" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="6" y="23" width="5" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="7" y="19" width="3" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="7" y="24" width="3" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="8" y="18" width="1" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="8" y="25" width="1" height="1"></rect></g></g><g class="serif svelte-16qcfmw"><g class="smooth svelte-16qcfmw"><polygon class="serif-casing svelte-16qcfmw" points="101.5,15 108.5,22 101.5,29 94.5,22"></polygon><polygon class="serif-ink svelte-16qcfmw" points="101.5,18 105.5,22 101.5,26 97.5,22"></polygon></g><g class="pixel svelte-16qcfmw"><rect class="serif-casing svelte-16qcfmw" x="95" y="21" width="13" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="95" y="22" width="13" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="96" y="20" width="11" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="96" y="23" width="11" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="97" y="19" width="9" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="97" y="24" width="9" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="98" y="18" width="7" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="98" y="25" width="7" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="99" y="17" width="5" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="99" y="26" width="5" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="100" y="16" width="3" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="100" y="27" width="3" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="101" y="15" width="1" height="1"></rect><rect class="serif-casing svelte-16qcfmw" x="101" y="28" width="1" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="98" y="21" width="7" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="98" y="22" width="7" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="99" y="20" width="5" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="99" y="23" width="5" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="100" y="19" width="3" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="100" y="24" width="3" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="101" y="18" width="1" height="1"></rect><rect class="serif-ink svelte-16qcfmw" x="101" y="25" width="1" height="1"></rect></g></g><text class="figures svelte-16qcfmw" text-anchor="middle" x="54.1225" y="30.369999999999997" font-size="27" font-weight="400">11:00</text></svg></span></span>  <button type="button" class="icon-button svelte-1q6et7t" aria-label="Mute the sound" aria-pressed="false" title="Mute the sound (M)"><svg class="bar-glyph svelte-kfajlw" viewBox="0 0 16 16" aria-hidden="true" focusable="false" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" class="svelte-kfajlw" d="M2.5 6h2.5l3.5-3v10l-3.5-3H2.5z M11 5.5a3.5 3.5 0 0 1 0 5"></path></svg></button> <button type="button" class="icon-button svelte-1q6et7t" aria-label="Settings [?]" aria-expanded="false" title="Settings [?]"><svg class="bar-glyph svelte-kfajlw" viewBox="0 0 16 16" aria-hidden="true" focusable="false" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" class="svelte-kfajlw" d="M5.6 6a2.4 2.4 0 1 1 3.2 2.3c-.6.2-.8.6-.8 1.2v.6 M8 12.2v.4"></path></svg></button> <button type="button" class="icon-button svelte-1q6et7t" aria-label="Exit" title="Exit"><svg class="bar-glyph svelte-kfajlw" viewBox="0 0 16 16" aria-hidden="true" focusable="false" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" class="svelte-kfajlw" d="M9 3H3v10h6M7 8h7M11.5 5.5 14 8l-2.5 2.5"></path></svg></button></div></header>
+  </div>
+  <svg id="fx" aria-hidden="true"></svg>
+</div></div>
+<script>
+'use strict';
+// ---------------------------------------------------------------- the client's pieces
+const FACTORIES_HTML = "<span data-coach=\"factories\" role=\"img\" class=\"factories svelte-1q6et7t\" title=\"Factories: own, builds included, of the most you may have\" aria-label=\"Factories: 2 of 3\"><svg class=\"cut-icon svelte-1p0qkde\" viewBox=\"-13 -13 26 26\" aria-hidden=\"true\" focusable=\"false\" width=\"22\" height=\"22\"><defs class=\"svelte-1p0qkde\"><pattern patternUnits=\"userSpaceOnUse\" width=\"2.6\" height=\"2.6\" class=\"svelte-1p0qkde\" id=\"cut-icon-rule-c2\"><rect width=\"2.6\" height=\"1.15\" fill=\"currentColor\" class=\"svelte-1p0qkde\"></rect></pattern></defs><path class=\"svelte-1p0qkde\" d=\"M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z\" fill=\"url(#cut-icon-rule-c2)\"></path><path fill=\"none\" stroke=\"#060504\" stroke-width=\"4.2\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" opacity=\"0.9\" class=\"svelte-1p0qkde\" d=\"M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5\"></path><path fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" class=\"svelte-1p0qkde\" d=\"M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5\"></path></svg> <span class=\"num svelte-1q6et7t\">2/3</span></span>";
+const CUT = {
+  factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z M-6.5 4 H-3 M0 4 H3.5',
+  economy: 'M0 -9 L7 -2 L0 5 L-7 -2 Z M-9 9 H9 M0 5 V9',
+  balance: 'M0 -10 V9 M-6 9.5 H6 M-9 -6 H9 M-9 -6 L-11.5 1 H-6.5 Z M9 -6 L6.5 1 H11.5 Z',
+  war: 'M-9 -9 L7 7 M9 -9 L-7 7 M3.5 9.5 L9.5 3.5 M-3.5 9.5 L-9.5 3.5',
+};
+const SOLID = { factory: 'M-10 9 V-1.5 L-5 -5 V-1.5 L0 -5 V-1.5 L5 -5 V-10 H8.5 V9 Z', economy: 'M0 -9 L7 -2 L0 5 L-7 -2 Z' };
+let uidN = 0;
+const uid = (p) => `${p}${++uidN}`;
+/** CutIcon.svelte: the ruled solid, the outline over a dark casing, square ends. */
+function cutIcon(name, size) {
+  const d = CUT[name], solid = SOLID[name], id = uid('cr');
+  return `<svg class="cut-icon svelte-1p0qkde" viewBox="-13 -13 26 26" width="${size}" height="${size}" aria-hidden="true" focusable="false">` +
+    (solid ? `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="2.6" height="2.6"><rect width="2.6" height="1.15" fill="currentColor"/></pattern></defs><path d="${solid}" fill="url(#${id})"/>` : '') +
+    `<path d="${d}" fill="none" stroke="#060504" stroke-width="4.2" stroke-linecap="square" stroke-linejoin="miter" opacity="0.9"/>` +
+    `<path d="${d}" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="square" stroke-linejoin="miter"/></svg>`;
+}
+const KBD = '<kbd class="svelte-1q6et7t">Q</kbd>';
+const NAMES = { economy: 'Economy', balance: 'Balance', war: 'War' };
+
+// ---------------------------------------------------------------- the rule (ticks, integers)
+const HZ = 10, T_END = 1200;
+const CAP_P = { economy: 100, balance: 200, war: 400 };
+const CP_P = { economy: 100, balance: 50, war: 40 };
+const DEFAULT_SCRIPT = [[0, 'balance'], [470, 'war'], [860, 'economy']];
+const CAP0 = 128, WP0 = 52, CP0 = 20, CPV0 = 320, CP_CAP = 500;
+const SPENDS = [95, 240, 330, 455, 610, 700, 905, 1010, 1130];
+let script = DEFAULT_SCRIPT.map((x) => x.slice());
+function changeAt(k) { for (const [t, s] of script) if (t === k) return s; return null; }
+/** The state after tick T (commands first, then economy; a counter fires at the period and restarts). */
+function simulate(T) {
+  let st = script[0][1], c = CAP0, w = WP0, q = CP0, v = CPV0;
+  const capEv = [], facEv = [];
+  for (let k = 1; k <= T; k++) {
+    const ns = changeAt(k);
+    if (ns && ns !== st) {
+      c = Math.floor((c * CAP_P[ns]) / CAP_P[st]);
+      w = Math.floor((w * CAP_P[ns]) / CAP_P[st]);
+      q = Math.floor((q * CP_P[ns]) / CP_P[st]);
+      st = ns;
+    }
+    if (++c >= CAP_P[st]) { capEv.push(k); c = 0; }
+    if (++w >= CAP_P[st]) { facEv.push(k); w = 0; }
+    if (++q >= CP_P[st]) { v = Math.min(CP_CAP, v + 50); q = 0; }
+    if (SPENDS.includes(k) && v >= 100) v -= 100;
+  }
+  return { st, c, w, q, v, capEv, facEv };
+}
+
+// ---------------------------------------------------------------- page state
+const P = { v: 'T0', g: 'front', w: 1280, t: 3.0, cu: false, rm: false, gr: false, play: true };
+const VARIANTS = [];
+const GROUNDS = { front: 'economy', siege: 'fights' };
+const SIZE = { 1280: [1280, 800], 960: [960, 720] };
+/** Where the capital's store is on each frame (CSS px); the siege's capital is off the frame to the left. */
+const CAPITAL = { 'front-1280': [146.5, 561.5], 'front-960': [46.5, 506], 'siege-1280': [-36, 470], 'siege-960': [-36, 420] };
+
+// ---------------------------------------------------------------- small helpers
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const easeEngrave = (x) => { x = clamp01(x); return -(Math.cos(Math.PI * x) - 1) / 2; };
+const easeOut = (x) => { x = clamp01(x); return 1 - (1 - x) * (1 - x); };
+const loz = (x, y, r) => `M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}Z`;
+/** The height from the foot of a lozenge (half-diagonal r) whose filled area is `share` of the whole. */
+const lozHeight = (share, r) => (share <= 0.5 ? r * Math.sqrt(2 * share) : 2 * r - r * Math.sqrt(2 * (1 - share)));
+const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const fmtCp = (h) => { const s = (h / 100).toFixed(1); return s.endsWith('.0') ? s.slice(0, -2) : s; };
+function set(el, attrs) { if (!el) return; for (const k in attrs) el.setAttribute(k, attrs[k]); }
+/** A pulse once a beat, eased (no blinking). */
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+/**
+ * A charge lozenge that forms from its foot: the owner's hatch is still to come, the owner's colour behind an
+ * ivory head line is made so far (the progress grammar of the recruit foundation), on a dark casing and an
+ * ink rim like the lozenges of the stores.
+ */
+function lozengeSVG(r, opts = {}) {
+  const id = uid('lz'), cs = r + (opts.casing ?? 1.8);
+  return `<svg class="pc" data-src width="${2 * cs}" height="${2 * cs}" viewBox="${-cs} ${-cs} ${2 * cs} ${2 * cs}" aria-hidden="true">
+  <defs><clipPath id="${id}c"><path d="${loz(0, 0, r - 0.45)}"/></clipPath>
+  <pattern id="${id}h" patternUnits="userSpaceOnUse" width="3" height="3"><rect width="3" height="1" fill="var(--own)"/></pattern>
+  <radialGradient id="${id}g"><stop offset="0" stop-color="#ece4d1" stop-opacity=".55"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>
+  <path class="l-stamp" d="${loz(0, 0, cs)}" fill="none" stroke="var(--casing)" stroke-width="3" opacity="0"/>
+  <path class="l-stampi" d="${loz(0, 0, cs)}" fill="none" stroke="var(--ink)" stroke-width="1.1" opacity="0"/>
+  <path class="l-ready" d="${loz(0, 0, cs + 1.6)}" fill="none" stroke="var(--ink)" stroke-width=".8" opacity="0"/>
+  <path d="${loz(0, 0, cs)}" fill="var(--casing)"/>
+  <path d="${loz(0, 0, r)}" fill="var(--plate)"/>
+  <g clip-path="url(#${id}c)">
+    <rect class="l-hatch" x="${-r}" y="${-r}" width="${2 * r}" height="${2 * r}" fill="url(#${id}h)" opacity="${opts.hatch ?? 0.5}"/>
+    <rect class="l-fill" x="${-r}" width="${2 * r}" y="${r}" height="0" fill="var(--own)"/>
+    <ellipse class="l-glow" cx="0" cy="0" rx="${r * 0.95}" ry="${Math.max(2.6, r * 0.34)}" fill="url(#${id}g)" opacity="0"/>
+    <rect class="l-head" x="${-r}" width="${2 * r}" y="0" height="1.2" fill="var(--ink)" opacity="0"/>
+    <rect class="l-made" x="${-r}" y="${-r}" width="${2 * r}" height="${2 * r}" fill="var(--own)" opacity="0"/>
+    <rect class="l-flash" x="${-r}" y="${-r}" width="${2 * r}" height="${2 * r}" fill="var(--ink)" opacity="0"/>
+  </g>
+  <path class="l-rim" d="${loz(0, 0, r)}" fill="none" stroke="var(--ink)" stroke-width="1" stroke-opacity=".92"/>
+</svg>`;
+}
+/** Paint a lozenge of lozengeSVG: the share made, ready (the last seconds), the event since it fired (s). */
+function paintLozenge(svg, r, share, ready, ev, rm, opts = {}) {
+  if (!svg) return;
+  const q = (s) => svg.querySelector(s);
+  const h = lozHeight(share, r - 0.45), top = (r - 0.45) - h;
+  set(q('.l-fill'), { y: top, height: h });
+  const run = share > 0.002 && share < 0.998;
+  set(q('.l-head'), { y: top - 0.6, opacity: run ? 1 : 0 });
+  set(q('.l-glow'), { cy: top, opacity: run && !rm ? (ready ? 0.95 : 0.6) : 0 });
+  set(q('.l-rim'), { 'stroke-width': ready ? 1.35 : 1, 'stroke-opacity': ready ? 1 : 0.92 });
+  set(q('.l-ready'), { opacity: ready && !rm ? 0.5 : ready ? 0.5 : 0 });
+  let made = 0, flash = 0, stamp = 0, sr = 0;
+  if (ev !== null) {
+    if (rm) { made = ev < 1 ? 1 : 0; }
+    else {
+      made = ev < 0.14 ? 1 : 1 - easeEngrave((ev - 0.14) / 0.42);
+      flash = ev < 0.07 ? (ev / 0.07) * 0.8 : 0.8 * (1 - easeOut((ev - 0.07) / 0.33));
+      if (ev < 0.62) { stamp = 0.95 * (1 - easeOut(ev / 0.62)); sr = (opts.ring ?? 7) * easeOut(ev / 0.62); }
+    }
+  }
+  set(q('.l-made'), { opacity: clamp01(made) });
+  set(q('.l-flash'), { opacity: clamp01(flash) });
+  const cs = r + (opts.casing ?? 1.8);
+  for (const c of ['.l-stamp', '.l-stampi']) set(q(c), { d: loz(0, 0, cs + sr), opacity: stamp });
+}
+/** Figures that roll up at the event (RollNum's motion: the old gone by 60 %, the new from 30 %, 500 ms). */
+function figsHTML() { return '<span class="figs"><span class="was"></span><span class="now"></span></span>'; }
+function paintFigs(el, s, ev, rm) {
+  if (!el) return;
+  const was = el.querySelector('.was'), now = el.querySelector('.now');
+  now.textContent = mmss(s.secs);
+  if (ev !== null && ev < 0.5 && !rm) {
+    const x = ev / 0.5;
+    was.textContent = mmss(1);
+    was.style.transform = `translateY(${-13 * easeEngrave(x / 0.6)}px)`;
+    was.style.opacity = String(1 - clamp01(x / 0.6));
+    now.style.transform = `translateY(${13 * (1 - easeEngrave((x - 0.3) / 0.7))}px)`;
+    now.style.opacity = String(clamp01((x - 0.3) / 0.7));
+  } else {
+    was.textContent = ''; now.style.transform = ''; now.style.opacity = '';
+  }
+}
+
+// ---------------------------------------------------------------- the flight to the capital's store
+const FLIGHT = { from: 0.12, dur: 0.5, land: 0.45 };
+function paintFlight(fx, from, to, ev, rm) {
+  fx.innerHTML = '';
+  if (ev === null || rm || from === null) return;
+  const t = (ev - FLIGHT.from) / FLIGHT.dur;
+  if (t < 0 || ev > FLIGHT.from + FLIGHT.dur + FLIGHT.land) return;
+  const c = [from[0] - (from[0] - to[0]) * 0.08, from[1] + (to[1] - from[1]) * 0.78];
+  const pt = (u) => [(1 - u) * (1 - u) * from[0] + 2 * (1 - u) * u * c[0] + u * u * to[0], (1 - u) * (1 - u) * from[1] + 2 * (1 - u) * u * c[1] + u * u * to[1]];
+  const u = easeEngrave(t);
+  const n = 28, pts = [];
+  for (let i = 0; i <= n; i++) pts.push(pt((Math.min(u, 1) * i) / n));
+  const trail = 'M' + pts.map((p) => p.map((x) => x.toFixed(1)).join(' ')).join('L');
+  const after = Math.max(0, ev - FLIGHT.from - FLIGHT.dur);
+  const fade = 1 - clamp01(after / FLIGHT.land);
+  let html = `<path d="${trail}" fill="none" stroke="var(--casing)" stroke-width="2.6" stroke-opacity="${0.5 * fade}" stroke-dasharray="1.5 3"/>` +
+    `<path d="${trail}" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-opacity="${0.8 * fade}" stroke-dasharray="1.5 3"/>`;
+  if (t <= 1) {
+    const p = pt(u);
+    html += `<circle cx="${p[0]}" cy="${p[1]}" r="13" fill="url(#flyglow)"/><path d="${loz(p[0], p[1], 7.8)}" fill="var(--casing)"/><path d="${loz(p[0], p[1], 5.9)}" fill="var(--own)" stroke="var(--ink)" stroke-width="1"/>`;
+  } else {
+    const k = easeOut(after / FLIGHT.land), r = 5 + 9 * k;
+    html += `<path d="${loz(to[0], to[1], r)}" fill="none" stroke="var(--casing)" stroke-width="3" opacity="${0.9 * (1 - k)}"/>` +
+      `<path d="${loz(to[0], to[1], r)}" fill="none" stroke="var(--ink)" stroke-width="1.1" opacity="${0.95 * (1 - k)}"/>`;
+  }
+  fx.innerHTML = '<defs><radialGradient id="flyglow"><stop offset="0" stop-color="#ece4d1" stop-opacity=".4"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>' + html;
+}
+
+// ---------------------------------------------------------------- the variants
+// Each builds the factory counter and the stance piece into the bar's left group and paints them per frame.
+const chipOpen = (cls = '') => `<button type="button" class="chip svelte-1q6et7t ${cls}" data-tip aria-label="Stance: {S} [Q]">`;
+const factories = () => FACTORIES_HTML;
+
+/** T0: today (TopBar.svelte): the icon, the small upright cell ruled from the bottom per snapshot, the key. */
+VARIANTS.push({
+  id: 'T0', name: 'Today',
+  build(slot, s) {
+    slot.innerHTML = factories() + chipOpen().replace('{S}', NAMES[s.stance]) + cutIcon(s.stance, 20) +
+      ' <span class="capital svelte-1q6et7t" aria-hidden="true"><i class="svelte-1q6et7t"></i></span> ' + KBD + '</button>';
+  },
+  paint(slot, s) {
+    const i = slot.querySelector('.capital i');
+    if (i) i.style.height = `${(P.rm ? s.share : s.shareTick) * 100}%`;
+  },
+});
+
+/**
+ * A "Mint": the chip mints the charge. A charge lozenge as tall as the icon forms from its foot (hatch to come,
+ * colour made, ivory head), the seconds to it in the clock's figures; the last 3 s a second rule lights round it.
+ * Made: the lozenge sets solid and flashes, a ring is stamped out of it, and the charge flies down to the
+ * capital's store; the figures roll to the new period. Narrow (960): no key and no figures (the tooltip has them).
+ */
+const R_A = 9.4;
+VARIANTS.push({
+  id: 'A', name: 'Mint', flight: true,
+  build(slot, s, e) {
+    slot.innerHTML = factories() + chipOpen('mint').replace('{S}', NAMES[s.stance]) + cutIcon(s.stance, 20) +
+      `<span data-fly>${lozengeSVG(R_A)}</span>` + (e.narrow ? '' : figsHTML() + KBD) + '</button>';
+  },
+  paint(slot, s, e) {
+    paintLozenge(slot.querySelector('[data-fly] svg'), R_A, s.share, s.ready, s.ev, e.rm, { ring: 8 });
+    paintFigs(slot.querySelector('.figs'), s, s.ev, e.rm);
+  },
+});
+
+/**
+ * B "Seal": the stance itself in a seal the shape of a charge. The framed control's double rule turned into a
+ * lozenge round the stance icon; a burin engraves its rim from the top corner down both sides in the owner's
+ * colour, notched every 5 s (Economy 1 notch a side, Balance 3, War 7), and the two heads meet at the foot when
+ * the charge is made: the seal floods with the colour behind the icon, flashes and stamps a ring. No figures:
+ * the notches still to pass are the 5-second steps left. The same 40 px at every width.
+ */
+const SC = 20, SR = 18, SR2 = 14.6;
+function sealPoint(f, side) {
+  const x = f < 0.5 ? SR * f * 2 : SR - SR * (f - 0.5) * 2;
+  const y = f < 0.5 ? -SR + SR * f * 2 : SR * (f - 0.5) * 2;
+  return [SC + side * x, SC + y];
+}
+function sealSVG(per) {
+  const id = uid('sl');
+  const side = (s) => `M${SC} ${SC - SR}L${SC + s * SR} ${SC}L${SC} ${SC + SR}`;
+  const n = Math.round(per / 50);
+  let ticks = '', cuts = '';
+  for (let k = 1; k < n; k++) {
+    const f = k / n;
+    for (const s of [-1, 1]) {
+      const [x, y] = sealPoint(f, s);
+      const nx = f < 0.5 ? -s * 0.7071 : f > 0.5 ? -s * 0.7071 : -s, ny = f < 0.5 ? 0.7071 : f > 0.5 ? -0.7071 : 0;
+      ticks += `M${(x + nx * 1.6).toFixed(2)} ${(y + ny * 1.6).toFixed(2)}L${(x + nx * 4.4).toFixed(2)} ${(y + ny * 4.4).toFixed(2)}`;
+      cuts += `M${(x - nx * 2.6).toFixed(2)} ${(y - ny * 2.6).toFixed(2)}L${(x + nx * 2.2).toFixed(2)} ${(y + ny * 2.2).toFixed(2)}`;
+    }
+  }
+  return `<svg class="pc" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+  <defs><radialGradient id="${id}g"><stop offset="0" stop-color="#ece4d1" stop-opacity=".6"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>
+  <path class="s-stamp" d="${loz(SC, SC, SR + 1.5)}" fill="none" stroke="var(--casing)" stroke-width="3" opacity="0"/>
+  <path class="s-stampi" d="${loz(SC, SC, SR + 1.5)}" fill="none" stroke="var(--ink)" stroke-width="1.1" opacity="0"/>
+  <path d="${loz(SC, SC, SR + 2)}" fill="var(--casing)" opacity=".92"/>
+  <path d="${loz(SC, SC, SR - 0.5)}" fill="rgb(14 12 9)"/>
+  <path class="s-flood" d="${loz(SC, SC, SR2 - 0.5)}" fill="var(--own)" opacity="0"/>
+  <path class="ring-out" d="${loz(SC, SC, SR)}" fill="none" stroke="var(--ink)" stroke-opacity=".6" stroke-width="1"/>
+  <path class="s-inner" d="${loz(SC, SC, SR2)}" fill="none" stroke="var(--ink)" stroke-opacity=".22" stroke-width="1"/>
+  <path class="s-c" d="${side(-1)}" pathLength="1" fill="none" stroke="var(--casing)" stroke-width="4.8" stroke-linejoin="miter"/>
+  <path class="s-c" d="${side(1)}" pathLength="1" fill="none" stroke="var(--casing)" stroke-width="4.8" stroke-linejoin="miter"/>
+  <path class="s-p" d="${side(-1)}" pathLength="1" fill="none" stroke="var(--own)" stroke-width="2.5" stroke-linejoin="miter"/>
+  <path class="s-p" d="${side(1)}" pathLength="1" fill="none" stroke="var(--own)" stroke-width="2.5" stroke-linejoin="miter"/>
+  <path d="${cuts}" fill="none" stroke="var(--casing)" stroke-width="1.7"/>
+  <path d="${ticks}" fill="none" stroke="var(--ink)" stroke-opacity=".9" stroke-width="1"/>
+  <path class="s-f" d="${side(-1)}M${SC} ${SC - SR}L${SC + SR} ${SC}L${SC} ${SC + SR}" fill="none" stroke="var(--own)" stroke-width="2.5" opacity="0"/>
+  <circle class="s-g" r="6.5" fill="url(#${id}g)" opacity="0"/><circle class="s-g" r="6.5" fill="url(#${id}g)" opacity="0"/>
+  <circle class="s-h" r="1.6" fill="var(--ink)" stroke="var(--casing)" stroke-width=".9" opacity="0"/>
+  <circle class="s-h" r="1.6" fill="var(--ink)" stroke="var(--casing)" stroke-width=".9" opacity="0"/>
+</svg>`;
+}
+VARIANTS.push({
+  id: 'B', name: 'Seal',
+  build(slot, s, e) {
+    slot.innerHTML = factories() + `<span class="sealwrap"><button type="button" class="seal" data-tip aria-label="Stance: ${NAMES[s.stance]} [Q]">` +
+      sealSVG(s.per) + cutIcon(s.stance, 18) + '</button>' + KBD.replace('<kbd class="', '<kbd class="') + '</span>';
+  },
+  paint(slot, s, e) {
+    const svg = slot.querySelector('button.seal svg');
+    if (!svg) return;
+    const q = (c) => [...svg.querySelectorAll(c)];
+    let share = s.share, full = 0, flood = 0, stamp = 0, sr = 0;
+    if (s.ev !== null) {
+      if (e.rm) { flood = s.ev < 1 ? 0.8 : 0; full = s.ev < 1 ? 1 : 0; }
+      else {
+        flood = s.ev < 0.08 ? (s.ev / 0.08) * 0.85 : s.ev < 0.2 ? 0.85 : 0.85 * (1 - easeEngrave((s.ev - 0.2) / 0.5));
+        full = s.ev < 0.3 ? 1 : 1 - easeEngrave((s.ev - 0.3) / 0.35);
+        if (s.ev < 0.62) { stamp = 0.95 * (1 - easeOut(s.ev / 0.62)); sr = 9 * easeOut(s.ev / 0.62); }
+      }
+    }
+    for (const p of q('.s-c')) p.setAttribute('stroke-dasharray', `${share.toFixed(4)} 2`);
+    for (const p of q('.s-p')) p.setAttribute('stroke-dasharray', `${share.toFixed(4)} 2`);
+    set(q('.s-f')[0], { opacity: clamp01(full) });
+    set(q('.s-flood')[0], { opacity: clamp01(flood) });
+    for (const c of q('.s-stamp').concat(q('.s-stampi'))) set(c, { d: loz(SC, SC, SR + 1.5 + sr), opacity: stamp });
+    set(q('.s-inner')[0], { 'stroke-opacity': s.ready ? 0.6 : 0.22 });
+    const run = share > 0.005 && share < 0.995;
+    q('.s-h').forEach((h, i) => { const [x, y] = sealPoint(share, i ? 1 : -1); set(h, { cx: x, cy: y, opacity: run ? 1 : 0 }); });
+    q('.s-g').forEach((h, i) => { const [x, y] = sealPoint(share, i ? 1 : -1); set(h, { cx: x, cy: y, opacity: run && !e.rm ? (s.ready ? 1 : 0.6) : 0 }); });
+  },
+});
+
+/**
+ * C "Hung tablet": the chip keeps the icon and the key; under it, hung from the bar's double rule like the alert
+ * strips, a small tablet holds the forming charge and the seconds. Made: the charge drops out of the tablet and
+ * flies to the capital's store, the tablet settles. It costs no width, so it is the same at 960.
+ */
+const R_C = 8.6;
+VARIANTS.push({
+  id: 'C', name: 'Hung tablet', flight: true,
+  build(slot, s) {
+    slot.innerHTML = factories() + chipOpen().replace('{S}', NAMES[s.stance]) + cutIcon(s.stance, 20) + ' ' + KBD + '</button>';
+    const t = document.createElement('div');
+    t.className = 'tablet extra';
+    t.setAttribute('role', 'img');
+    t.innerHTML = `<span data-fly>${lozengeSVG(R_C)}</span>${figsHTML()}`;
+    document.getElementById('hud').appendChild(t);
+  },
+  paint(slot, s, e) {
+    const t = document.querySelector('.tablet'), chip = slot.querySelector('.chip');
+    if (!t || !chip) return;
+    const x = chip.offsetLeft + slot.closest('.left').offsetLeft;
+    t.style.left = `${Math.round(x + (chip.offsetWidth - t.offsetWidth) / 2)}px`;
+    const settle = s.ev !== null && !e.rm && s.ev < 0.34 ? 2 * Math.sin((Math.PI * s.ev) / 0.34) : 0;
+    t.style.transform = settle ? `translateY(${settle.toFixed(2)}px)` : '';
+    t.setAttribute('aria-label', `Next charge of the capital in ${s.secs} s`);
+    paintLozenge(t.querySelector('svg.pc'), R_C, s.share, s.ready, s.ev, e.rm, { ring: 7 });
+    paintFigs(t.querySelector('.figs'), s, s.ev, e.rm);
+  },
+});
+
+/**
+ * D "Supply rail": the VP rail's grammar (P1, #930) for the next charge. Under the factory counter and the stance
+ * a casing with the period ruled upright in the owner's colour up to now behind a burin edge, an ink hairline with
+ * a tick every 5 s (the stance's pace in the number of ticks), and the charge lozenge past its end. Made: the
+ * lozenge sets solid and stamps a ring, and a new fill starts (it never runs back). When another factory makes
+ * its charge (the `charges_produced` event), a small lozenge rises from the factory counter. No figures.
+ */
+function railEndSVG() {
+  const id = uid('re');
+  return `<svg class="pc" width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
+  <defs><radialGradient id="${id}g"><stop offset="0" stop-color="#ece4d1" stop-opacity=".55"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>
+  <circle class="r-glow" r="9" fill="url(#${id}g)" opacity="0"/>
+  <path class="r-st" d="${loz(0, 0, 7.4)}" fill="none" stroke="var(--casing)" stroke-width="3" opacity="0"/>
+  <path class="r-sti" d="${loz(0, 0, 7.4)}" fill="none" stroke="var(--ink)" stroke-width="1.1" opacity="0"/>
+  <path d="${loz(0, 0, 7.4)}" fill="var(--casing)"/>
+  <path d="${loz(0, 0, 5.6)}" fill="var(--plate)"/>
+  <path class="r-made" d="${loz(0, 0, 5.6)}" fill="var(--own)" opacity="0"/>
+  <path class="r-flash" d="${loz(0, 0, 5.6)}" fill="var(--ink)" opacity="0"/>
+  <path class="r-rim" d="${loz(0, 0, 5.6)}" fill="none" stroke="var(--own)" stroke-width="1"/>
+</svg>`;
+}
+function popSVG() {
+  return `<svg class="pc fpop" width="16" height="22" viewBox="-8 -16 16 22" aria-hidden="true">
+  <g class="p-g" opacity="0"><path d="${loz(0, 0, 5.4)}" fill="var(--casing)"/><path d="${loz(0, 0, 3.8)}" fill="var(--own)" stroke="var(--ink)" stroke-width=".8"/></g></svg>`;
+}
+VARIANTS.push({
+  id: 'D', name: 'Supply rail',
+  build(slot, s, e) {
+    const n = Math.round(s.per / 50);
+    let ticks = '';
+    for (let j = 0; j <= n; j++) ticks += `<i class="${j === 0 || j === n ? 'end' : ''}" style="left:${(100 * j) / n}%"></i>`;
+    const fac = e.narrow ? '' : factories().replace('</span></span>', `</span>${popSVG()}</span>`);
+    slot.innerHTML = `<div class="supbox">${fac}` + chipOpen().replace('{S}', NAMES[s.stance]) + cutIcon(s.stance, 20) + ' ' + KBD + '</button>' +
+      `<div class="srail"><span class="sfill"></span>${ticks}${railEndSVG()}</div></div>`;
+  },
+  paint(slot, s, e) {
+    const f = slot.querySelector('.sfill');
+    if (!f) return;
+    f.style.width = `${s.share * 100}%`;
+    const svg = slot.querySelector('.srail svg');
+    const q = (c) => svg.querySelector(c);
+    let made = 0, flash = 0, stamp = 0, sr = 0;
+    if (s.ev !== null) {
+      if (e.rm) made = s.ev < 1 ? 1 : 0;
+      else {
+        made = s.ev < 0.3 ? 1 : 1 - easeEngrave((s.ev - 0.3) / 0.5);
+        flash = s.ev < 0.07 ? (s.ev / 0.07) * 0.85 : 0.85 * (1 - easeOut((s.ev - 0.07) / 0.35));
+        if (s.ev < 0.62) { stamp = 0.95 * (1 - easeOut(s.ev / 0.62)); sr = 6.5 * easeOut(s.ev / 0.62); }
+      }
+    }
+    set(q('.r-made'), { opacity: clamp01(made) });
+    set(q('.r-flash'), { opacity: clamp01(flash) });
+    set(q('.r-rim'), { stroke: s.ready ? 'var(--ink)' : 'var(--own)', 'stroke-width': s.ready ? 1.3 : 1 });
+    set(q('.r-glow'), { opacity: s.ready && !e.rm ? 0.9 : 0 });
+    for (const c of ['.r-st', '.r-sti']) set(q(c), { d: loz(0, 0, 7.4 + sr), opacity: stamp });
+    const pop = slot.querySelector('.p-g');
+    if (pop) {
+      let o = 0, y = 0;
+      if (s.fev !== null) {
+        if (e.rm) { o = s.fev < 1 ? 1 : 0; y = -7; }
+        else { const k = clamp01(s.fev / 0.9); y = -2 - 9 * easeOut(k); o = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45; }
+      }
+      set(pop, { opacity: clamp01(o), transform: `translate(0 ${y.toFixed(2)})` });
+    }
+  },
+});
+
+/**
+ * E "Hourglass": an hourglass of two charge lozenges point to point, between two caps on thin pillars, beside the
+ * stance icon. The upper bulb holds the owner's hatch still to come and drains; the lower one is the charge,
+ * filling in the owner's colour behind an ivory head. Made: the lower bulb flashes and the glass turns over
+ * (0.42 s). No figures. Narrow: no key.
+ */
+const GR = 7.2;
+function glassSVG() {
+  const id = uid('gl'), c = GR + 0.25, cy = 15.3, w = GR + 2.6;
+  const cap = (y) => `<rect x="${-w - 0.8}" y="${y - 1.8}" width="${2 * w + 1.6}" height="3.6" fill="var(--casing)"/><rect x="${-w}" y="${y - 1}" width="${2 * w}" height="2" fill="var(--ink)"/>`;
+  return `<svg class="pc" width="${2 * w + 2}" height="36" viewBox="${-w - 1} -18 ${2 * w + 2} 36" aria-hidden="true">
+  <defs><clipPath id="${id}t"><path d="${loz(0, -c, GR - 0.4)}"/></clipPath><clipPath id="${id}b"><path d="${loz(0, c, GR - 0.4)}"/></clipPath>
+  <pattern id="${id}h" patternUnits="userSpaceOnUse" width="3" height="2.6"><rect width="3" height="1" fill="var(--own)"/></pattern>
+  <radialGradient id="${id}g"><stop offset="0" stop-color="#ece4d1" stop-opacity=".6"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>
+  <g class="g-all">
+  <path d="M${-w + 1} ${-cy + 1}V${cy - 1}M${w - 1} ${-cy + 1}V${cy - 1}" stroke="var(--casing)" stroke-width="2.6"/>
+  <path class="g-pil" d="M${-w + 1} ${-cy + 1}V${cy - 1}M${w - 1} ${-cy + 1}V${cy - 1}" stroke="var(--ink)" stroke-width="1" stroke-opacity=".7"/>
+  <path d="${loz(0, -c, GR + 1.5)}${loz(0, c, GR + 1.5)}" fill="var(--casing)"/>
+  <path d="${loz(0, -c, GR)}${loz(0, c, GR)}" fill="var(--plate)"/>
+  <g clip-path="url(#${id}t)"><rect class="g-top" x="-9" width="18" y="0" height="0" fill="url(#${id}h)"/></g>
+  <line class="g-stream" x1="0" x2="0" y1="0" y2="11" stroke="var(--own)" stroke-width="1.1" opacity="0"/>
+  <g clip-path="url(#${id}b)"><rect class="g-bot" x="-9" width="18" y="11" height="0" fill="var(--own)"/>
+    <ellipse class="g-glow" rx="7" ry="3" fill="url(#${id}g)" opacity="0"/>
+    <rect class="g-head" x="-9" width="18" height="1.2" fill="var(--ink)" opacity="0"/>
+    <rect class="g-flash" x="-9" y="0" width="18" height="18" fill="var(--ink)" opacity="0"/></g>
+  <path class="g-rim" d="${loz(0, -c, GR)}${loz(0, c, GR)}" fill="none" stroke="var(--ink)" stroke-width="1" stroke-opacity=".92"/>
+  ${cap(-cy)}${cap(cy)}
+  </g></svg>`;
+}
+VARIANTS.push({
+  id: 'E', name: 'Hourglass',
+  build(slot, s, e) {
+    slot.innerHTML = factories() + chipOpen('glass').replace('{S}', NAMES[s.stance]) + cutIcon(s.stance, 20) + glassSVG() + (e.narrow ? '' : KBD) + '</button>';
+  },
+  paint(slot, s, e) {
+    const svg = slot.querySelector('.chip svg.pc');
+    if (!svg) return;
+    const q = (c) => svg.querySelector(c);
+    let share = s.share, rot = 0, flash = 0;
+    if (s.ev !== null) {
+      if (e.rm) { if (s.ev < 1) share = 1; }
+      else if (s.ev < 0.54) {
+        share = 1;
+        flash = s.ev < 0.06 ? (s.ev / 0.06) * 0.8 : 0.8 * (1 - easeOut((s.ev - 0.06) / 0.3));
+        rot = s.ev < 0.12 ? 0 : 180 * easeEngrave((s.ev - 0.12) / 0.42);
+      }
+    }
+    const c = GR + 0.25, neck = -c + GR - 0.4, foot = c + GR - 0.4;
+    const top = lozHeight(1 - share, GR - 0.4);
+    set(q('.g-top'), { y: neck - top, height: top });
+    const b = lozHeight(share, GR - 0.4), yb = foot - b;
+    set(q('.g-bot'), { y: yb, height: b });
+    const run = share > 0.004 && share < 0.996;
+    set(q('.g-head'), { y: yb - 0.55, opacity: run ? 1 : 0 });
+    set(q('.g-glow'), { cy: yb, opacity: run && !e.rm ? (s.ready ? 1 : 0.6) : 0 });
+    set(q('.g-stream'), { y1: 0.2, y2: yb, opacity: run && !e.rm ? 0.95 : 0 });
+    set(q('.g-flash'), { opacity: clamp01(flash) });
+    set(q('.g-rim'), { 'stroke-width': s.ready ? 1.25 : 0.95, 'stroke-opacity': s.ready ? 1 : 0.92 });
+    set(q('.g-pil'), { 'stroke-opacity': s.ready ? 1 : 0.7 });
+    set(q('.g-all'), { transform: rot ? `rotate(${rot.toFixed(2)})` : '' });
+  },
+});
+
+/**
+ * F "Cartouche": the stance chip drawn as the match clock's cartouche (T3, #1005): an outer rule and a faint inner
+ * one, the plate, the L brackets, a lozenge serif each side. Inside, the stance icon and the seconds to the next
+ * charge in the clock's figures. The right serif is the charge: a burin runs along the base rule toward it, and
+ * when it arrives the serif sets solid, flashes and swells by a ring (the clock's beat); the figures roll.
+ * Narrow: no key, the figures a size down.
+ */
+function cartFrame(W) {
+  const H = 36, m = H / 2, id = uid('ct');
+  const br = (x, y, sx, sy) => `M${x} ${y + sy * 7}V${y}H${x + sx * 7}`;
+  return `<svg class="frame" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+  <defs><radialGradient id="${id}g"><stop offset="0" stop-color="#ece4d1" stop-opacity=".55"/><stop offset="1" stop-color="#ece4d1" stop-opacity="0"/></radialGradient></defs>
+  <rect x="3" y="3" width="${W - 6}" height="${H - 6}" fill="var(--casing)" opacity=".55"/>
+  <rect class="fo" x=".5" y=".5" width="${W - 1}" height="${H - 1}" fill="none" stroke="var(--ink)" stroke-opacity=".6"/>
+  <rect x="3.5" y="3.5" width="${W - 7}" height="${H - 7}" fill="none" stroke="var(--ink)" stroke-opacity=".22"/>
+  <path d="M6 ${H - 0.5}H${W - 9}" stroke="var(--casing)" stroke-width="4"/>
+  <path d="M6 ${H - 0.5}H${W - 9}" stroke="var(--ink)" stroke-opacity=".6" stroke-width="1"/>
+  <path class="c-prog" d="M6 ${H - 0.5}H${W - 9}" pathLength="1" stroke="var(--own)" stroke-width="2.2" stroke-dasharray="0 2"/>
+  <circle class="c-head" cy="${H - 0.5}" r="1.6" fill="var(--ink)" stroke="var(--casing)" stroke-width=".9" opacity="0"/>
+  <path d="${br(-0.5, -0.5, 1, 1)}${br(W + 0.5, -0.5, -1, 1)}${br(-0.5, H + 0.5, 1, -1)}${br(W + 0.5, H + 0.5, -1, -1)}" fill="none" stroke="var(--casing)" stroke-width="4" stroke-linecap="square"/>
+  <path d="${br(-0.5, -0.5, 1, 1)}${br(W + 0.5, -0.5, -1, 1)}${br(-0.5, H + 0.5, 1, -1)}${br(W + 0.5, H + 0.5, -1, -1)}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="square"/>
+  <path d="${loz(0, m, 4.4)}" fill="var(--casing)"/><path d="${loz(0, m, 2.6)}" fill="var(--ink)"/>
+  <circle class="c-glow" cx="${W}" cy="${m}" r="10" fill="url(#${id}g)" opacity="0"/>
+  <path class="c-st" d="${loz(W, m, 7)}" fill="none" stroke="var(--casing)" stroke-width="3" opacity="0"/>
+  <path class="c-sti" d="${loz(W, m, 7)}" fill="none" stroke="var(--ink)" stroke-width="1.1" opacity="0"/>
+  <path d="${loz(W, m, 7)}" fill="var(--casing)"/>
+  <path d="${loz(W, m, 5.2)}" fill="var(--plate)"/>
+  <path class="c-made" d="${loz(W, m, 5.2)}" fill="var(--own)" opacity="0"/>
+  <path class="c-flash" d="${loz(W, m, 5.2)}" fill="var(--ink)" opacity="0"/>
+  <path class="c-rim" d="${loz(W, m, 5.2)}" fill="none" stroke="var(--ink)" stroke-width="1" stroke-opacity=".92"/>
+</svg>`;
+}
+VARIANTS.push({
+  id: 'F', name: 'Cartouche',
+  build(slot, s, e) {
+    slot.innerHTML = factories() + `<button type="button" class="chip cart svelte-1q6et7t" data-tip aria-label="Stance: ${NAMES[s.stance]} [Q]">` +
+      cutIcon(s.stance, 20) + figsHTML() + (e.narrow ? '' : KBD) + '</button>';
+    slot.querySelector('.cart').style.marginRight = '6px';
+  },
+  paint(slot, s, e) {
+    const b = slot.querySelector('.cart');
+    if (!b) return;
+    const W = b.offsetWidth;
+    let fr = b.querySelector('svg.frame');
+    if (!fr || Number(fr.getAttribute('width')) !== W) { if (fr) fr.remove(); b.insertAdjacentHTML('afterbegin', cartFrame(W)); fr = b.querySelector('svg.frame'); }
+    const q = (c) => fr.querySelector(c);
+    set(q('.c-prog'), { 'stroke-dasharray': `${s.share.toFixed(4)} 2` });
+    const run = s.share > 0.004 && s.share < 0.996;
+    set(q('.c-head'), { cx: 6 + (W - 15) * s.share, opacity: run ? 1 : 0 });
+    let made = 0, flash = 0, stamp = 0, sr = 0;
+    if (s.ev !== null) {
+      if (e.rm) made = s.ev < 1 ? 1 : 0;
+      else {
+        made = s.ev < 0.3 ? 1 : 1 - easeEngrave((s.ev - 0.3) / 0.5);
+        flash = s.ev < 0.07 ? (s.ev / 0.07) * 0.85 : 0.85 * (1 - easeOut((s.ev - 0.07) / 0.35));
+        if (s.ev < 0.42) { stamp = 0.95 * Math.sin((Math.PI * s.ev) / 0.42); sr = 5; } // the clock's swell: a larger ring inks in and out
+      }
+    }
+    set(q('.c-made'), { opacity: clamp01(made) });
+    set(q('.c-flash'), { opacity: clamp01(flash) });
+    for (const c of ['.c-st', '.c-sti']) set(q(c), { d: loz(W, 18, 7 + sr), opacity: clamp01(stamp) });
+    set(q('.c-rim'), { 'stroke-width': s.ready ? 1.35 : 1, 'stroke-opacity': s.ready ? 1 : 0.92 });
+    set(q('.c-glow'), { opacity: s.ready && !e.rm ? 0.9 : 0 });
+    paintFigs(b.querySelector('.figs'), s, s.ev, e.rm);
+  },
+});
+
+
+// ---------------------------------------------------------------- the frame loop
+const $ = (s) => document.querySelector(s);
+const stage = $('#stage'), viewport = $('#viewport'), slot = $('#slot'), hud = $('#hud'), fx = $('#fx');
+let built = null;
+function env() { return { narrow: P.w === 960, rm: P.rm }; }
+function snapshot(t) {
+  const tick = Math.min(T_END, Math.floor(t * HZ + 1e-6));
+  const S = simulate(tick);
+  const per = CAP_P[S.st], frac = P.rm ? 0 : t * HZ - tick;
+  const shareTick = S.c / per;
+  let share = Math.min(0.999, (S.c + frac) / per);
+  if (P.rm) share = Math.floor(shareTick * (per / HZ) + 1e-6) / (per / HZ); // steps once a second
+  const secs = Math.ceil((per - S.c) / HZ);
+  const lastCap = S.capEv.length ? S.capEv[S.capEv.length - 1] : null;
+  const lastFac = S.facEv.length ? S.facEv[S.facEv.length - 1] : null;
+  const ev = lastCap === null ? null : t - lastCap / HZ;
+  const fev = lastFac === null ? null : t - lastFac / HZ;
+  return {
+    t, tick, stance: S.st, per, c: S.c, share, shareTick, secs, ready: secs <= 3,
+    ev: ev !== null && ev < 1.8 ? ev : null, fev: fev !== null && fev < 1.2 ? fev : null,
+    cp: S.v, cpShare: Math.min(1, (S.q + frac) / CP_P[S.st]), cpSecs: Math.ceil((CP_P[S.st] - S.q) / HZ),
+  };
+}
+function tipText(s) {
+  if (P.v === 'T0') return `Next 0.5 CP in ${s.cpSecs} s, next charge of the capital in ${s.secs} s. Your other factories run at the same pace on their own progress. A change of stance keeps the progress of all`;
+  // The copy proposed with this round (design:ux-copy): the charge first, the one fact about the other factories.
+  return `${NAMES[s.stance]} [Q]. Next charge of the capital in ${s.secs} s, next 0.5 CP in ${s.cpSecs} s. Your other factories make theirs at the same pace`;
+}
+function build(s) {
+  slot.innerHTML = '';
+  hud.querySelectorAll('.extra').forEach((e) => e.remove());
+  const V = VARIANTS.find((x) => x.id === P.v);
+  V.build(slot, s, env());
+  built = { v: P.v, stance: s.stance, w: P.w };
+}
+function paintCp(s) {
+  const unit = 30, X = 6, cp = s.cp / 100;
+  const end = s.cp >= CP_CAP ? null : Math.min(5, cp + s.cpShare * 0.5);
+  const g = $('.cp');
+  set(g.querySelector('rect.bar'), { width: unit * cp });
+  set(g.querySelector('rect.quantum'), { x: X + unit * cp, width: end === null ? 0 : unit * (end - cp) });
+  const notch = g.querySelector('path.notch');
+  set(notch, { visibility: end === null ? 'hidden' : 'visible', transform: `translate(${end === null ? 0 : X + unit * end} 0)` });
+  set(g.querySelector('path.needle'), { transform: `translate(${X + unit * cp} 0)` });
+  g.querySelector('.digits').textContent = fmtCp(s.cp);
+  g.setAttribute('aria-label', `CP: ${fmtCp(s.cp)} of 5`);
+  const left = 660 - Math.floor(s.t);
+  $('text.figures').textContent = mmss(left);
+  const vp = ((s.tick % 300) + (P.rm ? 0 : s.t * HZ - s.tick)) / 300;
+  const fill = $('.rail-fill');
+  if (fill) fill.style.width = `${(P.rm ? Math.floor(vp * 30) / 30 : vp) * 100}%`;
+}
+function paint() {
+  const s = snapshot(P.t);
+  if (!built || built.v !== P.v || built.stance !== s.stance || built.w !== P.w) build(s);
+  paintCp(s);
+  const V = VARIANTS.find((x) => x.id === P.v);
+  const e = env();
+  V.paint(slot, s, e);
+  const chip = slot.querySelector('[data-tip]');
+  if (chip) chip.title = tipText(s);
+  // the flight from the piece to the capital's store (variants that send one)
+  const src = V.flight ? slot.parentElement.closest('.hud').querySelector('[data-fly]') : null;
+  let from = null;
+  if (src) {
+    const sr = stage.getBoundingClientRect(), b = src.getBoundingClientRect(), k = sr.width / stage.offsetWidth;
+    from = [(b.left + b.width / 2 - sr.left) / k, (b.top + b.height / 2 - sr.top) / k];
+  }
+  paintFlight(fx, from, CAPITAL[`${P.g}-${P.w}`], s.ev, P.rm);
+  $('#tout').textContent = mmss(Math.floor(P.t));
+  $('#scrub').value = String(P.t);
+}
+function layout() {
+  const [w, h] = SIZE[P.w];
+  stage.style.width = `${w}px`; stage.style.height = `${h}px`;
+  fx.setAttribute('width', w); fx.setAttribute('height', h);
+  stage.classList.toggle('narrow', P.w === 960);
+  stage.classList.toggle('stage-tug', P.w === 1280);
+  stage.classList.toggle('grey', P.gr);
+  document.documentElement.dataset.motion = P.rm ? 'reduced' : '';
+  const img = $('#ground'), src = `assets/next-supply-hud/${GROUNDS[P.g]}-${P.w}.webp`;
+  if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+  img.style.width = `${w}px`; img.style.height = `${h}px`;
+  const avail = Math.min(document.documentElement.clientWidth - 32, 1600);
+  let k, vw, vh;
+  if (P.cu) { // the close-up: the left of the bar and the map under it, twice as large
+    const cw = P.w === 960 ? 480 : 640, ch = 150;
+    k = Math.min(avail / cw, 3); vw = cw * k; vh = ch * k;
+  } else { k = Math.min(avail / w, 1); vw = w * k; vh = h * k; }
+  stage.style.transform = `scale(${k})`;
+  viewport.style.width = `${vw}px`; viewport.style.height = `${vh}px`;
+  built = null;
+}
+function writeHash() {
+  const sc = script.map(([t, s]) => `${t}${s[0]}`).join('');
+  const h = `#v=${P.v}&g=${P.g}&w=${P.w}&t=${P.t.toFixed(1)}&s=${sc}${P.cu ? '&cu=1' : ''}${P.rm ? '&rm=1' : ''}${P.gr ? '&gr=1' : ''}${P.play ? '' : '&p=0'}`;
+  history.replaceState(null, '', h);
+}
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.get('v') && VARIANTS.some((x) => x.id === q.get('v'))) P.v = q.get('v');
+  if (q.get('g') in GROUNDS) P.g = q.get('g');
+  if (q.get('w') === '960' || q.get('w') === '1280') P.w = Number(q.get('w'));
+  if (q.get('t') !== null) P.t = Math.max(0, Math.min(T_END / HZ, Number(q.get('t')) || 0));
+  const m = (q.get('s') || '').match(/(\d+)([ebw])/g);
+  if (m && m.length) script = m.map((x) => [Number(x.slice(0, -1)), { e: 'economy', b: 'balance', w: 'war' }[x.slice(-1)]]);
+  P.cu = q.get('cu') === '1'; P.rm = q.get('rm') === '1'; P.gr = q.get('gr') === '1';
+  if (q.get('p') === '0') P.play = false;
+}
+function buttons(host, items, key, onpick) {
+  host.innerHTML = '';
+  for (const [val, label, k] of items) {
+    const b = document.createElement('button');
+    b.className = 'pick'; b.type = 'button';
+    b.innerHTML = k ? `<span class="k">${k}</span>${label}` : label;
+    b.setAttribute('aria-pressed', String(P[key] === val));
+    b.onclick = () => { onpick ? onpick(val) : (P[key] = val); refresh(); };
+    host.appendChild(b);
+  }
+}
+function setStance(st) { // a SetStance applied at the next tick; later changes of the script are dropped
+  const k = Math.min(T_END, Math.floor(P.t * HZ + 1e-6) + 1);
+  const cur = simulate(k - 1).st;
+  script = script.filter(([t]) => t < k);
+  if (cur !== st) script.push([k, st]);
+}
+function refresh() {
+  buttons($('#vbtns'), VARIANTS.map((x) => [x.id, x.name, x.id]), 'v');
+  const cur = simulate(Math.floor(P.t * HZ + 1e-6)).st;
+  buttons($('#sbtns'), ['economy', 'balance', 'war'].map((s) => [s, NAMES[s]]), '_s', setStance);
+  $('#sbtns').querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(['economy', 'balance', 'war'][i] === cur)));
+  buttons($('#gbtns'), [['front', 'Front'], ['siege', 'Siege']], 'g');
+  buttons($('#wbtns'), [[1280, '1280'], [960, '960']], 'w');
+  buttons($('#cbtns'), [[false, 'Screen'], [true, 'Close-up']], 'cu');
+  $('#play').textContent = P.play ? 'Pause' : 'Play';
+  $('#play').setAttribute('aria-pressed', String(!P.play));
+  $('#rmb').setAttribute('aria-pressed', String(P.rm));
+  $('#grb').setAttribute('aria-pressed', String(P.gr));
+  layout(); paint(); writeHash();
+}
+$('#play').onclick = () => { P.play = !P.play; refresh(); };
+$('#scrub').oninput = (e) => { P.t = Number(e.target.value); paint(); writeHash(); refreshStance(); };
+$('#jump').onclick = () => {
+  const all = simulate(T_END).capEv.map((k) => k / HZ).filter((x) => x > P.t + 2.05);
+  P.t = all.length ? all[0] - 2 : 0; P.play = true; refresh();
+};
+$('#moreb').onclick = () => { const o = $('#ctl').classList.toggle('open'); $('#moreb').setAttribute('aria-expanded', String(o)); };
+$('#rmb').onclick = () => { P.rm = !P.rm; refresh(); };
+$('#grb').onclick = () => { P.gr = !P.gr; refresh(); };
+function refreshStance() {
+  const cur = simulate(Math.floor(P.t * HZ + 1e-6)).st;
+  $('#sbtns').querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(['economy', 'balance', 'war'][i] === cur)));
+}
+window.addEventListener('resize', () => { layout(); paint(); });
+document.addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement && e.key !== ' ') return;
+  if (e.key === ' ') { e.preventDefault(); P.play = !P.play; refresh(); }
+  const v = VARIANTS.find((x) => x.id.toLowerCase() === e.key.toLowerCase() || (e.key === '0' && x.id === 'T0'));
+  if (v) { P.v = v.id; refresh(); }
+});
+let lastNow = null, lastStance = null, lastHashAt = 0;
+function frame(now) {
+  if (P.play && lastNow !== null) {
+    P.t += (now - lastNow) / 1000;
+    if (P.t >= T_END / HZ) P.t = 0;
+    paint();
+    const st = simulate(Math.floor(P.t * HZ + 1e-6)).st;
+    if (st !== lastStance) { lastStance = st; refreshStance(); }
+    if (now - lastHashAt > 500) { writeHash(); lastHashAt = now; }
+  }
+  lastNow = now;
+  requestAnimationFrame(frame);
+}
+window.addEventListener('hashchange', () => { readHash(); refresh(); });
+readHash();
+document.fonts.ready.then(() => { refresh(); requestAnimationFrame(frame); });
+refresh();
+</script>
+</body>
+</html>
