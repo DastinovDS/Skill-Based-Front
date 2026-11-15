@@ -161,7 +161,7 @@ test('the chapter select in progress, the head-on attack of IV.4 and leaving a c
   await expect(page.getByRole('heading', { name: 'Attack and fight' })).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
-  await card(page, 'each charge is a shot');
+  await card(page, 'each charge is one shot');
   await shot(page, '11-shot');
   await page.getByRole('button', { name: 'Continue' }).click();
   // Review 6 (#1059): the rounds and no leaving a fight are told before the first fight.
@@ -359,7 +359,7 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await page.getByRole('button', { name: /^(Replay|Play again)$/ }).click();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   const attack = await mapOf('tut-attack');
-  await card(page, 'each charge is a shot');
+  await card(page, 'each charge is one shot');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'A fight runs in rounds');
   await page.getByRole('button', { name: 'Continue' }).click();
