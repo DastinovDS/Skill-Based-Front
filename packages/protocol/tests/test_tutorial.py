@@ -192,9 +192,32 @@ def test_the_content_of_review_5() -> None:
     menu = by_id["building"].beats[1]
     assert (menu.on.ui, menu.on.node, menu.client_only) == ("menu", "Fernhill", True)
     clocks = [(b.id, b.clock) for b in by_id["attack"].beats if b.clock is not None]
-    assert clocks == [("10", 600)]
+    assert clocks == [("11", 600)]
     for chapter_id in ("units", "economy", "building"):
         assert by_id[chapter_id].always == ()
     for chapter_id in CHAPTER_IDS[3:]:
         (entry,) = by_id[chapter_id].always
         assert entry.set_stance is not None and entry.set_stance.stance is None
+
+
+def test_the_content_of_review_6() -> None:
+    """#1059: every build is two steps (a card that opens the menu, then a UI beat on the open
+    menu), no focus phase from chapter III on (but Advanced 3, whose lesson is the supply flow),
+    any stance at the end of III, and the rules of a fight told before the first one."""
+    by_id = {c.id: c for c in chapters()}
+    for chapter_id, node in (
+        ("building", "Fernhill"),
+        ("building", "Millbrook"),
+        ("defence", "Flatford"),
+    ):
+        menus = [b for b in by_id[chapter_id].beats if b.on.ui == "menu" and b.on.node == node]
+        assert len(menus) == 1, (chapter_id, node)
+    for chapter_id in ("building", "attack", "defence", "group-orders", "rally-points"):
+        assert all(b.focus is None for b in by_id[chapter_id].beats), chapter_id
+    allow = by_id["building"].beats[-1].allow
+    assert allow is not None and len(allow) == 1
+    assert allow[0].set_stance is not None and allow[0].set_stance.stance is None
+    attack = by_id["attack"].beats
+    head_on = next(i for i, b in enumerate(attack) if b.allow and b.allow[0].move is not None)
+    assert [b.on.continued for b in attack[1:head_on]] == ["1", "2", "3"][: head_on - 1]
+    assert not any(b.on.event == "fight_started" for b in attack)

@@ -4,8 +4,9 @@ student (#806, ``docs/design/tutorial.md``, section 4).
 The expected ticks are the "Verified" lines of section 4 (AGENTS.md, 0.4), with the corrections
 the implementation recorded there (V: the fort a tick earlier, A3.2 at 30) and the waits of review
 4 (#1047: a beat ``after`` its trigger, the focus phases) and of review 5 (#1054: chapter III's new
-order, chapter IV's head-on attack first and its clock, the stance open after chapter III). The
-runner is stepped
+order, chapter IV's head-on attack first and its clock, the stance open after chapter III) and of
+review 6 (#1059: no focus phase after chapter II, the fights' rules before the first fight, the
+two-step builds, any stance at III.8). The runner is stepped
 by hand (``MatchRunner.step``, no loop): the student acts between two steps, as a client between
 two ticks, and a pause stops the stepping (the loop itself: ``test_tutorial.py``).
 
@@ -452,9 +453,12 @@ def test_economy_raiders_leave_at_once() -> None:
 # III. Building ------------------------------------------------------------------------------
 
 
-def test_building_plays_at_the_documented_ticks() -> None:
+@pytest.mark.parametrize("pick", [Stance.ECONOMY, Stance.WAR])
+def test_building_plays_at_the_documented_ticks(pick: Stance) -> None:
+    """III.8 takes any stance (review 6): the card suggests Economy, War is not locked."""
+
     def student(p: Play) -> None:
-        continues(p, "3", "6")
+        continues(p, "3", "7")
         if not p.runner.paused:
             if p.tick == 21:
                 assert p.size("Fernhill") == (3, 0)  # the units paid the barracks
@@ -467,26 +471,24 @@ def test_building_plays_at_the_documented_ticks() -> None:
         elif p.beat == "5":
             p.order(wire.BuildFactoryCmd(node=p.ids["Millbrook"]))
             p.deny(wire.BuildFactoryCmd(node=p.ids["Millbrook"]))  # once
-        elif p.beat == "7":
-            p.order(wire.SetStanceCmd(stance=Stance.ECONOMY))
+        elif p.beat == "8":
+            p.order(wire.SetStanceCmd(stance=pick))
 
     allowed = {
         "1": only(("build_barracks", "Fernhill")),
         "4": only(("recruit", "Fernhill")),
         "5": only(("build_factory", "Millbrook")),
-        "7": only(("set_stance", Stance.ECONOMY)),
+        "8": stance,  # every stance (review 6: War is not locked)
     }
     p = Play("building", allowed)
     p.play(student)
     assert p.beats == [
         (0, "1"),
         (21, "3"),  # 20 ticks after the payment, so the empty helmet is seen
-        (21, "3W"),
-        (101, "4"),
+        (101, "4"),  # no focus phase from chapter III on (review 6)
         (131, "5"),
-        (132, "5W"),
-        (232, "6"),
-        (232, "7"),
+        (232, "7"),  # the factory's menu beat (6) is the client's
+        (232, "8"),
     ]
     paid = [(e.tick, e.data["kind"], e.data["units"], e.data["owed"]) for e in p.seen("build_paid")]
     assert paid == [(1, "barracks", 3, 0), (132, "factory", 2, 0)]
@@ -500,21 +502,21 @@ def test_building_plays_at_the_documented_ticks() -> None:
 # IV. Attack and fight -----------------------------------------------------------------------
 
 ATTACK_ALLOWED: Final[dict[str, Allowed]] = {
-    "2": only(("move", "Fernhold", "Ashwood", False)),
-    "4": only(("move", "Fernhold", "Ashwood", True)),
-    "11": lambda lb: lb[:3] == ("move", "Ashwood", "Stormcrown"),
+    "4": only(("move", "Fernhold", "Ashwood", False)),
+    "7": only(("move", "Fernhold", "Ashwood", True)),
+    "13": lambda lb: lb[:3] == ("move", "Ashwood", "Stormcrown"),
 }
 
 
 def attack_student(stormcrown_bonus: int) -> Callable[[Play], None]:
     def student(p: Play) -> None:
-        continues(p, "1", "3", "7", "8", "9", "10")
-        if p.beat == "2" and p.runner.paused:
+        continues(p, "1", "2", "3", "5", "10", "11")
+        if p.beat == "4" and p.runner.paused:
             p.move("Fernhold", "Ashwood")  # head-on: it bounces, the lesson of the plan
-        elif p.beat == "4" and p.runner.paused:
+        elif p.beat == "7" and p.runner.paused:
             assert p.size("Fernhold") == (3, 3)
             p.move("Fernhold", "Ashwood", bonus=3)
-        elif p.beat == "11" and p.runner.paused:
+        elif p.beat == "13" and p.runner.paused:
             assert p.size("Ashwood") == (3, 3)
             p.move("Ashwood", "Stormcrown", bonus=stormcrown_bonus)
         if p.tick == 444:
@@ -528,16 +530,17 @@ def test_attack_plays_at_the_documented_ticks() -> None:
     p.play(attack_student(0))
     assert p.beats == [
         (0, "1"),
-        (0, "2"),
-        (148, "3"),
-        (218, "4"),
-        (219, "6"),
-        (230, "7"),
-        (404, "8"),
-        (454, "9"),
-        (469, "10"),
-        (469, "10W"),
-        (502, "11"),
+        (0, "2"),  # rounds and no leaving a fight, before the first one (review 6)
+        (0, "3"),
+        (0, "4"),
+        (148, "5"),
+        (148, "6"),  # wait for the refill: a card, no focus (review 6)
+        (218, "7"),
+        (219, "9"),
+        (230, "10"),
+        (469, "11"),
+        (469, "12"),
+        (502, "13"),
     ]
     ashwood, stormcrown = p.ids["Ashwood"], p.ids["Stormcrown"]
     rounds = [e.tick for e in p.seen("fight_round", node=ashwood)]
@@ -549,7 +552,7 @@ def test_attack_plays_at_the_documented_ticks() -> None:
     assert p.seen("node_captured", 333, player=1, node=p.ids["Old Mill"])  # the enemy plan
     assert p.seen("node_captured", 444, player=0, node=ashwood)
     assert [e.tick for e in p.seen("fight_round", node=stormcrown)] == [621, 641]
-    assert p.director.message().clock_end == 1069  # IV.10 at 469, a minute
+    assert p.director.message().clock_end == 1069  # IV.11 at 469, a minute
     assert p.end is not None and p.end.tick == 641
     assert (p.end.reason, p.end.winner) == (EndReason.CAPITAL_CAPTURED, 0)
     assert not p.director.by_clock
@@ -573,9 +576,11 @@ def test_attack_stance_is_open_and_ends_no_pause() -> None:
             p.order(wire.SetStanceCmd(stance=Stance.ECONOMY))
             assert p.runner.paused  # no answer to the card: it still waits
             p.resume()
-        elif p.beat == "2" and p.runner.paused:
+        elif p.beat in ("2", "3"):
+            continues(p, "2", "3")
+        elif p.beat == "4" and p.runner.paused:
             p.move("Fernhold", "Ashwood")
-        elif p.beat == "3":
+        elif p.beat == "5":
             p.order(wire.ForfeitCmd())
 
     p = Play("attack", ATTACK_ALLOWED, free=stance)
@@ -601,19 +606,20 @@ def test_defence_plays_at_the_documented_ticks() -> None:
                 if p.mapdef.edges[e].other(p.ids["Flatford"]) == p.ids["Eastfield"]
             )
             p.order(wire.FortifyRoadCmd(node=p.ids["Flatford"], edge=road))
-        elif p.beat == "5" and p.runner.paused:
+        elif p.beat == "6" and p.runner.paused:
             p.move("Millbrook", "Flatford")
         if p.tick == 267:
             assert p.size("Flatford") == (4, 4)
 
     allowed = {
         "4": only(("fortify_road", "Flatford", "Eastfield")),
-        "5": only(("move", "Millbrook", "Flatford", False)),
+        "6": only(("move", "Millbrook", "Flatford", False)),
     }
     p = Play("defence", allowed, free=stance)
     p.play(student)
     # the chevrons first, then the march on Highcrag
-    assert p.beats == [(0, "1"), (10, "2"), (169, "3"), (200, "4"), (201, "5"), (384, "6")]
+    # the menu beat of the fort (5) is the client's
+    assert p.beats == [(0, "1"), (10, "2"), (169, "3"), (200, "4"), (201, "6"), (384, "7")]
     highcrag, flatford = p.ids["Highcrag"], p.ids["Flatford"]
     rounds = p.seen("fight_round", node=highcrag)
     assert [e.tick for e in rounds] == [119, 139, 159] and rounds[0].data["virtual_0"] == 1

@@ -28,7 +28,7 @@ function withFailure(): Chapter {
   const attack = chapterOf('attack');
   return {
     ...attack,
-    beats: attack.beats.map((b) => (b.id === '2' ? { ...b, slides: 3 } : b)) as Chapter['beats'],
+    beats: attack.beats.map((b) => (b.id === '4' ? { ...b, slides: 3 } : b)) as Chapter['beats'],
     fails: [
       {
         id: 'F',
@@ -162,16 +162,16 @@ describe('gate (section 4.9)', () => {
     expect(flags('building', '1')).toContain('buildings');
     expect(flags('building', '3')).not.toContain('recruit');
     expect(flags('building', '4')).toContain('recruit');
-    expect(flags('building', '5')).not.toContain('factories');
-    expect(flags('building', '6')).toContain('factories');
-    expect(flags('building', '6')).not.toContain('stance');
-    expect(flags('building', '7')).toContain('stance');
-    expect(flags('attack', '4')).not.toContain('planned');
-    expect(flags('attack', '5')).toContain('planned');
-    expect(flags('attack', '9')).not.toContain('vp');
-    expect(flags('attack', '10')).toEqual(expect.arrayContaining(['vp', 'clock']));
-    // The clock stays to the end of chapter IV (review 5) and never carries over.
+    expect(flags('building', '6')).not.toContain('factories');
+    expect(flags('building', '7')).toContain('factories');
+    expect(flags('building', '7')).not.toContain('stance');
+    expect(flags('building', '8')).toContain('stance');
+    expect(flags('attack', '7')).not.toContain('planned');
+    expect(flags('attack', '8')).toContain('planned');
+    expect(flags('attack', '10')).not.toContain('vp');
     expect(flags('attack', '11')).toEqual(expect.arrayContaining(['vp', 'clock']));
+    // The clock stays to the end of chapter IV (review 5) and never carries over.
+    expect(flags('attack', '13')).toEqual(expect.arrayContaining(['vp', 'clock']));
     expect(flags('defence', null)).not.toContain('terrainMarks');
     expect(flags('defence', '1')).toContain('terrainMarks');
     expect(flags('defence', '4')).toEqual(expect.arrayContaining(['alerts', 'fort']));
@@ -253,20 +253,22 @@ describe('allow matcher (section 7.3)', () => {
     expect(commandAllowed(allow, [0, 0], move('g', id(map, 'Elmstead')), marching)).toBe(false);
   });
 
-  it('chapter IV.2 takes the head-on attack, IV.4 only the plan, IV.11 either', () => {
+  it('chapter IV.4 takes the head-on attack, IV.7 only the plan, IV.13 either', () => {
     const attack = chapterOf('attack');
     const map = chapterMap(attack);
     const ctx = context(map, { g: 'Fernhold' });
     const ashwood = id(map, 'Ashwood');
-    // IV.2 the head-on attack only, IV.4 only the plan, IV.11 either (review 5).
-    expect(commandAllowed(allowOf(attack, '2'), [0], move('g', ashwood), ctx)).toBe(true);
-    expect(commandAllowed(allowOf(attack, '2'), [0], move('g', ashwood, true), ctx)).toBe(false);
-    expect(commandAllowed(allowOf(attack, '4'), [0], move('g', ashwood), ctx)).toBe(false);
-    expect(commandAllowed(allowOf(attack, '4'), [0], move('g', ashwood, true), ctx)).toBe(true);
+    // IV.4 the head-on attack only, IV.7 only the plan, IV.13 either (review 5, review 6 ids).
+    expect(commandAllowed(allowOf(attack, '4'), [0], move('g', ashwood), ctx)).toBe(true);
+    expect(commandAllowed(allowOf(attack, '4'), [0], move('g', ashwood, true), ctx)).toBe(false);
+    expect(commandAllowed(allowOf(attack, '7'), [0], move('g', ashwood), ctx)).toBe(false);
+    expect(commandAllowed(allowOf(attack, '7'), [0], move('g', ashwood, true), ctx)).toBe(true);
+    // The wait for the refill (IV.6) allows nothing.
+    expect(commandAllowed(allowOf(attack, '6'), [0], move('g', ashwood, true), ctx)).toBe(false);
     const actx = context(map, { g: 'Ashwood' });
     const storm = id(map, 'Stormcrown');
-    expect(commandAllowed(allowOf(attack, '11'), [0], move('g', storm), actx)).toBe(true);
-    expect(commandAllowed(allowOf(attack, '11'), [0], move('g', storm, true), actx)).toBe(true);
+    expect(commandAllowed(allowOf(attack, '13'), [0], move('g', storm), actx)).toBe(true);
+    expect(commandAllowed(allowOf(attack, '13'), [0], move('g', storm, true), actx)).toBe(true);
   });
 
   it('builds, recruits, stances, forts, group orders and rally points by their places', () => {
@@ -321,12 +323,13 @@ describe('allow matcher (section 7.3)', () => {
         ctx,
       ),
     ).toBe(false);
+    // III.8 takes every stance (review 6: War was locked and players asked why).
     expect(
-      commandAllowed(allowOf(building, '7'), [0], { type: 'set_stance', stance: 'economy' }, ctx),
+      commandAllowed(allowOf(building, '8'), [0], { type: 'set_stance', stance: 'economy' }, ctx),
     ).toBe(true);
     expect(
-      commandAllowed(allowOf(building, '7'), [0], { type: 'set_stance', stance: 'war' }, ctx),
-    ).toBe(false);
+      commandAllowed(allowOf(building, '8'), [0], { type: 'set_stance', stance: 'war' }, ctx),
+    ).toBe(true);
 
     const defence = chapterOf('defence');
     const dmap = chapterMap(defence);
@@ -491,17 +494,17 @@ describe('coach on recorded tutorial streams', () => {
 
   it('pages the slides of a card and keeps them on a new message of the same beat', () => {
     const { coach } = coachOf(withFailure(), { g: 'Fernhold' });
-    coach.onMessage(msg('attack', '1', true, []));
-    coach.onMessage(msg('attack', '2', true, [0]));
+    coach.onMessage(msg('attack', '3', true, []));
+    coach.onMessage(msg('attack', '4', true, [0]));
     expect(coach.current.card?.slides).toBe(3);
     expect(coach.slide).toBe(0);
     coach.nextSlide();
     coach.nextSlide();
     coach.nextSlide();
     expect(coach.slide).toBe(2);
-    coach.onMessage(msg('attack', '2', true, [0]));
+    coach.onMessage(msg('attack', '4', true, [0]));
     expect(coach.slide).toBe(2);
-    coach.onMessage(msg('attack', '3', true, []));
+    coach.onMessage(msg('attack', '5', true, []));
     expect(coach.slide).toBe(0);
   });
 
@@ -524,7 +527,7 @@ describe('coach on recorded tutorial streams', () => {
 
   it('walks a failure beat: Try again, the plan unlocked, only the plan allowed', () => {
     const { coach, map } = coachOf(withFailure(), { g: 'Fernhold' });
-    coach.onMessage(msg('attack', '2', true, [0]));
+    coach.onMessage(msg('attack', '4', true, [0]));
     expect(coach.shows('planned')).toBe(false);
     coach.onMessage(msg('attack', 'F', true, [0]));
     expect(coach.current.card?.fail).toBe(true);
@@ -538,35 +541,48 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.allows({ type: 'move', group: 'g', dest: ashwood, planned: true, bonus: 3 })).toBe(
       true,
     );
-    // The planned order accepted: IV.6 shows no card while the army walks, the plan stays shown.
-    coach.onMessage(msg('attack', '6', false, []));
+    // The planned order accepted: IV.9 shows no card while the army walks, the plan stays shown.
+    coach.onMessage(msg('attack', '9', false, []));
     expect(coach.current.card).toBeNull();
     expect(coach.shows('planned')).toBe(true);
   });
 
   it('walks chapter IV: the head-on attack, the plan, and the clock to the end (review 5)', () => {
     const { coach, map } = coachOf('attack', { g: 'Fernhold' });
-    coach.onMessage(msg('attack', '2', true, [0]));
+    // The rounds and no leaving a fight come before the first fight (review 6).
+    coach.onMessage(msg('attack', '2', true, []));
+    expect(coach.current.card?.canContinue).toBe(true);
+    coach.onMessage(msg('attack', '4', true, [0]));
     expect(coach.current.card?.fail).toBe(false);
     expect(coach.shows('planned')).toBe(false);
-    coach.onMessage(msg('attack', '3', true, [], false, 148));
+    coach.onMessage(msg('attack', '5', true, [], false, 148));
     coach.onRender(148);
-    expect(coach.current.card?.id).toBe('3');
-    coach.onMessage(msg('attack', '4', true, [0], false, 218));
-    coach.onRender(218);
-    expect(coach.current.card?.id).toBe('4');
-    coach.onSelection({ node: nodeNamed(map, 'Fernhold') ?? null });
     expect(coach.current.card?.id).toBe('5');
+    // The refill: a card that asks the player to wait, no Continue, no mark (review 6).
+    coach.onMessage(msg('attack', '6', false, [], false, 148));
+    expect(coach.current.card?.id).toBe('6');
+    expect(coach.current.card?.canContinue).toBe(false);
+    expect(coach.current.card?.marks).toEqual([]);
+    expect(coach.current.focus).toBeNull();
+    coach.onMessage(msg('attack', '7', true, [0], false, 218));
+    coach.onRender(218);
+    expect(coach.current.card?.id).toBe('7');
+    coach.onSelection({ node: nodeNamed(map, 'Fernhold') ?? null });
+    expect(coach.current.card?.id).toBe('8');
     expect(coach.shows('planned')).toBe(true);
     expect(coach.current.clockEnd).toBeNull();
-    coach.onMessage(msg('attack', '10', true, [], false, 469, 1069));
+    coach.onMessage(msg('attack', '11', true, [], false, 469, 1069));
     coach.onRender(469);
     expect(coach.shows('clock')).toBe(true);
     expect(coach.current.clockEnd).toBe(1069);
-    coach.onMessage(msg('attack', '11', true, [0], false, 502, 1069));
+    coach.onMessage(msg('attack', '12', false, [], false, 469, 1069));
+    expect(coach.current.card?.id).toBe('12');
+    expect(coach.current.focus).toBeNull();
+    coach.onMessage(msg('attack', '13', true, [0], false, 502, 1069));
+    coach.onRender(502);
     expect(coach.shows('clock')).toBe(true);
     // The clock ran out: the chapter ends as won by VP.
-    coach.onMessage(msg('attack', '11', false, [1], true, 502, 1069, true));
+    coach.onMessage(msg('attack', '13', false, [1], true, 502, 1069, true));
     expect(coach.current.byClock).toBe(true);
   });
 
@@ -657,10 +673,28 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.current.card).toBeNull();
   });
 
-  it('shows no card for a beat that answers the order while the army walks (A1.3, IV.6, A2.3)', () => {
+  it('builds the factory and the road fort in two steps, like the barracks (review 6)', () => {
+    for (const [id, beat, node, item] of [
+      ['building', '5', 'Millbrook', 'factory'],
+      ['defence', '4', 'Flatford', 'fortify'],
+    ] as const) {
+      const { coach, map } = coachOf(id);
+      coach.onMessage(msg(id, beat, true, [0]));
+      expect(coach.current.card?.id).toBe(beat);
+      coach.onMenu(nodeNamed(map, node) ?? null);
+      const next = String(Number(beat) + 1);
+      expect(coach.current.card?.id).toBe(next);
+      expect(coach.menuMarks()).toEqual([{ item, node: nodeNamed(map, node) }]);
+      // The item chosen and the order given: the card goes (P2).
+      coach.onMessage(msg(id, beat, false, [1]));
+      expect(coach.current.card).toBeNull();
+    }
+  });
+
+  it('shows no card for a beat that answers the order while the army walks (A1.3, IV.9, A2.3)', () => {
     for (const [id, beat] of [
       ['group-orders', '3'],
-      ['attack', '6'],
+      ['attack', '9'],
       ['rally-points', '3'],
     ] as const) {
       const { coach } = coachOf(id, { g: 'Fernhold' });
@@ -669,7 +703,7 @@ describe('coach on recorded tutorial streams', () => {
       expect(coach.hudMarks()).toEqual([]);
       // The next beat shows again.
       if (id !== 'rally-points') {
-        coach.onMessage(msg(id, id === 'group-orders' ? '4' : '7', true, []));
+        coach.onMessage(msg(id, id === 'group-orders' ? '4' : '10', true, []));
         expect(coach.current.card).not.toBeNull();
       }
     }
