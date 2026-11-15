@@ -572,7 +572,7 @@
   /* A long chapter (IV has 13 steps since review 6, #1059): smaller and closer lozenges, so the
      row keeps beside the kicker inside the plate. */
   .steps.dense {
-    gap: 4px;
+    gap: 5px;
   }
 
   .steps.dense .lz {
