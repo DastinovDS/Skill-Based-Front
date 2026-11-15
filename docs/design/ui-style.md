@@ -2948,3 +2948,20 @@ The owner (2026-11-15): the "next charge" item of #1055 means the indicator besi
 - **F Cartouche**: the chip drawn as the match clock's cartouche (T3), the stance icon and the seconds inside, a burin along its base toward the right serif, which is the charge; made, the serif sets, swells by a ring, the figures roll.
 
 The blind check (14 unlabelled crops, an outside reader): the stance was read right in all 14; the seconds were read exactly and at once only where they are written (A, F; C exactly but "after a look", detached from the chip); B, D, E gave estimates and an unclear direction; T0 was read backwards once. The style-fit list, the table (client only for every variant: `me.capital_ticks`, `ruleset_public.stances`, the `charges_produced` events; no DEC, protocol or simulation change) and the recommendation (F Cartouche, fallback A Mint) are in the issue.
+
+## 81. Own and enemy pieces beyond colour (#1071) **[awaiting the owner's decision]**
+
+The UI audit of 2026-11-15 (finding 2) found that own and enemy helmets differ in hue but hardly in lightness. The domes of today's pair are 1.21:1 apart, and every allowed pair of DEC-49 is under 3:1 (Violet/Madder 1.08:1). In grey, for a colour-blind player, and at a glance in a busy fight, only the Rim/Cut shape tells the sides apart, and at the normal and far zoom that shape is a few pixels. The owner kept Rim/Cut (section 9.5); the round asks for a second carrier.
+
+Mockup round 1 (broad): [`mockups/own-enemy-pieces.html`](mockups/own-enemy-pieces.html) (frames: [`mockups/img/own-enemy-pieces/`](mockups/img/own-enemy-pieces/)). The ground is frames of the real client: a dev scene on `crossroads` with groups in cities and provinces, own groups and enemy figures on roads (exact, range, presence), a fight with its arena, fog memories, and full, partial and empty charges. The frames were taken at near (2.0), normal (1.0) and far (0.52) zoom, in five colour pairs (Lapis/Minium, Violet/Madder, Glacier/Shell, Minium/Shell, Lapis/Glacier), with the helmets, the arena chips and their chevrons hidden. Every piece is drawn back at the place, size and fill the client gave it, with the client's own outlines and numbers, so T0 matches today's client. The page has one large view, a variant row, zoom, a colour-pair switch and Grey. A click selects a piece (B6 ticks) and a hover shows the hover ticks.
+
+Every variant keeps Rim/Cut and the facing and adds one carrier that is not the hue, everywhere a piece appears: in a city or a province, on a road, beside a city in a fight, on the arena chips, as a memory, as an unknown figure, and selected.
+
+- **T0 Today**: Rim/Cut alone.
+- **A Dark centre**: the opponent's charge is a rim of its colour round a dark centre (the opponent's supply packet has a dark centre); own stays solid.
+- **B Light and deep**: each colour is set to a fixed lightness with its hue kept. Own is always the light helmet (luminance 0.50), the opponent the deep one (0.13): 3.06:1 in every pair.
+- **C Ruled**: the opponent's charge is cut by dark rules at 45 degrees, the angle of its land and of its buildings (#1065); own is solid. Empty domes follow the land too: own ruled level, the opponent's at 45 degrees.
+- **D Bold rim**: Rim/Cut made bold. The own brim is a broad ink band, and the opponent's ear cut is lined in black.
+- **E Ivory edge**: the own dome is edged in ivory, the opponent's in a deep shade of its own colour.
+
+Two first drafts were replaced after the first blind pass: a second outer rule on the opponent (it merged with the casing and the city rings at the far zoom) and a combination of that rule with C. The style-fit list, the two blind checks, the table of variants and the recommendation (**C Ruled**, fallback **E Ivory edge**) are in #1071. Every variant is client only (the baked helmet and chip specs, plus `HelmetIcon` for the HUD); no DEC, protocol or simulation change, except B, which would need a note on DEC-49 item 4 because the pieces would no longer wear the exact chosen colour.

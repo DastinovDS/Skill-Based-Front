@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Own and enemy pieces</title>
+<!-- Own and enemy pieces beyond colour, design round 1 (#1071). The audit of 2026-11-15
+     (finding 2): own and enemy helmets differ in hue but hardly in lightness, so in grey, for a
+     colour-blind player and at a glance only the Rim/Cut shape tells them apart. Every variant keeps
+     Rim/Cut and the facing and adds one carrier that is not the hue.
+     The ground is the real client: frames of a dev scene on the pool map `crossroads` (the
+     `provinces` moment with a fight at Middle Court, enemy figures on roads in every level, memories
+     in the fog, own groups on roads and in cities and provinces), near 2.0, normal 1.0 and far 0.52
+     css px per world unit, 1280 x 760 css px at device pixel ratio 2, in five colour pairs of DEC-49.
+     Each frame was taken with the helmets, the arena chips and their chevrons hidden; every piece is
+     drawn back here at the place, size and fill the client gave it (its token and chip transforms),
+     with the client's own outlines (units/helmet.ts) and numbers (render/style.ts HELMET_ENGRAVED,
+     bakedShapes.ts). T0 is that drawing with today's look; it matches the client's frame.
+     Self-contained: EB Garamond (SIL OFL) from assets/in-match-cp-vp/fonts/, the frames from
+     assets/own-enemy-pieces/. State in the address (#v=A&z=normal&p=lapis-minium&g=0); `face=right`
+     turns every helmet to face right (used only for the blind check, so facing tells nothing). -->
+<style>
+@font-face{font-family:'EB Garamond';src:url(assets/in-match-cp-vp/fonts/ebgaramond.woff2) format('woff2');font-weight:400 800;font-style:normal;font-display:block}
+:root{--stone:#16130f;--panel:#1d1a15;--ink:#ece4d1;--ink-soft:#cfc4ab;--ink-dim:#ada38f;--rule:#7d7363;--line:#3d372d}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--stone);color:var(--ink);font:14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--stone);padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px/1 'EB Garamond',Georgia,serif;letter-spacing:.04em;margin:0 8px 0 0}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:9px}
+.bar:first-child{margin-top:0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.lab{font:600 12px/1 'EB Garamond',Georgia,serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin-right:3px}
+button.chip{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);padding:6px 10px;font:500 13px/1 system-ui,sans-serif;cursor:pointer;border-radius:0;min-height:30px;display:inline-flex;align-items:center;gap:6px}
+button.chip:hover{border-color:var(--rule);color:var(--ink)}
+button.chip[aria-pressed="true"]{background:var(--ink);color:#16130f;border-color:var(--ink);font-weight:650}
+button.chip .k{opacity:.7;font-weight:700}
+button.chip.var{padding:7px 11px;font-size:14px}
+button.chip.ref{border-style:dashed}
+button.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.sw{display:inline-block;width:11px;height:11px;border:1px solid #060504;box-shadow:0 0 0 1px #3d372d}
+main{padding:10px 16px 24px}
+#cap{margin:0 0 8px;font:500 16px/1.35 'EB Garamond',Georgia,serif;color:var(--ink-soft);max-width:1280px;min-height:1.4em}
+#cap b{color:var(--ink);font-weight:650;margin-right:8px}
+.wrap{position:relative;background:#0b0a08;border:1px solid var(--line);overflow:hidden;max-width:1280px}
+canvas{display:block;width:100%}
+#view:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.gray .wrap{filter:grayscale(1)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>Own and enemy pieces</h1>
+    <div class="group" id="vars" role="group" aria-label="Variant"></div>
+  </div>
+  <div class="bar">
+    <div class="group" role="group" aria-label="Zoom"><span class="lab">Zoom</span><button class="chip" data-z="near">Near</button><button class="chip" data-z="normal">Normal</button><button class="chip" data-z="far">Far</button></div>
+    <div class="group" id="pairs" role="group" aria-label="Colours: yours and the opponent's"><span class="lab">Colours</span></div>
+    <div class="group"><button class="chip" id="gray" aria-pressed="false">Grey</button></div>
+  </div>
+</header>
+<main>
+  <p id="cap" aria-live="polite"></p>
+  <div class="wrap"><canvas id="view" width="2560" height="1520" role="img" tabindex="0" aria-keyshortcuts="Enter Escape"></canvas></div>
+</main>
+<script>
+'use strict';
+// =============================================================================================
+// The pieces of each frame, as the client placed them (render/shapes.ts Token, fightView chips,
+// the chevron badges): view and body transforms [a, b, c, d, tx, ty] in css px of the 1280 x 760
+// canvas, the helmet width in world units, the fill shown, the number and where it stands.
+// =============================================================================================
+const DATA = {"near":{"tokens":[{"kind":"enemy","width":26,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[2,0,0,2,258,918],"body":[-2,0,0,2,258,918],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":29.59,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,599.547,553.468],"body":[-2,0,0,2,599.547,553.468],"number":{"x":1.259,"y":-1.747},"fillShown":0.667},{"kind":"enemy","width":34.75,"dashed":false,"inside":true,"text":"5","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,806,-112],"body":[-2,0,0,2,806,-112],"number":{"x":1.479,"y":-2.052},"fillShown":0.8},{"kind":"enemy","width":26,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,804,368],"body":[-2,0,0,2,804,368],"number":{"x":1.107,"y":-1.535},"fillShown":0.5},{"kind":"enemy","width":36.98,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[2,0,0,2,1124,676],"body":[-2,0,0,2,1124,676],"number":{"x":0,"y":0},"fillShown":0},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,204,278],"body":[2,0,0,2,204,278],"number":{"x":-1.271,"y":-2.517},"fillShown":0.5},{"kind":"own","width":28.5,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,500,82],"body":[2,0,0,2,500,82],"number":{"x":-1.379,"y":-2.733},"fillShown":1},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"1","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,852,928],"body":[2,0,0,2,852,928],"number":{"x":-1.271,"y":-2.517},"fillShown":0},{"kind":"own","width":36.98,"dashed":false,"inside":true,"text":"4","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,524,622],"body":[2,0,0,2,524,622],"number":{"x":-1.79,"y":-3.546},"fillShown":0.5},{"kind":"own","width":35,"dashed":false,"inside":true,"text":"6","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,206,-162],"body":[2,0,0,2,206,-162],"number":{"x":-1.694,"y":-3.357},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"2","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,638.158,15.722],"body":[2,0,0,2,638.158,15.722],"number":{"x":-1.557,"y":-3.084},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"3","question":false,"ghost":false,"alpha":1,"view":[2,0,0,2,94.129,769.01],"body":[2,0,0,2,94.129,769.01],"number":{"x":-1.557,"y":-3.084},"fillShown":0.333},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":false,"ghost":false,"alpha":0.522,"view":[2,0,0,2,682.574,229.05],"body":[-2,0,0,2,682.574,229.05],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":false,"alpha":1,"view":[2,0,0,2,744.351,998.725],"body":[-2,0,0,2,744.351,998.725],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":false,"inside":false,"text":"4","question":false,"ghost":false,"alpha":0.927,"view":[2,0,0,2,943.127,819.036],"body":[-2,0,0,2,943.127,819.036],"number":{"x":1.711,"y":-2.374},"fillShown":0.75},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.6,"view":[2,0,0,2,1470,-54],"body":[-2,0,0,2,1470,-54],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.3,"view":[2,0,0,2,1478,426],"body":[-2,0,0,2,1478,426],"number":{"x":0,"y":0},"fillShown":0}],"chips":[{"key":"badge:up:1:11","alpha":1,"m":[1.4,0,0,1.4,223.897,270.122]},{"key":"badge:down:2:11","alpha":1,"m":[1.48,0,0,1.48,520.243,76.802]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,507,480]},{"key":"badge:up:1:9","alpha":1,"m":[1,0,0,1,514.5,473.5]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,487,480]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,467,480]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,447,480]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,541,480]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,561,480]},{"key":"hel-chip:empty:enemy:15038558","alpha":1,"m":[-1,0,0,1,581,480]},{"key":"hel-chip:killed:enemy:15038558","alpha":1,"m":[-1,0,0,1,601,480]}]},"normal":{"tokens":[{"kind":"enemy","width":26,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[1,0,0,1,279,654],"body":[-1,0,0,1,279,654],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":29.59,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,449.774,471.734],"body":[-1,0,0,1,449.774,471.734],"number":{"x":1.259,"y":-1.747},"fillShown":0.667},{"kind":"enemy","width":34.75,"dashed":false,"inside":true,"text":"5","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,553,139],"body":[-1,0,0,1,553,139],"number":{"x":1.479,"y":-2.052},"fillShown":0.8},{"kind":"enemy","width":26,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,552,379],"body":[-1,0,0,1,552,379],"number":{"x":1.107,"y":-1.535},"fillShown":0.5},{"kind":"enemy","width":36.98,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[1,0,0,1,712,533],"body":[-1,0,0,1,712,533],"number":{"x":0,"y":0},"fillShown":0},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,252,334],"body":[1,0,0,1,252,334],"number":{"x":-1.271,"y":-2.517},"fillShown":0.5},{"kind":"own","width":28.5,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,400,236],"body":[1,0,0,1,400,236],"number":{"x":-1.379,"y":-2.733},"fillShown":1},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"1","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,576,659],"body":[1,0,0,1,576,659],"number":{"x":-1.271,"y":-2.517},"fillShown":0},{"kind":"own","width":36.98,"dashed":false,"inside":true,"text":"4","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,412,506],"body":[1,0,0,1,412,506],"number":{"x":-1.79,"y":-3.546},"fillShown":0.5},{"kind":"own","width":35,"dashed":false,"inside":true,"text":"6","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,253,114],"body":[1,0,0,1,253,114],"number":{"x":-1.694,"y":-3.357},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"2","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,469.079,202.861],"body":[1,0,0,1,469.079,202.861],"number":{"x":-1.557,"y":-3.084},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"3","question":false,"ghost":false,"alpha":1,"view":[1,0,0,1,197.064,579.505],"body":[1,0,0,1,197.064,579.505],"number":{"x":-1.557,"y":-3.084},"fillShown":0.333},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":false,"ghost":false,"alpha":0.522,"view":[1,0,0,1,491.287,309.525],"body":[-1,0,0,1,491.287,309.525],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":false,"alpha":1,"view":[1,0,0,1,522.175,694.363],"body":[-1,0,0,1,522.175,694.363],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":false,"inside":false,"text":"4","question":false,"ghost":false,"alpha":0.927,"view":[1,0,0,1,621.563,604.518],"body":[-1,0,0,1,621.563,604.518],"number":{"x":1.711,"y":-2.374},"fillShown":0.75},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.6,"view":[1,0,0,1,885,168],"body":[-1,0,0,1,885,168],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.3,"view":[1,0,0,1,889,408],"body":[-1,0,0,1,889,408],"number":{"x":0,"y":0},"fillShown":0}],"chips":[{"key":"badge:up:1:11","alpha":1,"m":[0.7,0,0,0.7,261.949,330.061]},{"key":"badge:down:2:11","alpha":1,"m":[0.74,0,0,0.74,410.122,233.401]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,395,391]},{"key":"badge:up:1:9","alpha":1,"m":[1,0,0,1,402.5,384.5]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,375,391]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,355,391]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,335,391]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,429,391]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,449,391]},{"key":"hel-chip:empty:enemy:15038558","alpha":1,"m":[-1,0,0,1,469,391]},{"key":"hel-chip:killed:enemy:15038558","alpha":1,"m":[-1,0,0,1,489,391]}]},"far":{"tokens":[{"kind":"enemy","width":26,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,278.08,444.48],"body":[-0.667,0,0,0.667,278.08,444.48],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":29.59,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,369.667,347.175],"body":[-0.833,0,0,0.833,369.667,347.175],"number":{"x":1.259,"y":-1.747},"fillShown":0.667},{"kind":"enemy","width":34.75,"dashed":false,"inside":true,"text":"5","question":false,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,420.56,176.68],"body":[-0.667,0,0,0.667,420.56,176.68],"number":{"x":1.479,"y":-2.052},"fillShown":0.8},{"kind":"enemy","width":26,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,420.04,301.48],"body":[-0.833,0,0,0.833,420.04,301.48],"number":{"x":1.107,"y":-1.535},"fillShown":0.5},{"kind":"enemy","width":36.98,"dashed":true,"inside":true,"text":null,"question":true,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,503.24,381.56],"body":[-0.667,0,0,0.667,503.24,381.56],"number":{"x":0,"y":0},"fillShown":0},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"2","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,264.04,278.08],"body":[0.833,0,0,0.833,264.04,278.08],"number":{"x":-1.271,"y":-2.517},"fillShown":0.5},{"kind":"own","width":28.5,"dashed":false,"inside":true,"text":"3","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,341,227.12],"body":[0.833,0,0,0.833,341,227.12],"number":{"x":-1.379,"y":-2.733},"fillShown":1},{"kind":"own","width":26.25,"dashed":false,"inside":true,"text":"1","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,432.52,447.08],"body":[0.833,0,0,0.833,432.52,447.08],"number":{"x":-1.271,"y":-2.517},"fillShown":0},{"kind":"own","width":36.98,"dashed":false,"inside":true,"text":"4","question":false,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,347.24,367.52],"body":[0.667,0,0,0.667,347.24,367.52],"number":{"x":-1.79,"y":-3.546},"fillShown":0.5},{"kind":"own","width":35,"dashed":false,"inside":true,"text":"6","question":false,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,264.56,163.68],"body":[0.667,0,0,0.667,264.56,163.68],"number":{"x":-1.694,"y":-3.357},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"2","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,376.921,209.888],"body":[0.833,0,0,0.833,376.921,209.888],"number":{"x":-1.557,"y":-3.084},"fillShown":1},{"kind":"own","width":32.16,"dashed":false,"inside":false,"text":"3","question":false,"ghost":false,"alpha":1,"view":[0.833,0,0,0.833,235.473,405.743],"body":[0.833,0,0,0.833,235.473,405.743],"number":{"x":-1.557,"y":-3.084},"fillShown":0.333},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":false,"ghost":false,"alpha":0.522,"view":[0.667,0,0,0.667,388.469,265.353],"body":[-0.667,0,0,0.667,388.469,265.353],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":false,"alpha":1,"view":[0.667,0,0,0.667,404.531,465.469],"body":[-0.667,0,0,0.667,404.531,465.469],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":false,"inside":false,"text":"4","question":false,"ghost":false,"alpha":0.927,"view":[0.667,0,0,0.667,456.213,418.749],"body":[-0.667,0,0,0.667,456.213,418.749],"number":{"x":1.711,"y":-2.374},"fillShown":0.75},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.6,"view":[0.667,0,0,0.667,593.2,191.76],"body":[-0.667,0,0,0.667,593.2,191.76],"number":{"x":0,"y":0},"fillShown":0},{"kind":"enemy","width":40.2,"dashed":true,"inside":false,"text":null,"question":true,"ghost":true,"alpha":0.3,"view":[0.667,0,0,0.667,595.28,316.56],"body":[-0.667,0,0,0.667,595.28,316.56],"number":{"x":0,"y":0},"fillShown":0}],"chips":[{"key":"badge:up:1:11","alpha":1,"m":[0.583,0,0,0.583,272.331,274.798]},{"key":"badge:down:2:11","alpha":1,"m":[0.617,0,0,0.617,349.435,224.954]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,130.24,226.48]},{"key":"badge:up:1:9","alpha":1,"m":[1,0,0,1,137.74,219.98]},{"key":"hel-chip:charged:own:8824554","alpha":1,"m":[1,0,0,1,110.24,226.48]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,90.24,226.48]},{"key":"hel-chip:empty:own:8824554","alpha":1,"m":[1,0,0,1,70.24,226.48]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,164.24,226.48]},{"key":"hel-chip:charged:enemy:15038558","alpha":1,"m":[-1,0,0,1,184.24,226.48]},{"key":"hel-chip:empty:enemy:15038558","alpha":1,"m":[-1,0,0,1,204.24,226.48]},{"key":"hel-chip:killed:enemy:15038558","alpha":1,"m":[-1,0,0,1,224.24,226.48]}]}};
+const FRAMES = {"lapis-minium-near":"assets/own-enemy-pieces/lapis-minium-near.webp","lapis-minium-normal":"assets/own-enemy-pieces/lapis-minium-normal.webp","lapis-minium-far":"assets/own-enemy-pieces/lapis-minium-far.webp","violet-madder-near":"assets/own-enemy-pieces/violet-madder-near.webp","violet-madder-normal":"assets/own-enemy-pieces/violet-madder-normal.webp","violet-madder-far":"assets/own-enemy-pieces/violet-madder-far.webp","glacier-shell-near":"assets/own-enemy-pieces/glacier-shell-near.webp","glacier-shell-normal":"assets/own-enemy-pieces/glacier-shell-normal.webp","glacier-shell-far":"assets/own-enemy-pieces/glacier-shell-far.webp","minium-shell-near":"assets/own-enemy-pieces/minium-shell-near.webp","minium-shell-normal":"assets/own-enemy-pieces/minium-shell-normal.webp","minium-shell-far":"assets/own-enemy-pieces/minium-shell-far.webp","lapis-glacier-near":"assets/own-enemy-pieces/lapis-glacier-near.webp","lapis-glacier-normal":"assets/own-enemy-pieces/lapis-glacier-normal.webp","lapis-glacier-far":"assets/own-enemy-pieces/lapis-glacier-far.webp"};
+const PAIRS = [['lapis', 'minium'], ['violet', 'madder'], ['glacier', 'shell'], ['minium', 'shell'], ['lapis', 'glacier']];
+const COLOURS = { lapis: '#86a6ea', minium: '#e5785e', glacier: '#a6e0e8', shell: '#f4b4a4', violet: '#966fd6', madder: '#c8587e' };
+const NAMES = { lapis: 'Lapis', minium: 'Minium', glacier: 'Glacier', shell: 'Shell', violet: 'Violet', madder: 'Madder' };
+// render/style.ts, theme/tokens.ts, render/softness.ts (SOFT.ink, SOFT.weight)
+const C = { casing: '#060504', plate: '#0e0c09', cut: '#050403', ink: '#ccc0a6', ivory: '#ece4d1', up: '#8cc79a', down: '#ec6654' };
+const E = { casing: 6, inside: 1.6, gear: 0.55, edge: 1.25, hatch: { pitch: 3, width: 0.9 }, bead: { count: 44, radius: 1.05 }, pale: 0.3, unknownPlate: 0.85, font: 12.5, question: 15 };
+const STIPPLE = { count: 26, radius: 0.62, alpha: 0.55 };
+const TICKS = { gap: 2, arm: 6.2, casing: 4.4, casingA: 0.95, ink: 1.7, hover: 0.85, grow: 3, ms: 180 };
+const BADGE = { stroke: 0.3, outline: 2.6 };
+const DPR = 2, WEIGHT = 1.3;
+
+// =============================================================================================
+// The helmet outlines (units/helmet.ts, exactly): own Rim faces right, the opponent's Cut left.
+// =============================================================================================
+const PATHS = {
+  own: { dome: 'M9 70 C5 36 22 12 49 12 C70 12 85 26 88 42 C89 47 91 50 95 53 C82 54 72 56 66 60 C60 64 56 70 46 70 Z', band: 'M7 77 C20 79 34 80 46 79 C56 78 62 71 67 67 C72 63 82 61 96 60', strap: 'M46 80 L54 96' },
+  enemy: { dome: 'M8 54 C8 30 28 13 52 13 C74 13 90 30 92 46 L98 54 Q99 58 95 58 L74 58 C65 58 60 64 57 73 C56 77 52 78 46 77 C32 74 18 69 12 64 Q8 61 8 54 Z', band: null, strap: 'M38 75 L58 91 L64 68' },
+};
+function samplePath(d, steps = 10) {
+  const tk = d.match(/[MLCQZ]|-?\d*\.?\d+/g) || []; const pts = []; let i = 0, cmd = '', at = { x: 0, y: 0 };
+  const num = () => Number(tk[i++]);
+  while (i < tk.length) {
+    const t = tk[i];
+    if (/[MLCQZ]/.test(t)) { cmd = t; i++; if (cmd === 'Z') continue; }
+    if (cmd === 'M' || cmd === 'L') { at = { x: num(), y: num() }; pts.push(at); }
+    else if (cmd === 'C') { const c1 = { x: num(), y: num() }, c2 = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u * u * u * at.x + 3 * u * u * s * c1.x + 3 * u * s * s * c2.x + s * s * s * e.x, y: u * u * u * at.y + 3 * u * u * s * c1.y + 3 * u * s * s * c2.y + s * s * s * e.y }); } at = e; }
+    else if (cmd === 'Q') { const c = { x: num(), y: num() }, e = { x: num(), y: num() };
+      for (let k = 1; k <= steps; k++) { const s = k / steps, u = 1 - s; pts.push({ x: u * u * at.x + 2 * u * s * c.x + s * s * e.x, y: u * u * at.y + 2 * u * s * c.y + s * s * e.y }); } at = e; }
+    else i++;
+  }
+  return pts;
+}
+const bounds = (ps) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); } return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }; };
+const RAW = {}; for (const k of ['own', 'enemy']) RAW[k] = { dome: samplePath(PATHS[k].dome), band: PATHS[k].band ? samplePath(PATHS[k].band) : null, strap: samplePath(PATHS[k].strap) };
+const MEMO = new Map();
+function helmet(kind, width) {
+  const key = kind + width; if (MEMO.has(key)) return MEMO.get(key);
+  const r = RAW[kind], s = width / 100, all = bounds([...r.dome, ...(r.band || []), ...r.strap]);
+  const c = { x: all.x + all.width / 2, y: all.y + all.height / 2 }, pl = (p) => ({ x: (p.x - c.x) * s, y: (p.y - c.y) * s });
+  const dome = r.dome.map(pl), band = r.band ? r.band.map(pl) : null, strap = r.strap.map(pl), db = bounds(dome);
+  const h = { width, dome, band, strap, bounds: bounds([...dome, ...(band || []), ...strap]), domeTop: db.y, domeBottom: db.y + db.height };
+  MEMO.set(key, h); return h;
+}
+function lines(width) { const s = width / 100; return { strap: Math.max(6.4 * s, 2.1), band: Math.max(5.6 * s, 2.2) }; }
+function extent(h, extra = 0) { const l = lines(h.width); const pad = Math.max(E.casing, l.strap + E.casing) / 2 + extra; return { top: h.bounds.y - pad, bottom: h.bounds.y + h.bounds.height + pad, left: h.bounds.x - pad, right: h.bounds.x + h.bounds.width + pad }; }
+
+// =============================================================================================
+// Colour and drawing helpers.
+// =============================================================================================
+const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+const css = (r) => '#' + r.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const lighten = (c, t) => css(hex(c).map((v) => v + (255 - v) * t));
+const mixTo = (c, to, t) => { const a = hex(c), b = hex(to); return css(a.map((v, i) => v + (b[i] - v) * t)); };
+const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+const lum = (c) => { const [r, g, b] = hex(c); return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b); };
+// A colour moved in lightness to a target luminance, its hue kept (mixed towards the ivory or the plate).
+function toLum(c, target) {
+  const up = lum(c) < target; let lo = 0, hi = 1, best = c;
+  for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2, t = up ? mixTo(c, C.ivory, m) : mixTo(c, '#120f0c', m); best = t; if ((lum(t) < target) === up) lo = m; else hi = m; }
+  return best;
+}
+let PPU = 1; // device px per unit of the drawing now
+const hair = (w) => Math.max(w, WEIGHT / PPU);
+function poly(ctx, ps, close = true) { ctx.beginPath(); ps.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (close) ctx.closePath(); }
+function strokePoly(ctx, ps, w, color, close = true, alpha = 1, cap = 'round') { poly(ctx, ps, close); ctx.lineWidth = w; ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineCap = cap; ctx.lineJoin = 'round'; ctx.stroke(); ctx.globalAlpha = 1; }
+function fillPoly(ctx, ps, color, alpha = 1) { poly(ctx, ps); ctx.fillStyle = color; ctx.globalAlpha = alpha; ctx.fill(); ctx.globalAlpha = 1; }
+// Parallel rules across the box of `ps` at `angle` (radians, y down), `pitch` apart.
+function rules(ctx, ps, angle, pitch, phase = 0) {
+  const b = bounds(ps), cx = b.x + b.width / 2, cy = b.y + b.height / 2, R = Math.hypot(b.width, b.height) / 2 + pitch;
+  const ux = Math.cos(angle), uy = Math.sin(angle), nx = -uy, ny = ux; ctx.beginPath();
+  for (let d = -R + (phase % pitch); d <= R; d += pitch) { ctx.moveTo(cx + nx * d - ux * R, cy + ny * d - uy * R); ctx.lineTo(cx + nx * d + ux * R, cy + ny * d + uy * R); }
+}
+// The hatch of today's empty dome (pieceShapes.hatchAcross at -45 degrees, pitch min(3, max(1.4, w * .075))).
+const hatchPitch = (w) => Math.min(E.hatch.pitch, Math.max(1.4, w * 0.075));
+function beads(ps, n) {
+  const L = []; let tot = 0; ps.forEach((p, i) => { const q = ps[(i + 1) % ps.length]; const d = Math.hypot(q.x - p.x, q.y - p.y); L.push(d); tot += d; });
+  const out = []; let i = 0, walked = 0;
+  for (let k = 0; k < n; k++) { const at = (k / n) * tot; while (i < ps.length - 1 && walked + L[i] < at) { walked += L[i]; i++; } const p = ps[i], q = ps[(i + 1) % ps.length], t = L[i] > 0 ? (at - walked) / L[i] : 0; out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }); }
+  return out;
+}
+// The outline moved out by `d` (in, when negative) along the bisector at each point: the dark centre.
+function offset(ps, d, soft = false) {
+  const n = ps.length, out = [];
+  // Signed area: the outline winds clockwise on screen (y down) when positive.
+  let a = 0; for (let i = 0; i < n; i++) { const p = ps[i], q = ps[(i + 1) % n]; a += p.x * q.y - q.x * p.y; }
+  const s = a > 0 ? 1 : -1;
+  for (let i = 0; i < n; i++) {
+    const p = ps[(i - 1 + n) % n], c = ps[i], q = ps[(i + 1) % n];
+    let n1x = (c.y - p.y), n1y = -(c.x - p.x), l1 = Math.hypot(n1x, n1y) || 1; n1x /= l1; n1y /= l1;
+    let n2x = (q.y - c.y), n2y = -(q.x - c.x), l2 = Math.hypot(n2x, n2y) || 1; n2x /= l2; n2y /= l2;
+    let mx = n1x + n2x, my = n1y + n2y; const lm = Math.hypot(mx, my) || 1; mx /= lm; my /= lm;
+    const cos = soft ? 1 : Math.max(0.35, mx * n1x + my * n1y);
+    out.push({ x: c.x + s * mx * d / cos, y: c.y + s * my * d / cos });
+  }
+  return out;
+}
+
+// =============================================================================================
+// The looks. Each variant answers own against enemy with one carrier that is not the hue, on every
+// place a piece appears: the token in a city or a province, a group or a figure on a road, the
+// enemy beside a city in a fight, the arena chips, the memory and the unknown. `look(side, pair)`
+// gives the material of a side; the draw functions below are today's (bakedShapes.ts helmetBackSpec,
+// helmetLevelSpec, helmetFrontSpec, helmetChipSpec) with the hooks each variant uses.
+// =============================================================================================
+const VARIANTS = [
+  { id: 'T0', name: 'Today', ref: true, line: 'Rim and Cut alone: the two domes differ in hue, hardly in lightness.' },
+  { id: 'A', name: 'Dark centre', line: 'The opponent’s charge is a rim of its colour round a dark centre, like its supply packets; yours is solid.' },
+  { id: 'B', name: 'Light and deep', line: 'Yours is always the light helmet and the opponent’s the deep one, at least 3:1 apart in every colour pair; the hue is kept.' },
+  { id: 'C', name: 'Ruled', line: 'The opponent’s charge is cut by dark rules at 45 degrees, like its land; yours is solid. Empty domes are ruled the same way: yours level, theirs at 45 degrees.' },
+  { id: 'D', name: 'Bold rim', line: 'Rim and Cut made bold: your helmet sits on a broad ink brim; the opponent’s ear cut is lined in black.' },
+  { id: 'E', name: 'Ivory edge', line: 'Your dome is edged in ivory, the opponent’s in a deep shade of its own colour: a light outline is yours.' },
+];
+
+function look(v, side, pair) {
+  const own = side === 'own', base = COLOURS[own ? pair[0] : pair[1]];
+  const L = {
+    fill: base, hatch: base, hatchAngle: -Math.PI / 4, hatchAlpha: 1, edge: { w: E.edge, color: C.ink }, gearInk: C.ink,
+    core: null, rules: null, band: null, notch: null,
+  };
+  if (v === 'A' && !own) L.core = { inset: 0.13, min: 3 };
+  if (v === 'B') {
+    // Own at luminance 0.50 (lighter than every colour of the set but Glacier), the opponent at 0.13:
+    // (0.50 + 0.05) / (0.13 + 0.05) = 3.1:1, whatever the pair; both stay over 3:1 against the casing.
+    L.fill = toLum(base, own ? 0.5 : 0.13);
+    L.hatch = own ? toLum(base, 0.42) : toLum(base, 0.2);
+  }
+  if (v === 'C' && !own) L.rules = { angle: Math.PI / 4, pitch: 2.1, w: 1.15, alpha: 0.9 };
+  if (v === 'C') { L.hatchAngle = own ? 0 : -Math.PI / 4; }
+  if (v === 'D') { if (own) L.band = { mul: 2.8 }; else L.notch = true; }
+  if (v === 'E') { L.edge = own ? { w: 2.0, color: C.ivory } : { w: 1.4, color: toLum(base, 0.035) }; }
+  return L;
+}
+
+// A piece that fades (a figure dissolving out of the fog, a memory) is drawn whole on a layer, then
+// laid on the view at its opacity, as the client fades the whole token.
+const OFF = document.createElement('canvas'); OFF.width = 2560; OFF.height = 1520;
+const OCTX = OFF.getContext('2d');
+function faded(ctx, alpha, fn) {
+  if (alpha >= 0.999) { fn(ctx); return; }
+  OCTX.setTransform(1, 0, 0, 1, 0, 0); OCTX.clearRect(0, 0, 2560, 1520); fn(OCTX);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = alpha; ctx.drawImage(OFF, 0, 0); ctx.restore();
+}
+const at = (ctx, m) => { ctx.setTransform(DPR * m[0], DPR * m[1], DPR * m[2], DPR * m[3], DPR * m[4], DPR * m[5]); PPU = DPR * Math.hypot(m[0], m[1]); };
+const gearOf = (h) => (h.band ? [h.strap, h.band] : [h.strap]);
+
+function emptyHatch(ctx, h, L) {
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  rules(ctx, h.dome, L.hatchAngle, Math.max(hatchPitch(h.width), 2.6 / PPU));
+  ctx.lineWidth = hair(E.hatch.width); ctx.strokeStyle = L.hatch; ctx.lineCap = 'butt'; ctx.stroke(); ctx.restore();
+}
+function level(ctx, h, shown, L) {
+  if (!(shown > 0)) return;
+  const y = h.domeBottom + 1 - (1 + shown * (h.domeBottom - h.domeTop));
+  ctx.save(); poly(ctx, h.dome); ctx.clip(); ctx.beginPath(); ctx.rect(-400, y, 800, 800); ctx.clip();
+  fillPoly(ctx, h.dome, L.fill);
+  if (L.core) {
+    // A: the dark centre, set in from the dome's edge so a rim of the colour stays round it.
+    fillPoly(ctx, offset(h.dome, -Math.max(L.core.min, h.width * L.core.inset), true), C.casing, 0.94);
+  }
+  if (L.rules) {
+    // C, F: dark rules across the charge, never closer than 3.2 device px (no aliasing to a flat tone).
+    rules(ctx, h.dome, L.rules.angle, Math.max(L.rules.pitch, 3.0 / PPU));
+    ctx.lineWidth = Math.max(L.rules.w, 1.15 / PPU); ctx.strokeStyle = C.casing; ctx.globalAlpha = L.rules.alpha; ctx.lineCap = 'butt'; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+function gearLines(ctx, h, Ln, L) {
+  for (const ln of gearOf(h)) {
+    const band = ln === h.band;
+    if (band && L.band) strokePoly(ctx, ln, hair(Ln.band * E.gear * L.band.mul), C.ink, false);
+    else strokePoly(ctx, ln, hair((band ? Ln.band : Ln.strap) * E.gear), C.ink, false);
+  }
+}
+function gearCasing(ctx, h, Ln, L, casing) {
+  for (const ln of gearOf(h)) {
+    const band = ln === h.band, w = band ? Ln.band * (L.band ? L.band.mul : 1) : Ln.strap;
+    strokePoly(ctx, ln, w * E.gear + casing * 0.8, C.casing, false);
+  }
+}
+// D: the opponent's ear cut (the bay under the dome behind the strap) opened to the casing, with an
+// ink lip along the dome above it, so the Cut reads as a cut, not as a bend of the outline.
+function notch(ctx, h) {
+  const s = h.width / 100, r = RAW.enemy, all = bounds([...r.dome, ...r.strap]), c = { x: all.x + all.width / 2, y: all.y + all.height / 2 };
+  const pl = (x, y) => ({ x: (x - c.x) * s, y: (y - c.y) * s });
+  const cut = [pl(99, 55), pl(95, 58), pl(74, 58), pl(68, 59.2), pl(63.5, 61.6), pl(60.2, 65.8), pl(57, 73)];
+  ctx.save(); poly(ctx, h.dome); ctx.clip();
+  strokePoly(ctx, cut, Math.max(9 * s, 2.4), C.casing, false);
+  ctx.restore();
+  // The ink lip of the cut, set in from the dome's edge.
+  const lip = cut.map((p) => ({ x: p.x - 0.0 * s, y: p.y - Math.max(4.6 * s, 1.25) }));
+  ctx.save(); poly(ctx, h.dome); ctx.clip(); strokePoly(ctx, lip.slice(1, 6), hair(0.9), C.ink, false, 0.95); ctx.restore();
+}
+function beadRow(ctx, ps, n, rad, color) {
+  ctx.fillStyle = color;
+  for (const p of beads(ps, n)) { ctx.beginPath(); ctx.arc(p.x, p.y, rad, 0, Math.PI * 2); ctx.fill(); }
+}
+
+function drawTokenBody(ctx, t, v, pair) {
+  const h = helmet(t.kind, t.width), Ln = lines(t.width), L = look(v, t.kind, pair);
+  const casing = E.casing + (t.inside ? E.inside : 0), k = t.width / 40;
+  const pale = lighten(COLOURS[t.kind === 'own' ? pair[0] : pair[1]], E.pale);
+  if (t.dashed) {
+    // Numbers unknown, or a memory: a see-through plate, a pale strap and a beaded outline.
+    const n = Math.max(12, Math.round(E.bead.count * Math.min(1, k))), rad = Math.max(0.5, E.bead.radius * Math.min(1, k * 1.2));
+    fillPoly(ctx, h.dome, C.plate, E.unknownPlate);
+    if (L.rules) { ctx.save(); poly(ctx, h.dome); ctx.clip(); rules(ctx, h.dome, L.rules.angle, Math.max(L.rules.pitch * 1.2, 3.4 / PPU)); ctx.lineWidth = hair(0.75); ctx.strokeStyle = pale; ctx.globalAlpha = 0.42; ctx.lineCap = 'butt'; ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1; }
+    for (const ln of gearOf(h)) strokePoly(ctx, ln, hair(0.9), pale, false);
+    beadRow(ctx, h.dome, n, rad, pale);
+    return;
+  }
+  gearCasing(ctx, h, Ln, L, casing);
+  strokePoly(ctx, h.dome, casing * 0.9, C.casing);
+  fillPoly(ctx, h.dome, C.plate);
+  emptyHatch(ctx, h, L);
+  gearLines(ctx, h, Ln, L);
+  level(ctx, h, t.fillShown, L);
+  if (L.notch) notch(ctx, h);
+  strokePoly(ctx, h.dome, hair(L.edge.w), L.edge.color);
+}
+function glyph(ctx, text, x, y, size) {
+  ctx.font = `600 ${size}px 'EB Garamond', Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  const m = ctx.measureText(text), base = y + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+  ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = C.cut; ctx.globalAlpha = 1; ctx.strokeText(text, x, base);
+  ctx.fillStyle = C.ink; ctx.fillText(text, x, base);
+}
+// `face=right` in the address (the blind check only): every helmet faces right, so facing tells nothing.
+const FACE_RIGHT = new URLSearchParams(location.hash.slice(1)).get('face') === 'right';
+function drawToken(ctx, t, v, pair) {
+  if (FACE_RIGHT && t.body[0] < 0) t = { ...t, body: [-t.body[0], t.body[1], t.body[2], t.body[3], t.body[4], t.body[5]], number: { x: -t.number.x, y: t.number.y } };
+  faded(ctx, t.alpha, (c) => {
+    at(c, t.body); drawTokenBody(c, t, v, pair);
+    at(c, t.view);
+    if (t.text !== null) glyph(c, t.text, t.number.x, t.number.y, E.font);
+    else if (t.question) glyph(c, '?', t.number.x, t.number.y, E.question);
+  });
+}
+
+// An arena chip (helmetChipSpec): one pitch wide (20 px), charged solid, empty hatched, killed stippled.
+function drawChip(ctx, ch, v, pair) {
+  const [, state, kind] = ch.key.split(':'), h = helmet(kind, 20), Ln = lines(20), L = look(v, kind, pair);
+  at(ctx, ch.m);
+  if (state === 'killed') {
+    beadRow(ctx, h.dome, STIPPLE.count, STIPPLE.radius, C.ink); // the client fades them to 0.55
+    return;
+  }
+  gearCasing(ctx, h, Ln, L, E.casing);
+  strokePoly(ctx, h.dome, E.casing * 0.9, C.casing);
+  if (state === 'charged') { fillPoly(ctx, h.dome, L.fill); if (L.rules || L.core) level(ctx, h, 1, L); }
+  else { fillPoly(ctx, h.dome, C.plate); emptyHatch(ctx, h, L); }
+  gearLines(ctx, h, Ln, L);
+  if (L.notch) notch(ctx, h);
+  strokePoly(ctx, h.dome, hair(L.edge.w), L.edge.color);
+}
+// A chevron badge (chevronBadgeSpec): the strokes on a dark outline 2.6 wider.
+function drawBadge(ctx, b) {
+  const [, dir, n, size] = b.key.split(':'), count = Math.min(3, Number(n)), s = Number(size), y = dir === 'up' ? 1 : -1;
+  at(ctx, b.m);
+  const strokes = [];
+  for (let i = 0; i < count; i++) { const oy = (i - (count - 1) / 2) * s * 0.46; strokes.push([{ x: -s * 0.56, y: y * s * 0.26 + oy }, { x: 0, y: -y * s * 0.26 + oy }, { x: s * 0.56, y: y * s * 0.26 + oy }]); }
+  for (const [tone, w] of [[C.cut, s * BADGE.stroke + BADGE.outline], [dir === 'up' ? C.up : C.down, s * BADGE.stroke]]) for (const st of strokes) strokePoly(ctx, st, w, tone, false);
+}
+
+// The selection (B6 Corner ticks): four ivory L ticks at the corners of the box round the helmet as
+// drawn (2 clear of it), on a dark casing; the hover two of them, a lighter ivory.
+function tickBox(t) {
+  const h = helmet(t.kind, t.width), e = extent(h), enemy = t.kind === 'enemy';
+  return { x0: (enemy ? -e.right : e.left) - TICKS.gap, x1: (enemy ? -e.left : e.right) + TICKS.gap, y0: e.top - TICKS.gap, y1: e.bottom + TICKS.gap };
+}
+function drawTicks(ctx, t, v, kindOfLook, grow) {
+  const b = tickBox(t), all = [[b.x0, b.y0, 1, 1], [b.x1, b.y0, -1, 1], [b.x1, b.y1, -1, -1], [b.x0, b.y1, 1, -1]];
+  const corners = kindOfLook === 'select' ? all : [all[0], all[2]];
+  at(ctx, t.view);
+  for (const [w, color, a] of [[TICKS.casing, C.casing, TICKS.casingA], [TICKS.ink, C.ivory, kindOfLook === 'select' ? 1 : TICKS.hover]]) {
+    for (const [x, y, sx, sy] of corners) {
+      const ox = -sx * grow, oy = -sy * grow;
+      strokePoly(ctx, [{ x: x + ox + sx * TICKS.arm, y: y + oy }, { x: x + ox, y: y + oy }, { x: x + ox, y: y + oy + sy * TICKS.arm }], w, color, false, a, 'butt');
+    }
+  }
+}
+
+// =============================================================================================
+// The view.
+// =============================================================================================
+const view = document.getElementById('view'), ctx = view.getContext('2d');
+const state = { v: 'T0', z: 'normal', p: 0, g: false, sel: null, hover: null, selAt: 0 };
+let PAIR = PAIRS[0];
+const IMG = {};
+function frame() { const key = `${PAIRS[state.p].join('-')}-${state.z}`; if (!IMG[key]) { IMG[key] = new Image(); IMG[key].onload = draw; IMG[key].src = FRAMES[key]; } return IMG[key]; }
+const pieces = () => DATA[state.z];
+function draw() {
+  PAIR = PAIRS[state.p];
+  const img = frame(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, 2560, 1520);
+  if (!img.complete || !img.naturalWidth) return;
+  ctx.drawImage(img, 0, 0, 2560, 1520);
+  const d = pieces();
+  d.tokens.forEach((t) => drawToken(ctx, t, state.v, PAIR));
+  for (const c of d.chips) if (c.key.startsWith('hel-chip')) faded(ctx, c.key.includes(':killed:') ? STIPPLE.alpha * c.alpha : c.alpha, (x) => drawChip(x, c, state.v, PAIR));
+  for (const c of d.chips) if (c.key.startsWith('badge')) faded(ctx, c.alpha, (x) => drawBadge(x, c));
+  const now = performance.now();
+  const grow = (since) => TICKS.grow * (1 - easeOut(Math.min(1, (now - since) / TICKS.ms)));
+  if (state.hover !== null && state.hover !== state.sel) drawTicks(ctx, d.tokens[state.hover], state.v, 'hover', grow(state.hoverAt));
+  if (state.sel !== null && d.tokens[state.sel]) drawTicks(ctx, d.tokens[state.sel], state.v, 'select', grow(state.selAt));
+  if (now - Math.max(state.selAt, state.hoverAt || 0) < TICKS.ms + 20) requestAnimationFrame(draw);
+}
+const easeOut = (t) => 1 - (1 - t) ** 3;
+function hit(ev) {
+  const r = view.getBoundingClientRect(), x = ((ev.clientX - r.left) / r.width) * 1280, y = ((ev.clientY - r.top) / r.height) * 760;
+  let best = null, bd = Infinity;
+  pieces().tokens.forEach((t, i) => {
+    if (t.ghost) return;
+    const s = Math.hypot(t.view[0], t.view[1]), d = Math.hypot(x - t.view[4], y - t.view[5]), reach = Math.max(14, (t.width / 2 + 3) * s);
+    if (d < reach && d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+view.addEventListener('pointermove', (ev) => { const h = hit(ev); if (h !== state.hover) { state.hover = h; state.hoverAt = performance.now(); view.style.cursor = h === null ? 'default' : 'pointer'; draw(); } });
+view.addEventListener('pointerleave', () => { state.hover = null; draw(); });
+view.addEventListener('click', (ev) => { state.sel = hit(ev); state.selAt = performance.now(); save(); draw(); });
+view.addEventListener('keydown', (ev) => {
+  const own = pieces().tokens.map((t, i) => [t, i]).filter(([t]) => t.kind === 'own').map(([, i]) => i);
+  if (ev.key === 'Enter') { const k = own.indexOf(state.sel); state.sel = own[(k + 1) % own.length]; state.selAt = performance.now(); draw(); ev.preventDefault(); }
+  if (ev.key === 'Escape') { state.sel = null; draw(); }
+});
+
+// =============================================================================================
+// Controls and the address.
+// =============================================================================================
+const vars = document.getElementById('vars');
+for (const v of VARIANTS) {
+  const b = document.createElement('button'); b.className = 'chip var' + (v.ref ? ' ref' : ''); b.dataset.v = v.id;
+  b.innerHTML = `<span class="k">${v.id}</span>${v.name}`; b.onclick = () => { state.v = v.id; sync(); }; vars.appendChild(b);
+}
+const pairs = document.getElementById('pairs');
+PAIRS.forEach((p, i) => {
+  const b = document.createElement('button'); b.className = 'chip'; b.dataset.p = String(i);
+  b.setAttribute('aria-label', `You ${NAMES[p[0]]}, the opponent ${NAMES[p[1]]}`);
+  b.innerHTML = `<span class="sw" style="background:${COLOURS[p[0]]}"></span><span class="sw" style="background:${COLOURS[p[1]]}"></span>`;
+  b.title = `You ${NAMES[p[0]]}, the opponent ${NAMES[p[1]]}`; b.onclick = () => { state.p = i; sync(); }; pairs.appendChild(b);
+});
+for (const b of document.querySelectorAll('[data-z]')) b.onclick = () => { state.z = b.dataset.z; state.sel = defaultSel(); sync(); };
+document.getElementById('gray').onclick = () => { state.g = !state.g; sync(); };
+function defaultSel() { const i = pieces().tokens.findIndex((t) => t.kind === 'own' && t.text === '2' && !t.inside); return i < 0 ? null : i; }
+function save() { history.replaceState(null, '', '#' + currentHash()); }
+function sync() {
+  for (const b of document.querySelectorAll('[data-v]')) b.setAttribute('aria-pressed', String(b.dataset.v === state.v));
+  for (const b of document.querySelectorAll('[data-z]')) b.setAttribute('aria-pressed', String(b.dataset.z === state.z));
+  for (const b of document.querySelectorAll('[data-p]')) b.setAttribute('aria-pressed', String(Number(b.dataset.p) === state.p));
+  document.getElementById('gray').setAttribute('aria-pressed', String(state.g));
+  document.body.classList.toggle('gray', state.g);
+  const v = VARIANTS.find((x) => x.id === state.v), p = PAIRS[state.p];
+  document.getElementById('cap').innerHTML = `<b>${v.id} ${v.name}</b>${v.line}`;
+  view.setAttribute('aria-label', `${v.name}, ${state.z} zoom, you ${NAMES[p[0]]} against ${NAMES[p[1]]}${state.g ? ', grey' : ''}`);
+  save(); draw();
+}
+function load() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (VARIANTS.some((v) => v.id === q.get('v'))) state.v = q.get('v');
+  if (['near', 'normal', 'far'].includes(q.get('z'))) state.z = q.get('z');
+  const pi = PAIRS.findIndex((p) => p.join('-') === q.get('p')); if (pi >= 0) state.p = pi;
+  state.g = q.get('g') === '1';
+  state.sel = q.has('sel') ? (q.get('sel') === 'none' ? null : Number(q.get('sel'))) : defaultSel();
+  state.hoverAt = 0;
+  sync();
+}
+window.addEventListener('hashchange', () => { if (location.hash.slice(1) !== currentHash()) load(); });
+const currentHash = () => `v=${state.v}&z=${state.z}&p=${PAIRS[state.p].join('-')}&g=${state.g ? 1 : 0}`;
+load();
+document.fonts.load("600 12px 'EB Garamond'").then(draw, draw);
+
+</script>
+</body>
+</html>
