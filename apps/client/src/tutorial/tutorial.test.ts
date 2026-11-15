@@ -691,6 +691,23 @@ describe('coach on recorded tutorial streams', () => {
     }
   });
 
+  it('keeps only the city menu the card points into (review 6, pass 2)', () => {
+    const { coach, map } = coachOf('building');
+    const fernhill = nodeNamed(map, 'Fernhill') ?? -1;
+    const millbrook = nodeNamed(map, 'Millbrook') ?? -1;
+    // III.4 asks to recruit in Fernhill: its open menu stays.
+    coach.onMessage(msg('building', '4', true, [0]));
+    expect(coach.keepsMenu(fernhill)).toBe(true);
+    // III.5 asks to open Millbrook's menu: Fernhill's closes, Millbrook's would stay.
+    coach.onMessage(msg('building', '5', true, [0]));
+    expect(coach.keepsMenu(fernhill)).toBe(false);
+    expect(coach.keepsMenu(millbrook)).toBe(true);
+    // No card on screen (the order given): nothing is closed.
+    coach.onMessage(msg('building', '5', false, [1]));
+    expect(coach.current.card).toBeNull();
+    expect(coach.keepsMenu(fernhill)).toBe(true);
+  });
+
   it('shows no card for a beat that answers the order while the army walks (A1.3, IV.9, A2.3)', () => {
     for (const [id, beat] of [
       ['group-orders', '3'],

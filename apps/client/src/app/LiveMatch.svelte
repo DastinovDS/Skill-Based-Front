@@ -341,6 +341,21 @@
     tutor.onMenu(menu.open ? menu.target : null);
   });
 
+  // A new card closes a city menu it does not point into (review 6, pass 2, #1062: III.5 asked to
+  // open Millbrook's menu while Fernhill's stayed open from the recruit).
+  $effect(() => {
+    const tutor = coach;
+    if (tutor === null) return;
+    // Runs again whenever another card shows (`seq`).
+    if (tutor.current.seq < 0) return;
+    untrack(() => {
+      const ctl = orders;
+      const menu = ctl?.cityMenu.current;
+      if (ctl == null || menu === undefined || !menu.open || menu.target === null) return;
+      if (!tutor.keepsMenu(menu.target)) ctl.closeCityMenu();
+    });
+  });
+
   // A chapter's clock (IV.10, #1054): the match timer shows the time left to it.
   $effect(() => {
     hud?.setClockEnd(coach?.current.clockEnd ?? null);

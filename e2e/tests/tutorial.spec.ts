@@ -60,7 +60,7 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   });
   const response = await page.request.get('/api/maps/tut-move');
   const map = (await response.json()) as MapFile;
-  await card(page, 'This is your army');
+  await card(page, 'This is your group');
   // No "Paused" plate: the card holds the player (review 5).
   await expect(page.getByRole('status').filter({ hasText: 'Paused' })).toHaveCount(0);
   await expect(page.getByText('You are')).toHaveCount(0);
@@ -85,23 +85,23 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await card(page, 'capacity');
   await shot(page, '05-card-continue');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'Every capture costs');
+  await card(page, 'Each unit carries one charge');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Next, take Elmstead');
   await march(player, map, 'Ashford', 'Elmstead');
-  await card(page, 'You see only the places next to your army');
+  await card(page, 'You see only the places next to your group');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'Terrain sets your speed');
+  await card(page, 'Terrain sets how fast');
   // The marks in turn: a page a terrain, turned by the player (review 5, P9); the action line
   // comes with the last one.
   const plate = page.locator('.coach .plate');
   await expect(plate).toContainText('1 of 3');
-  await expect(plate).not.toContainText('Click on your army, then on Fordham');
+  await expect(plate).not.toContainText('Click on your group, then on Fordham');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(plate).toContainText('2 of 3');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(plate).toContainText('3 of 3');
-  await expect(plate).toContainText('Click on your army, then on Fordham');
+  await expect(plate).toContainText('Click on your group, then on Fordham');
   await shot(page, '06-card-turns');
 
   // A reload in the middle of the chapter returns to it, at its card.
@@ -109,14 +109,16 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', /^\d+$/, {
     timeout: 60_000,
   });
-  await card(page, 'Terrain sets your speed');
+  await card(page, 'Terrain sets how fast');
   await march(player, map, 'Elmstead', 'Fordham');
 
   // The goal: the result (Seal) over the last frame, two buttons.
   const seal = page.getByRole('dialog').filter({ hasText: 'Complete' });
   await expect(seal).toBeVisible({ timeout: 60_000 });
   // A lesson is a full sentence (review 6, #1059).
-  await expect(seal).toContainText('Every city or province you take costs your army one charge.');
+  await expect(seal).toContainText(
+    'Every city or province you take costs your group one charge, and a group without a charge cannot take it and turns back.',
+  );
   await expect(seal.getByRole('button')).toHaveText(['All chapters', 'Replay chapter']);
   await shot(page, '07-seal');
   await seal.getByRole('button', { name: 'All chapters' }).click();
@@ -168,14 +170,14 @@ test('the chapter select in progress, the head-on attack of IV.4 and leaving a c
   await card(page, 'cannot leave');
   await page.getByRole('button', { name: 'Continue' }).click();
   // Review 5 (#1054): show, do not tell. The head-on attack first, no slides of math.
-  await card(page, 'Attack Ashwood');
+  await card(page, 'Try an ordinary attack first');
   await expect(page.locator('.coach .plate')).toContainText('Click on your group, then on Ashwood');
   await shot(page, '12-head-on');
 
   // Leaving a chapter loses nothing: the chapter select.
   await page.getByRole('button', { name: 'Exit', exact: true }).click();
   const leave = page.getByRole('alertdialog', { name: 'Leave the chapter?' });
-  await expect(leave).toContainText('It will start over.');
+  await expect(leave).toContainText('the chapter will start over.');
   await shot(page, '13-leave');
   await leave.getByRole('button', { name: 'Leave the chapter' }).click();
   await expect(page.getByRole('radio', { name: /Chapter IV: Attack and fight, Next/ })).toBeVisible(
@@ -328,7 +330,7 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await expect(plate.filter({ hasText: 'Fernhold waits' })).toHaveCount(0);
   await shot(page, '14-a1-walking', 0);
   // A1.4 comments on the fight: it still shows.
-  await card(page, 'they far outnumber');
+  await card(page, 'far outnumber');
   await leave();
 
   // A2.3: the rally point and the recruits are given, the card "walking" is not shown.
@@ -363,19 +365,19 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'cannot leave');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'Attack Ashwood');
+  await card(page, 'Try an ordinary attack first');
   await march(player, attack, 'Fernhold', 'Ashwood');
-  await card(page, 'charges ran out', 60_000);
+  await card(page, 'ran out of charges', 60_000);
   await shot(page, '16-iv-bounce');
   await page.getByRole('button', { name: 'Continue' }).click();
   // The refill: a card says to wait, nothing is lit (review 6).
-  await card(page, 'Wait until it is full of charges again');
-  await card(page, 'full again', 60_000);
+  await card(page, 'Wait until it is fully charged again');
+  await card(page, 'This time, give it a planned order', 60_000);
   await player.clickNode(attack, node(attack, 'Fernhold'));
-  await card(page, 'planned order');
+  await card(page, 'into bonus shots');
   await player.clickNode(attack, node(attack, 'Ashwood'), ['KeyE']);
   await page.waitForTimeout(1200);
-  await expect(plate.filter({ hasText: 'gathers its bonus' })).toHaveCount(0);
+  await expect(plate.filter({ hasText: 'gathers its bonus shots' })).toHaveCount(0);
   await shot(page, '17-iv-walking', 0);
   expect(errors).toEqual([]);
   await player.close();
