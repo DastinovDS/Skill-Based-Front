@@ -96,12 +96,12 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   // comes with the last one.
   const plate = page.locator('.coach .plate');
   await expect(plate).toContainText('1 of 3');
-  await expect(plate).not.toContainText('Now take Fordham');
+  await expect(plate).not.toContainText('Click on your army, then on Fordham');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(plate).toContainText('2 of 3');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(plate).toContainText('3 of 3');
-  await expect(plate).toContainText('Now take Fordham');
+  await expect(plate).toContainText('Click on your army, then on Fordham');
   await shot(page, '06-card-turns');
 
   // A reload in the middle of the chapter returns to it, at its card.
@@ -115,7 +115,8 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   // The goal: the result (Seal) over the last frame, two buttons.
   const seal = page.getByRole('dialog').filter({ hasText: 'Complete' });
   await expect(seal).toBeVisible({ timeout: 60_000 });
-  await expect(seal).toContainText('A capture costs one charge.');
+  // A lesson is a full sentence (review 6, #1059).
+  await expect(seal).toContainText('Every city or province you take costs your army one charge.');
   await expect(seal.getByRole('button')).toHaveText(['All chapters', 'Replay chapter']);
   await shot(page, '07-seal');
   await seal.getByRole('button', { name: 'All chapters' }).click();
@@ -134,7 +135,7 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await player.close();
 });
 
-test('the chapter select in progress, the head-on attack of IV.2 and leaving a chapter', async ({
+test('the chapter select in progress, the head-on attack of IV.4 and leaving a chapter', async ({
   browser,
   baseURL,
 }) => {
@@ -160,6 +161,11 @@ test('the chapter select in progress, the head-on attack of IV.2 and leaving a c
 
   await card(page, 'each charge is a shot');
   await shot(page, '11-shot');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  // Review 6 (#1059): the rounds and no leaving a fight are told before the first fight.
+  await card(page, 'A fight runs in rounds');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await card(page, 'cannot leave');
   await page.getByRole('button', { name: 'Continue' }).click();
   // Review 5 (#1054): show, do not tell. The head-on attack first, no slides of math.
   await card(page, 'Attack Ashwood');
@@ -277,7 +283,7 @@ test('the rules from the chapter select, and the first match with its hints acro
   await player.close();
 });
 
-test('the cards that answer an order show nothing while the army walks (P2: A1.3, A2.3, IV.6)', async ({
+test('the cards that answer an order show nothing while the army walks (P2: A1.3, A2.3, IV.9)', async ({
   browser,
   baseURL,
 }) => {
@@ -344,7 +350,7 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await shot(page, '15-a2-walking', 0);
   await leave();
 
-  // IV.6: the head-on attack bounces (IV.3), the planned order is given, the card "gathers its
+  // IV.9: the head-on attack bounces (IV.5), the planned order is given, the card "gathers its
   // bonus" is not shown.
   await page.getByRole('button', { name: 'How to play' }).click();
   await page.getByRole('radio', { name: /Chapter IV/ }).click();
@@ -353,11 +359,17 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   const attack = await mapOf('tut-attack');
   await card(page, 'each charge is a shot');
   await page.getByRole('button', { name: 'Continue' }).click();
+  await card(page, 'A fight runs in rounds');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await card(page, 'cannot leave');
+  await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Attack Ashwood');
   await march(player, attack, 'Fernhold', 'Ashwood');
   await card(page, 'charges ran out', 60_000);
   await shot(page, '16-iv-bounce');
   await page.getByRole('button', { name: 'Continue' }).click();
+  // The refill: a card says to wait, nothing is lit (review 6).
+  await card(page, 'Wait until it is full of charges again');
   await card(page, 'full again', 60_000);
   await player.clickNode(attack, node(attack, 'Fernhold'));
   await card(page, 'planned order');

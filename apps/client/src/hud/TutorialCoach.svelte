@@ -301,7 +301,7 @@
           {#if card.fail}
             <span class="lab again">{t('tutorial.card.tryAgain')}</span>
           {:else}
-            <span class="steps" role="img" aria-label={stepsLabel}>
+            <span class="steps" class:dense={card.steps > 10} role="img" aria-label={stepsLabel}>
               {#each [...Array(card.steps).keys()] as i (i)}
                 <span class="lz" class:on={i + 1 < card.step} class:now={i + 1 === card.step}
                 ></span>
@@ -567,6 +567,17 @@
     height: 6px;
     transform: rotate(45deg);
     box-shadow: 0 0 0 1px var(--ink-soft);
+  }
+
+  /* A long chapter (IV has 13 steps since review 6, #1059): smaller and closer lozenges, so the
+     row keeps beside the kicker inside the plate. */
+  .steps.dense {
+    gap: 5px;
+  }
+
+  .steps.dense .lz {
+    width: 5px;
+    height: 5px;
   }
 
   .lz.on {

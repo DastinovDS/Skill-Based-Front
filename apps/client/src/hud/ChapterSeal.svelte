@@ -74,7 +74,7 @@
   .window {
     position: relative;
     box-sizing: border-box;
-    width: min(620px, 100%);
+    width: min(660px, 100%);
     padding: 58px 52px 40px;
     background: var(--stone-tex) var(--stone-panel);
     box-shadow: 0 30px 60px rgb(0 0 0 / 55%);
@@ -121,9 +121,11 @@
     color: var(--ink);
   }
 
+  /* A lesson is one or two full sentences (review 6, #1059): it wraps, its lozenge stands by the
+     first line. */
   .lesson {
     display: grid;
-    gap: 10px;
+    gap: 12px;
     width: max-content;
     max-width: 100%;
     margin: 22px auto 30px;
@@ -134,15 +136,16 @@
 
   .lesson li {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
-    font: 500 20px/1.25 var(--font-text);
+    font: 500 18px/1.4 var(--font-text);
   }
 
   .lz {
     flex: none;
     width: 7px;
     height: 7px;
+    margin-top: calc((1.4em - 7px) / 2);
     background: var(--ink);
     box-shadow: 0 0 0 1px var(--ink-soft);
     transform: rotate(45deg);
