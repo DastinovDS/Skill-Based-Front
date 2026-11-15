@@ -1394,11 +1394,12 @@ the look of most frames or costs more than a day) **does not start with code.** 
 1. **A mockup.** A self-contained interactive HTML in `docs/design/mockups/` (one file, opens from a file by double click, no network, no third-party
    assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene
    plus the current look, in **two rounds** (the owner, 2026-11-07; replaces "at least 10 variants" of 2026-10-30): **round 1 is broad**, clearly
-   different directions (not tweaks of one idea), as many as can be finished to production quality, no placeholders, foreign styles dropped; **round 2 is deep**,
-   a few fully polished variations of the direction the owner picked. **Quality over count** (the owner, 2026-11-07, repeated 2026-11-11 and 2026-11-12):
-   every variant, in both rounds and in every design implementation, is finished, production quality, at the level of the existing art; when time or effort
-   is short, cut the number of variants, never the quality. No variant count is a target or a floor; a variant that cannot be brought to that level is dropped,
-   not shown. **A whole-style round** (one complete UI style across many screens, as #826) is capped at **5 complete directions** per round
+   different directions (not tweaks of one idea), **at least 5** finished variants plus the current look (the owner, 2026-11-15; this replaces "no count is a floor" of 2026-11-07 for broad rounds: a broad round is round 1 or any round that answers the owner's rejection), no placeholders, foreign styles dropped; **round 2 is deep**,
+   a few fully polished variations of the direction the owner picked. A deep round has no floor. **Quality over count** (the owner, 2026-11-07, repeated 2026-11-11 and 2026-11-12):
+   every variant, in both rounds and in every design implementation, is finished, production quality, at the level of the existing art; when effort
+   is short, spend more time, never cut the quality. A variant that cannot be brought to that level is replaced by another direction, never shown weak.
+   Every variant stays close to the game's existing setting and does not stand out of it (the owner, 2026-11-15: no plinths): variants differ in how they
+   solve the problem, not by importing foreign visual ideas. **A whole-style round** (one complete UI style across many screens, as #826) is capped at **5 complete directions** per round
    (the owner, 2026-11-08), a ceiling, not a target. Every variant is checked against a style-fit list of the existing look
    (palette, strokes, rims, glow, easing and timings of the current effects) before it goes on the page, and is drawn with the game's own material
    (real baked frames, gradients, rims, soft glow, eased motion): nothing flat, crude or unfinished. Weak variants are pruned with
