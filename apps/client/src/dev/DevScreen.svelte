@@ -15,6 +15,7 @@
   import { pinGroup } from './groupPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource, parseFlood } from './scenarios.ts';
   import { rallyPlay } from './groupScene.ts';
+  import { supplyPlay } from './flowScene.ts';
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
@@ -94,6 +95,11 @@
   // `?play=rally` on the scene `rally_due` (#930): on the window event `dev-play` a walk is paid,
   // then a VP credit comes, for the HUD (the map stays frozen).
   const playRally = params.get('play') === 'rally';
+  // `?play=supply` on the scene `stances` (#1067): on `dev-play` the capital makes its charge, a
+  // factory makes its own, then the stance changes, for the HUD (the map stays frozen).
+  const playSupply = params.get('play') === 'supply';
+  // `?stale` keeps the bar of a frozen scene as a reconnect leaves it (#1069): dimmed, the last numbers.
+  const stalePinned = params.has('stale');
   const capturePinned =
     params.has('capture') && Number.isInteger(Number(params.get('capture')))
       ? Number(params.get('capture'))
@@ -247,23 +253,40 @@
         // A frozen scene has no render clock: its toasts show at once.
         hud.onRender(Number.POSITIVE_INFINITY);
         if (bannerPinned) hud.banner = true;
+        if (stalePinned) hud.reset();
       });
-      if (playRally && scene.id === 'rally_due') {
-        // The steps start on the window event `dev-play`, so a screenshot script times its frames.
+      const steps =
+        playRally && scene.id === 'rally_due'
+          ? rallyPlay(map)
+          : playSupply && scene.id === 'stances'
+            ? supplyPlay(map)
+            : null;
+      if (steps !== null) {
+        // The steps start on the window event `dev-play`, so a screenshot script times its frames;
+        // `dev-step` (a `CustomEvent` with the step's index) gives one step at once instead.
         const timers: ReturnType<typeof setTimeout>[] = [];
+        const give = (step: (typeof steps)[number]): void => {
+          for (const event of step.events) hud.onEvent(event);
+          hud.onSnapshot(step.snapshot);
+        };
         const play = (): void => {
-          for (const step of rallyPlay(map)) {
+          for (const step of steps) {
             timers.push(
               setTimeout(() => {
-                for (const event of step.events) hud.onEvent(event);
-                hud.onSnapshot(step.snapshot);
+                give(step);
               }, step.atMs),
             );
           }
         };
+        const one = (event: Event): void => {
+          const step = steps[event instanceof CustomEvent ? Number(event.detail) : -1];
+          if (step !== undefined) give(step);
+        };
         window.addEventListener('dev-play', play);
+        window.addEventListener('dev-step', one);
         return () => {
           window.removeEventListener('dev-play', play);
+          window.removeEventListener('dev-step', one);
           for (const timer of timers) clearTimeout(timer);
         };
       }

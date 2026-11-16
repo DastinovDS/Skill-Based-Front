@@ -14,6 +14,7 @@ import {
   type HudData,
   type HoverTarget,
   type Selection,
+  type SupplyBeats,
   type VpCredit,
   type WalkPaid,
 } from './hudData.ts';
@@ -80,6 +81,12 @@ export class HudState {
   /** Charged walks the map has not drawn leaving yet: their flight waits for the render tick. */
   #paidWaiting: { walk: WalkPaid; tick: number; timer: ReturnType<typeof setTimeout> }[] = [];
   #credit: VpCredit | null = null;
+  /** The charges of the own factories for the supply rail (#1067). */
+  #supply: SupplyBeats = { cycle: 0, capital: null, factory: null };
+  /** The capital's counter and stance of the last snapshot: a drop in one stance is a new period. */
+  #lastCapital: { readonly ticks: number; readonly stance: string } | null = null;
+  /** The own capital, whose `charges_produced` is the rail's moment. */
+  readonly #capital: number | null;
   /** A tutorial chapter's clock (#1054): the tick it runs out, or null. */
   #clockEnd: number | null = null;
   #extraSeq = 0;
@@ -98,6 +105,7 @@ export class HudState {
     this.nodeName = nodeNamer(ctx.map);
     this.alerts = new AlertState(ctx.me, ctx.rules);
     this.threats = new ThreatLog(ctx.me);
+    this.#capital = ctx.map.nodes.find((n) => n.capital_of === ctx.me)?.id ?? null;
   }
 
   /** The context of the match: ruleset, side, nicks, map. */
@@ -126,6 +134,7 @@ export class HudState {
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#snapshot = snapshot;
     this.#keepPending(snapshot);
+    this.#supplyCycle(snapshot);
     this.alerts.onSnapshot(snapshot);
     this.threats.onSnapshot(snapshot);
     this.#startOnce(snapshot);
@@ -162,6 +171,7 @@ export class HudState {
   onEvent(event: EventMsg): void {
     this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
     this.#rallyAndCredit(event);
+    this.#chargeMade(event);
     const toast = toastOf(event, this.#ctx.me, this.nodeName);
     if (toast !== null) this.toasts.later(event.tick, toast);
   }
@@ -214,6 +224,7 @@ export class HudState {
     this.toasts.clear();
     this.#dropPaidWaiting();
     this.#pending = [];
+    this.#lastCapital = null;
     this.#tell();
   }
 
@@ -271,6 +282,34 @@ export class HudState {
       }
       default:
     }
+  }
+
+  /**
+   * The capital's counter fell in one stance: its period ran out (DEC-44, item 3), and the rail
+   * starts a new fill instead of running back. A stance change carries the counter over (item 4),
+   * which is not a new period.
+   */
+  #supplyCycle(snapshot: SnapshotMsg): void {
+    const { capital_ticks: ticks, stance } = snapshot.view.me;
+    if (ticks === null) return;
+    const last = this.#lastCapital;
+    if (last !== null && last.stance === stance && ticks < last.ticks) {
+      this.#supply = { ...this.#supply, cycle: this.#supply.cycle + 1 };
+    }
+    this.#lastCapital = { ticks, stance };
+  }
+
+  /**
+   * An own factory made a charge (`charges_produced`, into its warehouse or spilled on): the
+   * capital's is the rail's moment, any other lifts a small lozenge off the factory counter
+   * (DEC-47). The charges of one tick are one moment.
+   */
+  #chargeMade(event: EventMsg): void {
+    if (event.kind !== 'charges_produced' || event.data.player !== this.#ctx.me) return;
+    const key = event.data.node === this.#capital ? 'capital' : 'factory';
+    if (this.#supply[key]?.tick === event.tick) return;
+    this.#extraSeq += 1;
+    this.#supply = { ...this.#supply, [key]: { seq: this.#extraSeq, tick: event.tick } };
   }
 
   #dropPaidWaiting(): void {
@@ -342,6 +381,7 @@ export class HudState {
       paid: this.#paid,
       credit: this.#credit,
       clockEnd: this.#clockEnd,
+      supply: this.#supply,
     });
     this.#tell();
   }

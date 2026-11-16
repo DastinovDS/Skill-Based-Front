@@ -1889,3 +1889,115 @@ for (const dpr of [1, 2]) {
     }
   });
 }
+
+// The supply rail under the stance chip (#1067, variant D moved under the chip): the top bar of the
+// scene `stances` (War, a quarter of the capital's period) at the widths of #1069 (`supply-rail-<w>`,
+// the left of the bar twice as large in `supply-rail-<w>-2x`), as a reconnect leaves it
+// (`supply-rail-stale-<w>`), and played (`?play=supply`): 3 s before the charge, the charge made
+// (every animation of the bar held at a moment), another factory's charge, and the change to Economy.
+const RAIL_SIZES = [
+  { width: 1920, height: 1080 },
+  { width: 1280, height: 800 },
+  { width: 960, height: 720 },
+  { width: 820, height: 700 },
+  { width: 560, height: 700 },
+] as const;
+const railClip = async (page: import('@playwright/test').Page, width = 420) => {
+  const box = await page.locator('header.bar').boundingBox();
+  if (box === null) throw new Error('no top bar');
+  return { x: box.x, y: box.y, width: Math.min(width, box.width), height: 62 };
+};
+test.describe('the supply rail', () => {
+  test.use({ deviceScaleFactor: 2 });
+  for (const size of RAIL_SIZES) {
+    test(`shot of the supply rail at ${String(size.width)}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto('/?scene=stances');
+      await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      await page.mouse.move(5, 300);
+      await page
+        .locator('header.bar')
+        .screenshot({ path: join(OUT, `supply-rail-${String(size.width)}.png`) });
+      await page.screenshot({
+        path: join(OUT, `supply-rail-${String(size.width)}-2x.png`),
+        clip: await railClip(page),
+      });
+      if (size.width === 1280) {
+        await page.screenshot({ path: join(OUT, 'supply-rail-1280-screen.png') });
+        await page.addStyleTag({ content: 'header.bar { filter: grayscale(1); }' });
+        await page.screenshot({
+          path: join(OUT, 'supply-rail-1280-gray.png'),
+          clip: await railClip(page),
+        });
+      }
+    });
+  }
+  for (const width of [1280, 820]) {
+    test(`shot of the supply rail after a reconnect at ${String(width)}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto('/?scene=stances&stale');
+      await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      await page.mouse.move(5, 300);
+      await page.screenshot({
+        path: join(OUT, `supply-rail-stale-${String(width)}.png`),
+        clip: await railClip(page),
+      });
+    });
+  }
+  test('shot of the supply rail marked by a hint', async ({ page }) => {
+    // The hint of full warehouses marks the stance piece: its ring takes the chip, the rail and
+    // the lozenge in (`supply-rail-hint.png`).
+    await page.goto('/?scene=stances&hint=H3');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await page.evaluate('document.fonts.ready.then(() => true)');
+    await page.mouse.move(5, 300);
+    await page.waitForTimeout(600);
+    await page.screenshot({
+      path: join(OUT, 'supply-rail-hint.png'),
+      clip: { x: 0, y: 0, width: 520, height: 140 },
+    });
+  });
+  for (const less of [false, true]) {
+    test(`shot of the supply rail played${less ? ' with less motion' : ''}`, async ({ page }) => {
+      if (less) await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/?scene=stances&play=supply');
+      await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+      await page.evaluate('document.fonts.ready.then(() => true)');
+      await page.mouse.move(5, 300);
+      const tag = less ? '-less' : '';
+      // One step of `supplyPlay` at a time (`dev-step`); the animations of `selector` held at `ms`,
+      // every other one at its end.
+      const step = async (n: number): Promise<void> => {
+        await page.evaluate(
+          `window.dispatchEvent(new CustomEvent('dev-step', { detail: ${String(n)} }))`,
+        );
+        await page.waitForTimeout(150);
+      };
+      const hold = async (name: string, selector: string, ms: number): Promise<void> => {
+        await page.evaluate(`document.getAnimations().forEach((a) => {
+          a.pause();
+          const el = a.effect && a.effect.target;
+          a.currentTime = el && el.closest(${JSON.stringify(selector)}) ? ${String(ms)} : 100000;
+        })`);
+        await page.screenshot({
+          path: join(OUT, `supply-rail${tag}-${name}.png`),
+          clip: await railClip(page),
+        });
+      };
+      await step(0);
+      await hold('ready', 'none', 0);
+      await step(1);
+      for (const ms of less ? [500] : [60, 200, 450, 900]) {
+        await hold(`made-${String(ms)}`, '.sloz', ms);
+      }
+      await step(2);
+      for (const ms of less ? [500] : [150, 450]) {
+        await hold(`factory-${String(ms)}`, '.factories', ms);
+      }
+      await step(3);
+      await hold('economy', 'none', 0);
+    });
+  }
+});
