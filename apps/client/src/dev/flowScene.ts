@@ -11,6 +11,7 @@
  */
 import type {
   EdgeView,
+  EventMsg,
   FlowIdle,
   GroupView,
   MapFile,
@@ -177,4 +178,54 @@ export function stancesSnapshot(map: MapFile): SnapshotMsg {
       me: { ...base.view.me, stance: 'war', cp_ticks: 30, capital_ticks: 100 },
     },
   };
+}
+
+/** One step of the played supply rail (#1067): what the HUD gets `atMs` after `dev-play`. */
+export interface SupplyPlayStep {
+  readonly atMs: number;
+  readonly events: readonly EventMsg[];
+  readonly snapshot: SnapshotMsg;
+}
+
+/**
+ * `?play=supply` on the `stances` scene (#1067), for the HUD alone (the map stays frozen): in War
+ * (the capital's period 400 ticks) the rail stands 3 s before the charge, the capital makes it (the
+ * rail's lozenge is made and a new fill starts), the factory of Watchpost (3) makes its own (the small
+ * lozenge lifts off the factory counter), then a change to Economy carries the counter over as the
+ * server does (DEC-44, item 4: `16 * 100 // 400 = 4`, the share kept).
+ */
+export function supplyPlay(map: MapFile): SupplyPlayStep[] {
+  const base = stancesSnapshot(map);
+  const at = (tick: number, me: Partial<SnapshotMsg['view']['me']>): SnapshotMsg => ({
+    ...base,
+    tick,
+    view: { ...base.view, me: { ...base.view.me, ...me } },
+  });
+  const ev = (tick: number, kind: string, data: EventMsg['data']): EventMsg => ({
+    type: 'event',
+    tick,
+    kind,
+    data,
+  });
+  const made = T + 31;
+  const factory = T + 47;
+  const change = T + 60;
+  return [
+    { atMs: 0, events: [], snapshot: at(T, { capital_ticks: 370 }) },
+    {
+      atMs: 1000,
+      events: [ev(made, 'charges_produced', { player: 0, node: 0, charges: 1, spill: 0 })],
+      snapshot: at(made, { capital_ticks: 0 }),
+    },
+    {
+      atMs: 2600,
+      events: [ev(factory, 'charges_produced', { player: 0, node: 3, charges: 1, spill: 0 })],
+      snapshot: at(factory, { capital_ticks: 16 }),
+    },
+    {
+      atMs: 4000,
+      events: [ev(change, 'stance_changed', { player: 0, stance: 'economy' })],
+      snapshot: at(change, { stance: 'economy', capital_ticks: 4, cp_ticks: 20 }),
+    },
+  ];
 }

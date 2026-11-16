@@ -71,3 +71,49 @@ export function railTicks(period: number, tickHz: number): number[] {
   const n = Math.max(1, Math.round(seconds / 5));
   return Array.from({ length: n + 1 }, (_, j) => j / n);
 }
+
+/** The supply rail turns ready (its lozenge inked and lit) this many seconds before the charge. */
+export const SUPPLY_READY_S = 3;
+
+/** The supply rail under the stance chip (#1067, ui-style 80): the way to the capital's next charge. */
+export interface SupplyRail {
+  /** How much of the capital's period has passed, 0..1. */
+  readonly share: number;
+  /** Whole seconds until the charge, rounded up (the accessible name and the tooltip only). */
+  readonly seconds: number;
+  /** The period of the stance in force, in seconds (the rail steps once a second in less motion). */
+  readonly periodSeconds: number;
+  /** Where the ticks stand, 0..1: one every 5 s of the period of the stance, both ends included. */
+  readonly ticks: readonly number[];
+  /** The last `SUPPLY_READY_S` seconds before the charge. */
+  readonly ready: boolean;
+}
+
+/**
+ * The rail of the capital's charge (DEC-44): `me.capital_ticks` over the period of the stance in
+ * force, the period's ticks every 5 s (2, 4 and 8 spans for Economy, Balance and War at the
+ * reference periods). A stance change needs nothing here: the server carries the counter over
+ * (item 4), so the share stays. `null` without stances.
+ */
+export function supplyRail(rules: RulesetPublic, me: SelfView): SupplyRail | null {
+  const progress = stanceProgress(rules, me);
+  if (progress === null) return null;
+  const period = rules.stances.capital_period_ticks[me.stance];
+  const { share, seconds } = progress.capital;
+  return {
+    share,
+    seconds,
+    periodSeconds: period / rules.tick_hz,
+    ticks: railTicks(period, rules.tick_hz),
+    ready: seconds <= SUPPLY_READY_S,
+  };
+}
+
+/**
+ * The fill of a rail in less motion: it steps once a whole second of the period, never between
+ * (the rail is information, so it still moves).
+ */
+export function steppedShare(share: number, periodSeconds: number): number {
+  if (periodSeconds <= 0) return share;
+  return Math.floor(share * periodSeconds + 1e-6) / periodSeconds;
+}

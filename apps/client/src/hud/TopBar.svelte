@@ -17,7 +17,7 @@
   import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
   import { reducedMotion } from '../render/motion.ts';
   import RollNum from './RollNum.svelte';
-  import { atCap, railTicks, vpShare } from './topBar.ts';
+  import { atCap, railTicks, steppedShare, vpShare } from './topBar.ts';
   import BarGlyph from '../theme/BarGlyph.svelte';
   import CpMark from '../theme/CpMark.svelte';
   import { FULL_GATE, type Gate } from '../tutorial/gate.ts';
@@ -78,6 +78,31 @@
   const factories = $derived(data?.factories ?? null);
   const factoriesFull = $derived(factories !== null && factories.count >= factories.max);
   const next = $derived(data?.stanceProgress ?? null);
+
+  // #1067, ui-style 80 (D "Supply rail" under the stance chip): the way to the capital's next
+  // charge, the moment it is made, and another factory's charge lifting off the factory counter.
+  const supply = $derived(data?.supply ?? null);
+  const supplyShare = $derived(
+    supply === null
+      ? 0
+      : reducedMotion()
+        ? steppedShare(supply.share, supply.periodSeconds)
+        : supply.share,
+  );
+  /** A charge made within the last two seconds of the snapshot plays its moment once (by `seq`). */
+  const recent = (made: { readonly tick: number } | null): boolean =>
+    data !== null && made !== null && data.tick - made.tick <= 2 * (data.vpNext.tickHz || 10);
+  const capitalMade = $derived(recent(supply?.capital ?? null) ? (supply?.capital ?? null) : null);
+  const factoryMade = $derived(recent(supply?.factory ?? null) ? (supply?.factory ?? null) : null);
+  const stanceTip = $derived(
+    data === null || next === null
+      ? undefined
+      : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
+          amount: formatCentis(data.cp.quantum, locale),
+          cp: next.cp.seconds,
+          capital: next.capital.seconds,
+        }),
+  );
 
   // #930, W10: the walks to rally points the CP will pay (the accessible name of the gauge).
   const rally = $derived(data?.rally ?? null);
@@ -199,50 +224,84 @@
         >
           <Icon name="factory" size={22} cut />
           <span class="num">{factories.count}/{factories.max}</span>
+          {#if factoryMade !== null}
+            {#key factoryMade.seq}
+              <!-- Another factory made its charge (DEC-47): a small lozenge lifts off the counter. -->
+              <svg class="fpop" width="16" height="16" viewBox="-8 -8 16 16" aria-hidden="true">
+                <path class="loz-casing" d="M0 -5.4L5.4 0L0 5.4L-5.4 0Z" />
+                <path class="fpop-body" d="M0 -3.8L3.8 0L0 3.8L-3.8 0Z" />
+              </svg>
+            {/key}
+          {/if}
         </span>
       {/if}
-      <!-- The stance (DEC-44) as its icon, the capital's next charge as a small upright cell, and the key. -->
+      <!-- The stance (DEC-44) as its icon and the key; under it the supply rail (#1067): the
+           capital's next charge, ruled in the own colour up to now, a tick every 5 s, the charge
+           lozenge past its end. -->
       {#if gate.has('stance')}
-        <button
-          type="button"
-          class="chip"
-          class:locked={chipLocked}
-          data-coach="stance"
-          aria-disabled={chipLocked || stale}
-          aria-label={tf('orders.stanceOpen', {
-            stance: t(`stance.${data.stance}`),
-            stanceKey: keyBindings.label('stance'),
-          })}
-          title={chipLocked
-            ? t('tutorial.locked')
-            : next === null
-              ? undefined
-              : tf(orders.factoriesFollow ? 'bar.nextTipAll' : 'bar.nextTip', {
-                  amount: formatCentis(data.cp.quantum, locale),
-                  cp: next.cp.seconds,
-                  capital: next.capital.seconds,
-                })}
-          onclick={() => {
-            if (!stale) orders.openRadial(true);
-          }}
-        >
-          <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
-          {#if next !== null}
-            <span class="capital" aria-hidden="true">
-              <i style:height="{next.capital.share * 100}%"></i>
+        <span class="stance" class:railed={supply !== null} data-coach="stance">
+          <button
+            type="button"
+            class="chip"
+            class:locked={chipLocked}
+            aria-disabled={chipLocked || stale}
+            aria-label={tf('orders.stanceOpen', {
+              stance: t(`stance.${data.stance}`),
+              stanceKey: keyBindings.label('stance'),
+            })}
+            title={chipLocked ? t('tutorial.locked') : stanceTip}
+            onclick={() => {
+              if (!stale) orders.openRadial(true);
+            }}
+          >
+            <Icon name={STANCE_ICONS[data.stance]} size={20} cut />
+            <kbd>{keyBindings.label('stance')}</kbd>
+            {#if chipLocked}
+              <!-- Locked by a tutorial beat (#806): the chip dims, a small padlock at its corner. -->
+              <svg class="padlock" width="12" height="14" viewBox="-7 -8 14 17" aria-hidden="true">
+                <path class="pl-case" d="M-5.5 -1h11v9h-11z" />
+                <path class="pl-shackle-case" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
+                <path class="pl-body" d="M-5.5 -1h11v9h-11z" />
+                <path class="pl-shackle" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
+              </svg>
+            {/if}
+          </button>
+          {#if supply !== null}
+            <span
+              class="srail"
+              role="img"
+              aria-label={tf('bar.supplyLabel', { seconds: supply.seconds })}
+              title={stanceTip}
+            >
+              {#key supply.cycle}
+                <span class="sfill" class:still={reducedMotion()} style:width="{supplyShare * 100}%"
+                ></span>
+              {/key}
+              {#each supply.ticks as tick, i (i)}
+                <i class:end={i === 0 || i === supply.ticks.length - 1} style:left="{tick * 100}%"
+                ></i>
+              {/each}
+              <span class="sloz" class:ready={supply.ready}>
+                <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
+                  <path class="loz-casing" d="M0 -7.4L7.4 0L0 7.4L-7.4 0Z" />
+                  <path class="sloz-plate" d="M0 -5.6L5.6 0L0 5.6L-5.6 0Z" />
+                  {#if capitalMade !== null}
+                    {#key capitalMade.seq}
+                      <!-- The charge made: it sets solid, flashes ivory and stamps a ring. -->
+                      <g class="made">
+                        <path class="made-ring casing" d="M0 -7.4L7.4 0L0 7.4L-7.4 0Z" />
+                        <path class="made-ring ink" d="M0 -7.4L7.4 0L0 7.4L-7.4 0Z" />
+                        <path class="made-body" d="M0 -5.6L5.6 0L0 5.6L-5.6 0Z" />
+                        <path class="made-flash" d="M0 -5.6L5.6 0L0 5.6L-5.6 0Z" />
+                      </g>
+                    {/key}
+                  {/if}
+                  <path class="sloz-rim" d="M0 -5.6L5.6 0L0 5.6L-5.6 0Z" />
+                </svg>
+              </span>
             </span>
           {/if}
-          <kbd>{keyBindings.label('stance')}</kbd>
-          {#if chipLocked}
-            <!-- Locked by a tutorial beat (#806): the chip dims, a small padlock at its corner. -->
-            <svg class="padlock" width="12" height="14" viewBox="-7 -8 14 17" aria-hidden="true">
-              <path class="pl-case" d="M-5.5 -1h11v9h-11z" />
-              <path class="pl-shackle-case" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
-              <path class="pl-body" d="M-5.5 -1h11v9h-11z" />
-              <path class="pl-shackle" d="M-3.2 -1v-3.2a3.2 3.2 0 0 1 6.4 0v3.2" />
-            </svg>
-          {/if}
-        </button>
+        </span>
       {/if}
     {/if}
   </div>
@@ -500,6 +559,7 @@
 
   /* The factory counter: the cut factory and own/max; at the max a dashed frame (shape, not colour). */
   .factories {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -512,24 +572,277 @@
     color: var(--ink-dim);
   }
 
-  /* The capital's next charge: a small upright cell that fills ruled from the bottom (DEC-44). */
-  .capital {
+  /* The stance chip with the supply rail under it (#1067): one piece, the rail as wide as the chip
+     and its lozenge hanging past the end. */
+  .stance {
     position: relative;
-    display: inline-block;
-    width: 12px;
-    height: 16px;
-    box-sizing: border-box;
-    border: 1px solid var(--ink);
-    box-shadow: 0 0 0 2px var(--plate);
+    display: inline-grid;
+    row-gap: 4px;
   }
 
-  .capital i {
+  /* The padding keeps the lozenge inside the piece (the tutorial's ring takes it in too). */
+  .stance.railed {
+    padding-right: 15px;
+    transform: translateY(2px);
+  }
+
+  .stance.railed .chip {
+    height: 26px;
+    min-width: 64px;
+  }
+
+  /* The rail: the VP rail's grammar (P1) in the own colour. A casing, the period ruled upright to
+     now behind a burin edge with a soft ivory light, an ink hairline with a tick every 5 s hanging
+     down, the charge lozenge past its end. */
+  .srail {
+    position: relative;
+    height: 11px;
+  }
+
+  .srail::before {
+    content: '';
     position: absolute;
-    left: 1px;
-    right: 1px;
-    bottom: 1px;
-    max-height: calc(100% - 2px);
-    background: repeating-linear-gradient(0deg, var(--own) 0 1px, transparent 1px 2.5px);
+    left: -1px;
+    right: -1px;
+    top: 0;
+    height: 8px;
+    background: var(--casing);
+  }
+
+  .srail::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 7px;
+    height: 1px;
+    background: var(--ink);
+  }
+
+  .sfill {
+    position: absolute;
+    left: 0;
+    top: 1px;
+    height: 6px;
+    background: repeating-linear-gradient(90deg, var(--own) 0 1.2px, transparent 1.2px 2.4px);
+    transition: width 100ms linear;
+  }
+
+  .sfill.still {
+    transition: none;
+  }
+
+  /* The burin edge of the fill. */
+  .sfill::after {
+    content: '';
+    position: absolute;
+    right: -0.8px;
+    top: -0.5px;
+    width: 1.6px;
+    height: 7px;
+    background: var(--ink);
+    box-shadow: 0 0 4px 1px rgb(236 228 209 / 35%);
+  }
+
+  .srail i {
+    position: absolute;
+    top: 7px;
+    width: 1px;
+    height: 3px;
+    margin-left: -0.5px;
+    background: var(--ink);
+    opacity: 0.85;
+  }
+
+  .srail i.end {
+    height: 4px;
+    opacity: 1;
+  }
+
+  /* The charge lozenge past the rail's end: the store rows' lozenge (a dark casing, the plate, a
+     rim in the own colour); the last seconds ink its rim and light it softly (shape and light, not
+     only the hue). */
+  .sloz {
+    position: absolute;
+    right: -17px;
+    top: -5px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .sloz::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgb(236 228 209 / 55%), rgb(236 228 209 / 0%));
+    opacity: 0;
+    transition: opacity 400ms var(--ease-engrave);
+  }
+
+  .sloz.ready::before {
+    opacity: 0.9;
+  }
+
+  .sloz svg {
+    position: relative;
+    display: block;
+    overflow: visible;
+  }
+
+  .loz-casing {
+    fill: var(--casing);
+  }
+
+  .sloz-plate {
+    fill: var(--plate);
+  }
+
+  .sloz-rim {
+    fill: none;
+    stroke: var(--own);
+    stroke-width: 1;
+  }
+
+  .sloz.ready .sloz-rim {
+    stroke: var(--ink);
+    stroke-width: 1.3;
+  }
+
+  /* The moment (the mockup's timing): the lozenge sets solid at once and holds 0.3 s, then eases
+     out by 0.8 s; an ivory flash peaks at 0.07 s; a ring stamps out from the casing in 0.62 s. */
+  .made-body {
+    fill: var(--own);
+    animation: made-set 800ms linear both;
+  }
+
+  .made-flash {
+    fill: var(--ink);
+    animation: made-flash 420ms linear both;
+  }
+
+  .made-ring {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    transform-origin: 0 0;
+    animation: made-ring 620ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  }
+
+  .made-ring.casing {
+    stroke: var(--casing);
+    stroke-width: 3;
+  }
+
+  .made-ring.ink {
+    stroke: var(--ink);
+    stroke-width: 1.1;
+  }
+
+  @keyframes made-set {
+    0%,
+    37% {
+      opacity: 1;
+      animation-timing-function: var(--ease-engrave);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes made-flash {
+    0% {
+      opacity: 0;
+    }
+    17% {
+      opacity: 0.85;
+      animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes made-ring {
+    0% {
+      opacity: 0.95;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.88);
+    }
+  }
+
+  /* Another factory's charge: a small lozenge in the own colour lifts off the counter and fades. */
+  .fpop {
+    position: absolute;
+    left: 3px;
+    top: -2px;
+    overflow: visible;
+    pointer-events: none;
+    animation: fpop 900ms linear both;
+  }
+
+  .fpop-body {
+    fill: var(--own);
+    stroke: var(--ink);
+    stroke-width: 0.8;
+  }
+
+  @keyframes fpop {
+    0% {
+      opacity: 1;
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    55% {
+      opacity: 1;
+      transform: translateY(-7px);
+      animation-timing-function: linear;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-9px);
+    }
+  }
+
+  /* Less motion: no flash, ring or lift; the made charge stands solid for a second, the factory's
+     lozenge stands over the counter for a second. */
+  :global(:root[data-motion='reduced']) .made-body {
+    animation: made-stand 1000ms steps(1, end) both;
+  }
+
+  :global(:root[data-motion='reduced']) .made-flash,
+  :global(:root[data-motion='reduced']) .made-ring {
+    display: none;
+  }
+
+  :global(:root[data-motion='reduced']) .fpop {
+    animation: fpop-stand 1000ms steps(1, end) both;
+  }
+
+  :global(:root[data-motion='reduced']) .sloz::before {
+    transition: none;
+  }
+
+  @keyframes made-stand {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fpop-stand {
+    0% {
+      opacity: 1;
+      transform: translateY(-5px);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-5px);
+    }
   }
 
   kbd {
@@ -848,6 +1161,11 @@
 
     kbd {
       display: none;
+    }
+
+    /* Without the key cap the chip is the icon alone: the rail keeps 52 px (6.5 px a tick in War). */
+    .stance.railed .chip {
+      min-width: 52px;
     }
 
     .score {

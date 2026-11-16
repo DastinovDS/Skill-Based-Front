@@ -334,9 +334,10 @@ export const en = {
     'VP score: {mine} {mineVp}, {enemy} {enemyVp}. Next credit in {seconds} s: {mine} +{mineGain}, {enemy} +{enemyGain}',
   'bar.cpShortHint': 'Not enough CP for this action',
   'bar.nextTip':
-    'Next {amount} CP in {cp} s, next charge of the capital in {capital} s. A change of stance keeps the progress of both',
+    'Next charge of the capital in {capital} s, next {amount} CP in {cp} s. A change of stance keeps the progress of both',
   'bar.nextTipAll':
-    'Next {amount} CP in {cp} s, next charge of the capital in {capital} s. Your other factories run at the same pace on their own progress. A change of stance keeps the progress of all',
+    'Next charge of the capital in {capital} s, next {amount} CP in {cp} s. Your other factories make theirs at the same pace. A change of stance keeps the progress of all',
+  'bar.supplyLabel': 'Next charge of the capital in {seconds} s',
   'bar.factories': 'Factories: own, builds included, of the most you may have',
   'bar.factoriesFull': 'Factories: at the most you may have, no more can be built',
   'bar.factoriesLabel': 'Factories: {count} of {max}',
@@ -667,7 +668,7 @@ export const en = {
     'You see only the places next to your groups, and how much depends on the ground on both sides. Plains are seen exactly from plains or mountains but only as a range from a forest; a forest is always a range; mountains show only that an enemy is there, except from other mountains, which see a range. Units are faster on plains, slower in mountains.',
   'rules.supply.title': 'CP and supply',
   'rules.supply.text':
-    'In Balance, CP come {cp} every {cpEvery}, up to {cap}, and your capital makes a charge every {chargeEvery}. Your roads carry charges to the front on their own. A place cut off from your capital gets no new charges, and soon it starts losing the charges it has, first from its warehouse, then from its units.',
+    'In Balance, CP come {cp} every {cpEvery}, up to {cap}, and your capital makes a charge every {chargeEvery}. The line under the stance button fills until the next one. Your roads carry charges to the front on their own. A place cut off from your capital gets no new charges, and soon it starts losing the charges it has, first from its warehouse, then from its units.',
   'rules.flow.title': 'Supply in detail',
   'rules.flow.text':
     'The front is your places that touch an enemy (before contact, the farthest from your capital). Places with room call the nearest spare charges, the front first; an army short of charges, an unpaid building and a gathering plan call before the others. Charges move one road at a time between your own places; a lost road loses its charge. A full factory sends its new charge to the nearest room. A factory cut off from your capital stops making charges, but its pocket does not starve.',
@@ -782,7 +783,7 @@ export const en = {
   'tutorial.building.7':
     'Nice job! Millbrook’s **factory** now makes charges. This counter shows how many factories you have, your capital included, and the most you can have.',
   'tutorial.building.8':
-    'Your **stance** decides what your economy makes more of. **Economy** makes more charges and fewer CP, **War** more CP and fewer charges, and **Balance**, where every game starts, sits between them.',
+    'Your **stance** decides what your economy makes more of. **Economy** makes more charges and fewer CP, **War** more CP and fewer charges, and **Balance**, where every game starts, sits between them. The line under the stance button fills until your capital makes its next charge.',
   'tutorial.building.8.act':
     'Press {stance_key} and pick a stance, for example Economy, which makes the most charges',
   // Chapter IV: Attack and fight (tut-attack).

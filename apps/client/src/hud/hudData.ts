@@ -20,7 +20,14 @@ import type {
 } from '../protocol.gen.ts';
 
 import { rallyDues, type DueWalk, type PendingWalk } from './rallyDue.ts';
-import { stanceProgress, vpCountdown, type StanceProgress, type VpCountdown } from './topBar.ts';
+import {
+  stanceProgress,
+  supplyRail,
+  vpCountdown,
+  type StanceProgress,
+  type SupplyRail,
+  type VpCountdown,
+} from './topBar.ts';
 
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
@@ -250,6 +257,26 @@ export interface VpCredit {
   readonly enemy: number;
 }
 
+/** A charge an own factory made (`charges_produced`, #1067): the moment the supply rail shows. */
+export interface ChargeMade {
+  /** Order of arrival: a new one plays the moment again. */
+  readonly seq: number;
+  readonly tick: number;
+}
+
+/** The charges of the own factories as the HUD keeps them from the events and snapshots (#1067). */
+export interface SupplyBeats {
+  /** The capital's period ran out this many times while the bar was up: a new one is a new fill. */
+  readonly cycle: number;
+  /** The latest charge of the own capital, `null` before the first. */
+  readonly capital: ChargeMade | null;
+  /** The latest charge of any other own factory (DEC-47), `null` before the first. */
+  readonly factory: ChargeMade | null;
+}
+
+/** The supply rail under the stance chip (#1067): the way to the capital's charge and its moments. */
+export interface SupplyInfo extends SupplyRail, SupplyBeats {}
+
 /** What the server says of the next VP credit (#930, P1, #934). */
 interface VpNext {
   /** The way to it, from the ruleset period; `null` without one. */
@@ -274,9 +301,12 @@ export interface HudExtras {
    * IV.10); absent, the match length.
    */
   readonly clockEnd?: number | null;
+  /** The charges of the own factories (#1067); absent: none seen. */
+  readonly supply?: SupplyBeats;
 }
 
 const NO_EXTRAS: HudExtras = { pending: [], paid: [], credit: null };
+const NO_BEATS: SupplyBeats = { cycle: 0, capital: null, factory: null };
 
 export interface HudData {
   readonly tick: number;
@@ -289,6 +319,8 @@ export interface HudData {
   readonly stance: Stance;
   /** Stances of economy v2 (DEC-44): the way to the next quanta; `null` without them. */
   readonly stanceProgress: StanceProgress | null;
+  /** The supply rail (#1067): the capital's next charge and the charges just made; `null` without stances. */
+  readonly supply: SupplyInfo | null;
   /**
    * Economy v2 (DEC-41, item 2): the own factories, the builds under way counted as the server
    * counts them for `factory.max`, and that max; `null` without factories (#762).
@@ -500,6 +532,15 @@ function rallyInfo(
   };
 }
 
+function supplyInfo(
+  rules: RulesetPublic,
+  me: SnapshotMsg['view']['me'],
+  beats: SupplyBeats,
+): SupplyInfo | null {
+  const rail = supplyRail(rules, me);
+  return rail === null ? null : { ...rail, ...beats };
+}
+
 export function buildHudData(
   ctx: HudContext,
   snapshot: SnapshotMsg,
@@ -533,6 +574,7 @@ export function buildHudData(
     },
     stance: view.me.stance,
     stanceProgress: stanceProgress(rules, view.me),
+    supply: supplyInfo(rules, view.me, extras.supply ?? NO_BEATS),
     factories: factoryCount(rules, view.nodes, me),
     workingFactories: workingFactoryCount(view.nodes, me),
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },

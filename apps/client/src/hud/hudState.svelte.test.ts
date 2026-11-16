@@ -2,7 +2,7 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
-import { DEV_RULES, devSnapshot } from './devFeed.ts';
+import { DEV_RULES, DEV_RULES_STANCES, devSnapshot } from './devFeed.ts';
 import { HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
 import { TOAST_HOLD_MS } from './toastState.svelte.ts';
 
@@ -210,5 +210,58 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(hud.toasts.current).toEqual([]);
     hud.destroy();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('HudState: the supply rail (#1067)', () => {
+  const capital = map.nodes.find((n) => n.capital_of === 0)?.id ?? -1;
+  const factory = map.nodes.find((n) => n.start_owner === 0 && n.capital_of === null)?.id ?? -1;
+  const stancesHud = (): HudState =>
+    new HudState({ me: 0, nicks: ['Ember', 'Bot'], rules: DEV_RULES_STANCES, map });
+  const at = (tick: number, stance: 'war' | 'economy', capitalTicks: number): SnapshotMsg => {
+    const base = devSnapshot(map, DEV_RULES_STANCES, tick);
+    return {
+      ...base,
+      view: {
+        ...base.view,
+        me: { ...base.view.me, stance, cp_ticks: 0, capital_ticks: capitalTicks },
+      },
+    };
+  };
+  const produced = (tick: number, node: number, player = 0) => ({
+    type: 'event' as const,
+    tick,
+    kind: 'charges_produced',
+    data: { player, node, charges: 1, spill: 0 },
+  });
+
+  it('starts a new fill when the period runs out, not on a stance change', () => {
+    const hud = stancesHud();
+    hud.onSnapshot(at(10, 'war', 390));
+    expect(hud.current?.supply).toMatchObject({ cycle: 0, ready: true });
+    hud.onSnapshot(at(20, 'war', 0));
+    expect(hud.current?.supply?.cycle).toBe(1);
+    hud.onSnapshot(at(30, 'war', 100));
+    // War 100 of 400 carried to Economy 25 of 100 (DEC-44, item 4): the same fill goes on.
+    hud.onSnapshot(at(31, 'economy', 25));
+    expect(hud.current?.supply).toMatchObject({ cycle: 1, share: 0.25 });
+  });
+
+  it('keeps the charges of the capital and of the other factories apart', () => {
+    const hud = stancesHud();
+    hud.onEvent(produced(20, capital));
+    hud.onEvent(produced(20, factory));
+    // Two factories in one tick are one moment; the enemy's charges are never seen.
+    hud.onEvent(produced(20, factory));
+    hud.onEvent(produced(21, factory, 1));
+    hud.onSnapshot(at(20, 'war', 0));
+    const supply = hud.current?.supply;
+    expect(supply?.capital?.tick).toBe(20);
+    expect(supply?.factory?.tick).toBe(20);
+    const seq = supply?.factory?.seq;
+    hud.onEvent(produced(40, factory));
+    hud.onSnapshot(at(40, 'war', 20));
+    expect(hud.current?.supply?.factory?.seq).toBeGreaterThan(seq ?? 0);
+    expect(hud.current?.supply?.capital?.tick).toBe(20);
   });
 });
