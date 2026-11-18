@@ -323,9 +323,14 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await page.waitForTimeout(1500);
   await expect(plate.filter({ hasText: 'Fernhold waits' })).toHaveCount(0);
   await shot(page, '14-a1-walking', 0);
-  // No card comments on the fight (#1075, A1.4 cut): the next one is A1.5, after the capture.
+  // No card comments on the fight (#1075, A1.4 cut): the next one is A1.5, after the capture. It
+  // fires with the goal, so the chapter ends through its Continue and the result.
   await card(page, 'gathers', 60_000);
-  await leave();
+  await plate.getByRole('button', { name: 'Continue' }).click();
+  const seal = page.getByRole('dialog').filter({ hasText: 'Complete' });
+  await expect(seal).toBeVisible({ timeout: 30_000 });
+  await seal.getByRole('button', { name: 'All chapters' }).click();
+  await expect(page.getByRole('radio', { name: /Chapter I:/ })).toBeVisible({ timeout: 30_000 });
 
   // A2.3: the rally point and the recruits are given, the card "walking" is not shown.
   await page.getByRole('button', { name: 'How to play' }).click();
