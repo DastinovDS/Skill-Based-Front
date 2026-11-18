@@ -15,8 +15,6 @@
      "mark": [{"node": "Ashwood"}]},
     {"id": "3", "on": {"accepted": {"group_move": {"to": "Ashwood"}}}, "allow": [],
      "mark": [{"node": "Fernhold"}]},
-    {"id": "4", "on": {"event": "fight_started", "node": "Ashwood"}, "allow": [],
-     "mark": [{"node": "Ashwood", "ring": true}]},
     {"id": "5", "on": {"event": "node_captured", "node": "Ashwood", "by": "you", "after": 25},
      "allow": [],
      "with_goal": true,

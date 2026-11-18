@@ -12,8 +12,6 @@
      "mark": [{"group": "Highhold"}]},
     {"id": "2", "on": {"ui": "select", "group": "Highhold"},
      "mark": [{"node": "Ashford"}]},
-    {"id": "3", "on": {"accepted": {"move": {"to": "Ashford"}}}, "pause": "continue", "allow": [],
-     "mark": [{"capacity": "Ashford"}]},
     {"id": "4", "on": {"event": "node_captured", "node": "Ashford", "by": "you", "after": 12}, "pause": "continue",
      "allow": [],
      "mark": [{"group": "Ashford"}]},

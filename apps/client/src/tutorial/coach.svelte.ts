@@ -275,6 +275,10 @@ export class TutorialCoach {
    */
   finish(): void {
     this.#ended = true;
+    // The match is over, so the map draws no later tick: a beat still waiting for its tick shows
+    // now. A1.5 begins one tick before the end and the map stays two ticks behind the last
+    // snapshot, so without this the result covered it (#1075).
+    if (this.#msg !== null && this.#msg !== this.#shown) this.#settle(true);
     const card = this.current.card;
     const beat = card === null ? undefined : beatAt(this.chapter, card.id)?.beat;
     if (beat?.with_goal === true && !this.#goalContinued) {

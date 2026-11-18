@@ -316,7 +316,7 @@ UNITS_ALLOWED: Final[dict[str, Allowed]] = {
 
 def test_units_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
-        continues(p, "3", "4", "6")
+        continues(p, "4", "6")
         view = p.view()
         assert not view.packets  # the capital's first charge stays home (tick 400)
         if p.beat == "1" and p.runner.paused:
@@ -336,7 +336,7 @@ def test_units_plays_at_the_documented_ticks() -> None:
     cps: dict[int, int] = {}
     p = Play("units", UNITS_ALLOWED)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (77, "4"), (77, "5"), (143, "6"), (143, "7")]
+    assert p.beats == [(0, "1"), (77, "4"), (77, "5"), (143, "6"), (143, "7")]  # no I.3 (#1075)
     assert [a[0].applied_tick for s, a in sorted(p.acks.items()) if s not in p.refused] == [
         1,
         78,
@@ -357,7 +357,7 @@ def test_units_with_the_offered_cancel() -> None:
     cps: list[int] = []
 
     def student(p: Play) -> None:
-        continues(p, "3", "4", "6")
+        continues(p, "4", "6")
         cps.append(p.view().me.cp)
         if p.beat == "1" and p.runner.paused:
             p.move("Highhold", "Ashford")
@@ -376,7 +376,7 @@ def test_units_with_the_offered_cancel() -> None:
 
     p = Play("units", UNITS_ALLOWED)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (77, "4"), (77, "5"), (185, "6"), (185, "7")]
+    assert p.beats == [(0, "1"), (77, "4"), (77, "5"), (185, "6"), (185, "7")]
     assert [e.tick for e in p.seen("node_captured", player=0)] == [65, 173, 295]
     assert p.end is not None and p.end.tick == 296
     assert min(cps) == 150  # 1.5 CP: never short of an order (the document said 2, corrected)
@@ -510,7 +510,7 @@ ATTACK_ALLOWED: Final[dict[str, Allowed]] = {
 
 def attack_student(stormcrown_bonus: int) -> Callable[[Play], None]:
     def student(p: Play) -> None:
-        continues(p, "1", "2", "3", "5", "10", "11")
+        continues(p, "1", "5", "11")
         if p.beat == "4" and p.runner.paused:
             p.move("Fernhold", "Ashwood")  # head-on: it bounces, the lesson of the plan
         elif p.beat == "7" and p.runner.paused:
@@ -529,18 +529,15 @@ def test_attack_plays_at_the_documented_ticks() -> None:
     p = Play("attack", ATTACK_ALLOWED, free=stance)
     p.play(attack_student(0))
     assert p.beats == [
-        (0, "1"),
-        (0, "2"),  # rounds and no leaving a fight, before the first one (review 6)
-        (0, "3"),
-        (0, "4"),
+        (0, "1"),  # the shot and the rounds, one card (#1075)
+        (0, "4"),  # no leaving a fight, with the head-on attack (#1075)
         (148, "5"),
         (148, "6"),  # wait for the refill: a card, no focus (review 6)
         (218, "7"),
         (219, "9"),
-        (230, "10"),
+        (230, "10"),  # no pause: it stands while the plan gathers (#1075)
         (469, "11"),
-        (469, "12"),
-        (502, "13"),
+        (502, "13"),  # no wait card before it (#1075)
     ]
     ashwood, stormcrown = p.ids["Ashwood"], p.ids["Stormcrown"]
     rounds = [e.tick for e in p.seen("fight_round", node=ashwood)]
@@ -576,8 +573,6 @@ def test_attack_stance_is_open_and_ends_no_pause() -> None:
             p.order(wire.SetStanceCmd(stance=Stance.ECONOMY))
             assert p.runner.paused  # no answer to the card: it still waits
             p.resume()
-        elif p.beat in ("2", "3"):
-            continues(p, "2", "3")
         elif p.beat == "4" and p.runner.paused:
             p.move("Fernhold", "Ashwood")
         elif p.beat == "5":
@@ -594,7 +589,7 @@ def test_attack_stance_is_open_and_ends_no_pause() -> None:
 
 def test_defence_plays_at_the_documented_ticks() -> None:
     def student(p: Play) -> None:
-        continues(p, "1", "2")
+        continues(p, "1", "3")  # V.2 runs, V.3 waits for Continue (#1075)
         if p.beat == "1":
             nodes = p.view().nodes
             assert nodes[p.ids["Highcrag"]].terrain_mark == 1  # the chevrons the card names
@@ -651,7 +646,7 @@ def test_group_orders_plays_at_the_documented_ticks() -> None:
     }
     p = Play("group-orders", allowed, free=stance)
     p.play(student)
-    assert p.beats == [(0, "1"), (1, "3"), (141, "4"), (246, "5")]  # A1.5 25 ticks after 221
+    assert p.beats == [(0, "1"), (1, "3"), (246, "5")]  # no A1.4 (#1075); A1.5 25 ticks after 221
     ashwood = p.ids["Ashwood"]
     assert sorted(e.tick for e in p.seen("group_arrived", node=ashwood)) == [141, 141]
     (fight,) = p.seen("fight_ended", node=ashwood)

@@ -14,6 +14,7 @@ from gow_protocol.messages import TutorialMsg
 from gow_protocol.schema import protocol_json_schema
 from gow_protocol.tutorial import (
     CHAPTER_IDS,
+    Beat,
     Chapter,
     ChapterError,
     chapter_paths,
@@ -83,9 +84,9 @@ BROKEN: Final[list[tuple[Change, str]]] = [
         "at most one beat starts the chapter's clock",
     ),
     (lambda d: d.update(cp_ticks_start=-1), "cp_ticks_start"),
-    (lambda d: d["beats"][2]["on"].update(event="nothing"), "a trigger"),
+    (lambda d: d["beats"][3]["on"].update(event="node_captured"), "a trigger"),
     (lambda d: d["beats"][3]["on"].update(start=True), "exactly one of"),
-    (lambda d: d["beats"][4]["on"].update(continued="9"), "continued names no beat"),
+    (lambda d: d["beats"][3]["on"].update(continued="9"), "continued names no beat"),
     (lambda d: d["beats"][0].update(extra=1), "extra"),
     (lambda d: d.update(cp_start="full"), "cp_start"),
     (lambda d: d["beats"][0]["on"].update(after=5), "after goes with a trigger the server fires"),
@@ -172,14 +173,13 @@ def test_the_waits_of_review_4() -> None:
     for several orders, and a mark may name the element of a place."""
     by_id = {c.id: c for c in chapters()}
     units = by_id["units"]
-    assert units.beats[3].on.after == 12 and units.beats[3].card
-    assert units.beats[2].mark[0].capacity == "Ashford"
+    assert units.beats[2].on.after == 12 and units.beats[2].card
     economy = by_id["economy"]
     focus = [b for b in economy.beats if not b.card]
     assert [(b.id, b.focus) for b in focus] == [("1W", 35), ("2W", 60), ("3W", 80)]
     assert economy.beats[4].mark[0].warehouse == "Westmarch"
     assert by_id["rally-points"].beats[1].acts == 2
-    assert by_id["units"].beats[5].mark[0].count == "Kestrel"
+    assert by_id["units"].beats[4].mark[0].count == "Kestrel"
 
 
 def test_the_content_of_review_5() -> None:
@@ -218,6 +218,29 @@ def test_the_content_of_review_6() -> None:
     assert allow is not None and len(allow) == 1
     assert allow[0].set_stance is not None and allow[0].set_stance.stance is None
     attack = by_id["attack"].beats
-    head_on = next(i for i, b in enumerate(attack) if b.allow and b.allow[0].move is not None)
-    assert [b.on.continued for b in attack[1:head_on]] == ["1", "2", "3"][: head_on - 1]
     assert not any(b.on.event == "fight_started" for b in attack)
+
+
+def test_the_cuts_of_the_attention_review() -> None:
+    """#1075 (``docs/design/tutorial.md`` section 1, "Attention review"): I has no capacity card,
+    IV tells the shot and the rounds in one card and no leaving a fight with the head-on attack,
+    IV.10 and V.2 do not pause, V.3 does, and no card waits for a refill or comments on A1's
+    fight. The beat ids of review 6 are kept, so the gaps are the cut beats."""
+    by_id = {c.id: c for c in chapters()}
+
+    def ids(chapter_id: str) -> list[str]:
+        return [b.id for b in by_id[chapter_id].beats]
+
+    def beat(chapter_id: str, beat_id: str) -> Beat:
+        return next(b for b in by_id[chapter_id].beats if b.id == beat_id)
+
+    assert ids("units") == ["1", "2", "4", "5", "6", "7"]
+    assert ids("attack") == ["1", "4", "5", "6", "7", "8", "9", "10", "11", "13"]
+    assert ids("group-orders") == ["1", "2", "3", "5"]
+    head_on = beat("attack", "4")
+    assert head_on.on.continued == "1" and head_on.pause == "action"
+    assert beat("attack", "10").pause is None
+    assert beat("attack", "13").on.view is not None  # the refill ends with the attack card
+    assert beat("defence", "2").pause is None
+    assert beat("defence", "3").pause == "continue"
+    assert not any(b.on.event == "fight_started" for b in by_id["group-orders"].beats)

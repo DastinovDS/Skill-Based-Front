@@ -70,7 +70,7 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await expect(page.locator('[data-coach="clock"]')).toHaveCount(0);
   await shot(page, '03-card-compass');
 
-  // I.1 -> I.2 (a selection) -> the march to Ashford -> I.3 (Continue).
+  // I.1 -> I.2 (a selection) -> the march to Ashford, no card on the way (#1075) -> I.4 (Continue).
   await player.clickNode(map, 0);
   await card(page, 'To march');
   await shot(page, '04-card-selected');
@@ -82,10 +82,8 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   const ashford = map.nodes.find((n) => n.name === 'Ashford');
   if (ashford === undefined) throw new Error('Ashford');
   await player.clickNode(map, ashford.id);
-  await card(page, 'capacity');
-  await shot(page, '05-card-continue');
-  await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Each unit carries one charge');
+  await shot(page, '05-card-continue');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Next, take Elmstead');
   await march(player, map, 'Ashford', 'Elmstead');
@@ -112,13 +110,11 @@ test('a new guest: the popup, chapter I to its result, a reload in the middle', 
   await card(page, 'Terrain sets how fast');
   await march(player, map, 'Elmstead', 'Fordham');
 
-  // The goal: the result (Seal) over the last frame, two buttons.
+  // The goal: the result (Seal) over the last frame, the result and two buttons, no lessons (#1075).
   const seal = page.getByRole('dialog').filter({ hasText: 'Complete' });
   await expect(seal).toBeVisible({ timeout: 60_000 });
-  // A lesson is a full sentence (review 6, #1059).
-  await expect(seal).toContainText(
-    'Every city or province you take costs your group one charge, and a group without a charge cannot take it and turns back.',
-  );
+  await expect(seal).toContainText('Units and movement');
+  await expect(seal.getByRole('listitem')).toHaveCount(0);
   await expect(seal.getByRole('button')).toHaveText(['All chapters', 'Replay chapter']);
   await shot(page, '07-seal');
   await seal.getByRole('button', { name: 'All chapters' }).click();
@@ -161,16 +157,14 @@ test('the chapter select in progress, the head-on attack of IV.4 and leaving a c
   await expect(page.getByRole('heading', { name: 'Attack and fight' })).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
 
-  await card(page, 'each charge is one shot');
+  // The shot and the rounds in one card (#1075), told before the first fight (review 6).
+  await card(page, 'the fight runs in rounds');
   await shot(page, '11-shot');
   await page.getByRole('button', { name: 'Continue' }).click();
-  // Review 6 (#1059): the rounds and no leaving a fight are told before the first fight.
-  await card(page, 'A fight runs in rounds');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'cannot leave');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  // Review 5 (#1054): show, do not tell. The head-on attack first, no slides of math.
+  // Review 5 (#1054): show, do not tell. The head-on attack first, no slides of math; no leaving a
+  // fight is told with it (#1075).
   await card(page, 'Try an ordinary attack first');
+  await expect(page.locator('.coach .plate')).toContainText('it cannot leave until the fight ends');
   await expect(page.locator('.coach .plate')).toContainText('Click on your group, then on Ashwood');
   await shot(page, '12-head-on');
 
@@ -329,9 +323,14 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await page.waitForTimeout(1500);
   await expect(plate.filter({ hasText: 'Fernhold waits' })).toHaveCount(0);
   await shot(page, '14-a1-walking', 0);
-  // A1.4 comments on the fight: it still shows.
-  await card(page, 'far outnumber');
-  await leave();
+  // No card comments on the fight (#1075, A1.4 cut): the next one is A1.5, after the capture. It
+  // fires with the goal, so the chapter ends through its Continue and the result.
+  await card(page, 'gathers', 60_000);
+  await plate.getByRole('button', { name: 'Continue' }).click();
+  const seal = page.getByRole('dialog').filter({ hasText: 'Complete' });
+  await expect(seal).toBeVisible({ timeout: 30_000 });
+  await seal.getByRole('button', { name: 'All chapters' }).click();
+  await expect(page.getByRole('radio', { name: /Chapter I:/ })).toBeVisible({ timeout: 30_000 });
 
   // A2.3: the rally point and the recruits are given, the card "walking" is not shown.
   await page.getByRole('button', { name: 'How to play' }).click();
@@ -360,10 +359,6 @@ test('the cards that answer an order show nothing while the army walks (P2: A1.3
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   const attack = await mapOf('tut-attack');
   await card(page, 'each charge is one shot');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'A fight runs in rounds');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await card(page, 'cannot leave');
   await page.getByRole('button', { name: 'Continue' }).click();
   await card(page, 'Try an ordinary attack first');
   await march(player, attack, 'Fernhold', 'Ashwood');

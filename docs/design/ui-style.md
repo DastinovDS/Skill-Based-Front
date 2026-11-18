@@ -2862,8 +2862,8 @@ ringed with their words as labels; with "Less motion" that last state at once).
   III"), the name, one sentence, the goal list, Start and "All chapters"; on the right a crop of the chapter map with
   the goals ringed and the length. No row of chapters (round 5: the chapter select shows the way).
 - **Result: Seal.** A stone window over the chapter's last moment, the seal (a lozenge with the chapter numeral; the
-  Advanced seals read "ADV" over theirs), "Complete", three lessons, two buttons: "All chapters" (primary) and
-  "Replay chapter" (secondary; round 4).
+  Advanced seals read "ADV" over theirs), "Complete", two buttons: "All chapters" (primary) and "Replay chapter"
+  (secondary; round 4). No lessons since the attention review (#1075): the result only.
 - **Chapter select: Charter** (round 5, section 77.1; it replaces the Road). The client's top bar (the brand is the
   way back to the main menu) over a stone sheet of seals: the main rule I to V ends in an ivory arrow at the first
   match's seal (the enemy star in a minium rim, larger than the chapters', open at any time); the Advanced rule drops
