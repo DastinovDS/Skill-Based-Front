@@ -5,7 +5,7 @@
   import { modal } from '../theme/modal.ts';
   import { numeral } from '../tutorial/chapters.ts';
   import SealMark from '../app/tutorial/SealMark.svelte';
-  import { chapterKicker, chapterName, lessonsOf } from '../app/tutorial/texts.ts';
+  import { chapterKicker, chapterName } from '../app/tutorial/texts.ts';
 
   interface Props {
     chapter: Chapter;
@@ -26,28 +26,25 @@
 </script>
 
 <!-- The chapter result (Seal, docs/design/tutorial.md section 8): a stone window over the chapter's
-     last moment, the seal with the chapter numeral, "Complete", its three lessons and two buttons
-     (round 4: no "Next chapter", no "First match"; the player goes on from the chapter select). -->
+     last moment, the seal with the chapter numeral, "Complete" and two buttons (round 4: no "Next
+     chapter", no "First match"; the player goes on from the chapter select). The result only: the
+     lessons went with the attention review (#1075), the next chapter's actions are the review. -->
 <div class="dim">
   <div
     class="window rule-frame"
     role="dialog"
     aria-modal="true"
     aria-labelledby="seal-title"
+    aria-describedby={byClock ? 'seal-lab seal-by-clock' : 'seal-lab'}
     tabindex="-1"
     use:modal={{ onclose: onchapters }}
   >
     <SealMark n={numeral(chapter)} advanced={chapter.road === 'advanced'} />
-    <p class="lab">{chapterKicker(chapter)} · {chapterName(chapter)}</p>
+    <p class="lab" id="seal-lab">{chapterKicker(chapter)} · {chapterName(chapter)}</p>
     <h2 id="seal-title">{t('tutorial.result.title')}</h2>
     {#if byClock}
-      <p class="by-clock">{t('tutorial.result.byClock')}</p>
+      <p class="by-clock" id="seal-by-clock">{t('tutorial.result.byClock')}</p>
     {/if}
-    <ul class="lesson">
-      {#each lessonsOf(chapter) as lesson, i (i)}
-        <li><span class="lz" aria-hidden="true"></span>{lesson}</li>
-      {/each}
-    </ul>
     <div class="acts">
       <button type="button" class="lapis-btn primary" bind:this={primary} onclick={onchapters}
         >{t('tutorial.allChapters')}</button
@@ -121,38 +118,9 @@
     color: var(--ink);
   }
 
-  /* A lesson is one or two full sentences (review 6, #1059): it wraps, its lozenge stands by the
-     first line. */
-  .lesson {
-    display: grid;
-    gap: 12px;
-    width: max-content;
-    max-width: 100%;
-    margin: 22px auto 30px;
-    padding: 0;
-    list-style: none;
-    text-align: left;
-  }
-
-  .lesson li {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    font: 500 18px/1.4 var(--font-text);
-  }
-
-  .lz {
-    flex: none;
-    width: 7px;
-    height: 7px;
-    margin-top: calc((1.4em - 7px) / 2);
-    background: var(--ink);
-    box-shadow: 0 0 0 1px var(--ink-soft);
-    transform: rotate(45deg);
-  }
-
   .acts {
     display: flex;
+    margin-top: 30px;
     flex-wrap: wrap;
     justify-content: center;
     gap: 14px 20px;

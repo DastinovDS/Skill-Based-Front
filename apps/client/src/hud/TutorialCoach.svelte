@@ -140,9 +140,13 @@
     return null;
   }
 
+  /** The room kept under the last notice for the next one, px (as the hint card, `HintCard`). */
+  const TOAST_ROOM = 52;
+
   /**
-   * What the card keeps clear of: every place and its name, the marks, the HUD, open menus (the
-   * arenas of fights are kept clear harder, `placeCard`).
+   * What the card keeps clear of: every place and its name, the marks, the HUD, open menus, the
+   * notices and room for the next one (a card without a pause stands while the game runs: IV.10,
+   * V.2, #1075; the arenas of fights are kept clear harder, `placeCard`).
    */
   function obstacles(target: Target | null): Rect[] {
     const out: Rect[] = [];
@@ -156,10 +160,14 @@
     for (const box of hudBoxes)
       out.push([box.x - 14, box.y - 14, box.x + box.w + 14, box.y + box.h + 14]);
     for (const el of document.querySelectorAll(
-      '.radial svg, .hud .bar, [data-coach="alerts"] > *',
+      '.radial svg, .hud .bar, [data-coach="alerts"] > *, .toasts > *',
     )) {
       const r = el.getBoundingClientRect();
       if (r.width > 0) out.push([r.x - 8, r.y - 8, r.right + 8, r.bottom + 8]);
+    }
+    const toasts = document.querySelector('.toasts')?.getBoundingClientRect();
+    if (toasts !== undefined && toasts.width > 0) {
+      out.push([toasts.x - 8, toasts.y - 8, toasts.right + 8, toasts.bottom + TOAST_ROOM]);
     }
     return out;
   }
@@ -197,7 +205,9 @@
       return;
     }
     const size = { w: plate.offsetWidth, h: plate.offsetHeight };
-    const key = `${String(view.seq)}:${String(slide)}:${String(size.h)}:${String(window.innerWidth)}x${String(window.innerHeight)}`;
+    // A notice that comes in under the card moves it (#1075).
+    const notices = document.querySelectorAll('.toasts > *').length;
+    const key = `${String(view.seq)}:${String(slide)}:${String(notices)}:${String(size.h)}:${String(window.innerWidth)}x${String(window.innerHeight)}`;
     // The card never covers the arena of a fight (review 5, P7): one that comes up under it moves it.
     // (Once per change of the arenas: a card with no free spot is not placed again every frame.)
     const arenas = anchors.arenas?.() ?? [];

@@ -88,8 +88,8 @@ def group_in(runner: MatchRunner, node: int) -> str:
 
 
 def test_no_tick_passes_while_a_card_waits() -> None:
-    """Chapter I on its real loop: the first card waits for its order, the third for Continue;
-    time runs on meanwhile and no tick passes."""
+    """Chapter I on its real loop: the first card waits for its order, the charge card (I.4) for
+    Continue; time runs on meanwhile and no tick passes."""
 
     async def scenario() -> None:
         clock = ManualClock()
@@ -117,13 +117,16 @@ def test_no_tick_passes_while_a_card_waits() -> None:
         group = group_in(runner, ids["Highhold"])
         assert runner.submit(0, 2, wire.MoveCmd(group=group, dest=ids["Ashford"], planned=False))
         assert not runner.paused  # the asked order ends the pause
-        await advance(0.15)
-        assert runner.match.tick == 1 and runner.paused  # I.3 (capacity) waits for Continue
+        await advance(8.0)  # the march to Ashford: no card while it walks (#1075)
+        assert runner.match.tick == 77 and runner.paused  # I.4 (the charge) waits for Continue
         await advance(5.0)
-        assert runner.match.tick == 1
+        assert runner.match.tick == 77
         assert runner.request_resume(0)
+        assert runner.paused  # I.5 at once: it waits for the march to Elmstead
+        group = group_in(runner, ids["Ashford"])
+        assert runner.submit(0, 3, wire.MoveCmd(group=group, dest=ids["Elmstead"], planned=False))
         await advance(1.0)
-        assert runner.match.tick == 11 and not runner.paused
+        assert runner.match.tick == 87 and not runner.paused
         runner.technical_defeat(0)
         await advance(0.2)
         await asyncio.wait_for(task, TIMEOUT_S)
@@ -293,13 +296,16 @@ def test_a_chapter_over_http_and_the_websocket(tutorial_settings: Settings) -> N
                 await live.advance(0.2)
                 ack = await recv_until(ws, AckMsg)
                 assert (ack.seq, ack.applied_tick, ack.reject_code) == (2, 1, None)
+                await live.advance(8.0)  # the march to Ashford (no card while it walks, #1075)
                 card = await recv_until(ws, TutorialMsg)
-                assert (card.beat, card.paused) == ("3", True)
+                while card.beat == "1":  # the count of the order, then the next card
+                    card = await recv_until(ws, TutorialMsg)
+                assert (card.beat, card.paused, card.tick) == ("4", True, 77)
                 await live.advance(2.0)
-                assert runner.match.tick == 1  # paused
+                assert runner.match.tick == 77  # paused
                 await ws.send(encode(ResumeMsg()))  # Continue
                 going = await recv_until(ws, TutorialMsg)
-                assert (going.beat, going.paused) == ("3", False)
+                assert (going.beat, going.paused) == ("5", True)  # I.5 waits for its march
                 await ws.send(encode(CommandMsg(seq=3, cmd=wire.ForfeitCmd())))  # leave
                 await live.advance(0.3)
                 end = await recv_until(ws, MatchEndMsg)

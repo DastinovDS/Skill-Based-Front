@@ -25,7 +25,7 @@
      "mark": [{"menu": "factory", "at": "Millbrook"}]},
     {"id": "7", "on": {"event": "factory_built", "node": "Millbrook", "by": "you"}, "pause": "continue",
      "allow": [], "ui": ["factories"],
-     "mark": [{"node": "Millbrook"}, {"hud": "factories"}]},
+     "mark": [{"hud": "factories"}]},
     {"id": "8", "on": {"continued": "7"}, "pause": "action", "ui": ["stance"],
      "allow": [{"set_stance": {}}],
      "mark": [{"hud": "stance"}]}

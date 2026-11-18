@@ -60,7 +60,7 @@ describe('chapter files and texts', () => {
 
   it('has the texts of every beat in the dictionary, and no text of a beat that is not there', () => {
     const keys = Object.keys(en);
-    const META = /^(name|why|length|goal\d|lesson\d)$/;
+    const META = /^(name|why|length|goal\d)$/;
     for (const id of CHAPTER_IDS) {
       const chapter = chapterOf(id);
       // A focus beat (review 4, P5) has no card and no text.
@@ -84,7 +84,8 @@ describe('chapter files and texts', () => {
       }
       for (let i = 1; i <= GOAL_COUNT[id]; i++)
         expect(keys).toContain(`tutorial.${id}.goal${String(i)}`);
-      for (const meta of ['name', 'why', 'length', 'lesson1', 'lesson2', 'lesson3']) {
+      // The Seal has no lessons since the attention review (#1075): a `lessonN` key names no beat.
+      for (const meta of ['name', 'why', 'length']) {
         expect(keys).toContain(`tutorial.${id}.${meta}`);
       }
     }
@@ -188,7 +189,7 @@ describe('gate (section 4.9)', () => {
     const units = chapterOf('units');
     expect(allowOf(units, null)).toEqual([]);
     expect(allowOf(units, '2')).toBe(units.beats[0].allow);
-    expect(allowOf(units, '3')).toEqual([]);
+    expect(allowOf(units, '4')).toEqual([]);
     const failing = withFailure();
     expect(allowOf(failing, 'F')).toBe(failing.fails?.[0]?.allow);
     expect(allowOf(chapterOf('rally-points'), '3')).toBe(chapterOf('rally-points').beats[1]?.allow);
@@ -232,7 +233,7 @@ describe('allow matcher (section 7.3)', () => {
     expect(commandAllowed(allow, [0], { type: 'merge', groups: ['g', 'h'] }, ctx)).toBe(false);
     // Leaving is always allowed; a beat that allows nothing allows nothing else.
     expect(commandAllowed([], [], { type: 'forfeit' }, ctx)).toBe(true);
-    expect(commandAllowed(allowOf(units, '3'), [], move('g', id(map, 'Ashford')), ctx)).toBe(false);
+    expect(commandAllowed(allowOf(units, '4'), [], move('g', id(map, 'Ashford')), ctx)).toBe(false);
   });
 
   it('chapter I.5: the move twice and the cancel once, counted by the server', () => {
@@ -436,7 +437,7 @@ describe('coach on recorded tutorial streams', () => {
     coach.onMessage(msg('units', '1', true, [0]));
     expect(coach.current.card?.id).toBe('1');
     expect(coach.current.card?.step).toBe(1);
-    expect(coach.current.card?.steps).toBe(7);
+    expect(coach.current.card?.steps).toBe(6); // no I.3 (#1075)
     expect(coach.current.card?.canContinue).toBe(false);
     expect(coach.current.paused).toBe(true);
     expect(coach.current.gate.size).toBe(0);
@@ -456,17 +457,18 @@ describe('coach on recorded tutorial streams', () => {
         bonus: 0,
       }),
     ).toBe(true);
-    // The server names I.3 (the move accepted): a Continue card.
-    coach.onMessage(msg('units', '3', true, []));
-    expect(coach.current.card?.id).toBe('3');
+    // The move accepted: the card and its marks go while the group walks (review 4, P2), and no
+    // card comes on the way (#1075: the capacity card I.3 is cut).
+    coach.onMessage(msg('units', '1', false, [1]));
+    expect(coach.current.card).toBeNull();
+    expect(coach.current.paused).toBe(false);
+    // Ashford taken: I.4, a Continue card.
+    coach.onMessage(msg('units', '4', true, []));
+    expect(coach.current.card?.id).toBe('4');
+    expect(coach.current.card?.step).toBe(3);
     expect(coach.current.card?.canContinue).toBe(true);
     coach.continue();
     expect(resumed()).toBe(1);
-    // Continued: the card and its marks go while the army walks (review 4, P2).
-    coach.onMessage(msg('units', '3', false, []));
-    expect(coach.current.card).toBeNull();
-    expect(coach.current.paused).toBe(false);
-    coach.onMessage(msg('units', '4', true, []));
     coach.onMessage(msg('units', '5', true, [0, 0]));
     expect(coach.current.card?.id).toBe('5');
     expect(coach.allows({ type: 'cancel_order', group: 'g' })).toBe(true);
@@ -494,7 +496,7 @@ describe('coach on recorded tutorial streams', () => {
 
   it('pages the slides of a card and keeps them on a new message of the same beat', () => {
     const { coach } = coachOf(withFailure(), { g: 'Fernhold' });
-    coach.onMessage(msg('attack', '3', true, []));
+    coach.onMessage(msg('attack', '1', true, []));
     coach.onMessage(msg('attack', '4', true, [0]));
     expect(coach.current.card?.slides).toBe(3);
     expect(coach.slide).toBe(0);
@@ -549,10 +551,12 @@ describe('coach on recorded tutorial streams', () => {
 
   it('walks chapter IV: the head-on attack, the plan, and the clock to the end (review 5)', () => {
     const { coach, map } = coachOf('attack', { g: 'Fernhold' });
-    // The rounds and no leaving a fight come before the first fight (review 6).
-    coach.onMessage(msg('attack', '2', true, []));
+    // The shot and the rounds in one card, no leaving a fight with the head-on attack (#1075).
+    coach.onMessage(msg('attack', '1', true, []));
     expect(coach.current.card?.canContinue).toBe(true);
+    expect(coach.current.card?.steps).toBe(10);
     coach.onMessage(msg('attack', '4', true, [0]));
+    expect(coach.current.card?.step).toBe(2);
     expect(coach.current.card?.fail).toBe(false);
     expect(coach.shows('planned')).toBe(false);
     coach.onMessage(msg('attack', '5', true, [], false, 148));
@@ -571,12 +575,19 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.current.card?.id).toBe('8');
     expect(coach.shows('planned')).toBe(true);
     expect(coach.current.clockEnd).toBeNull();
+    // The enemy's plan: a card without Continue that stands while the plan gathers (#1075).
+    coach.onMessage(msg('attack', '10', false, [], false, 230));
+    coach.onRender(230);
+    expect(coach.current.card?.id).toBe('10');
+    expect(coach.current.card?.canContinue).toBe(false);
     coach.onMessage(msg('attack', '11', true, [], false, 469, 1069));
     coach.onRender(469);
     expect(coach.shows('clock')).toBe(true);
     expect(coach.current.clockEnd).toBe(1069);
-    coach.onMessage(msg('attack', '12', false, [], false, 469, 1069));
-    expect(coach.current.card?.id).toBe('12');
+    // Continued: no wait card until the group is full (#1075, IV.12 cut).
+    coach.continue();
+    coach.onMessage(msg('attack', '11', false, [], false, 469, 1069));
+    expect(coach.current.card).toBeNull();
     expect(coach.current.focus).toBeNull();
     coach.onMessage(msg('attack', '13', true, [0], false, 502, 1069));
     coach.onRender(502);
@@ -630,12 +641,26 @@ describe('coach on recorded tutorial streams', () => {
     expect(coach.sealed).toBe(true);
   });
 
+  it('shows the last card of a goal at the end though the map never drew its tick (#1075)', () => {
+    const { coach } = coachOf('group-orders');
+    coach.onMessage(msg('group-orders', '3', false, [1], false, 1));
+    coach.onRender(244);
+    // A1.5 begins at 246, the match ends at 247: the map stops two ticks behind, at 245.
+    coach.onMessage(msg('group-orders', '5', false, [1], true, 246));
+    coach.onRender(245);
+    expect(coach.current.card).toBeNull();
+    coach.finish();
+    expect(coach.current.card?.id).toBe('5');
+    expect(coach.current.card?.canContinue).toBe(true);
+    expect(coach.sealed).toBe(false);
+    coach.continue();
+    expect(coach.sealed).toBe(true);
+  });
+
   it('shows a beat only once the map has drawn its tick (review 4, P1)', () => {
     const { coach } = coachOf('units', { g: 'Highhold' });
-    coach.onMessage(msg('units', '3', true, [], false, 1));
-    coach.onRender(1);
-    expect(coach.current.card?.id).toBe('3');
-    coach.onMessage(msg('units', '3', false, [], false, 1));
+    coach.onMessage(msg('units', '1', false, [1], false, 0));
+    expect(coach.current.card).toBeNull();
     // I.4 begins at 77; the map is still at 75: nothing shows, the pause is the server's already.
     coach.onRender(75);
     coach.onMessage(msg('units', '4', true, [], false, 77));
@@ -720,7 +745,7 @@ describe('coach on recorded tutorial streams', () => {
       expect(coach.hudMarks()).toEqual([]);
       // The next beat shows again.
       if (id !== 'rally-points') {
-        coach.onMessage(msg(id, id === 'group-orders' ? '4' : '10', true, []));
+        coach.onMessage(msg(id, id === 'group-orders' ? '5' : '10', false, []));
         expect(coach.current.card).not.toBeNull();
       }
     }
@@ -756,7 +781,7 @@ describe('coach on recorded tutorial streams', () => {
   });
 
   it('counts the standing orders, a cancel taking one back', () => {
-    const allow = chapterOf('units').beats[4]?.allow ?? [];
+    const allow = chapterOf('units').beats[3]?.allow ?? []; // I.5
     expect(standingOrders(allow, [0, 0])).toBe(0);
     expect(standingOrders(allow, [1, 0])).toBe(1);
     expect(standingOrders(allow, [1, 1])).toBe(0);
